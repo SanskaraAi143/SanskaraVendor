@@ -5,10 +5,20 @@ import { supabase } from '../integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
 
+type VendorProfile = {
+  vendor_id: string;
+  vendor_name: string;
+  vendor_category: string;
+  contact_email: string;
+  is_verified: boolean;
+}
+
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  vendorProfile: VendorProfile | null;
+  isLoadingProfile: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, metadata?: any) => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,7 +30,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const navigate = useNavigate();
+
+  // Fetch vendor profile data
+  const fetchVendorProfile = async (userId: string) => {
+    try {
+      setIsLoadingProfile(true);
+      const { data, error } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('supabase_auth_uid', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching vendor profile:', error);
+        return;
+      }
+
+      if (data) {
+        setVendorProfile(data as VendorProfile);
+      }
+    } catch (error) {
+      console.error('Error fetching vendor profile:', error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -28,6 +65,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
+        
+        // Don't fetch profile inside the auth listener to avoid deadlock issues
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Use setTimeout to safely handle profile fetching outside the auth callback
+          setTimeout(() => {
+            if (currentSession?.user) {
+              fetchVendorProfile(currentSession.user.id);
+            }
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          setVendorProfile(null);
+        }
+        
         setIsLoading(false);
       }
     );
@@ -36,6 +86,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      
+      if (currentSession?.user) {
+        fetchVendorProfile(currentSession.user.id);
+      }
+      
       setIsLoading(false);
     });
 
@@ -130,7 +185,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      isLoading, 
+      vendorProfile, 
+      isLoadingProfile,
+      signIn, 
+      signUp, 
+      signOut 
+    }}>
       {children}
     </AuthContext.Provider>
   );

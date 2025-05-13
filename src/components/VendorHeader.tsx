@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Bell, ChevronDown, Menu, User, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,9 +11,30 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from '@/hooks/useAuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const VendorHeader: React.FC = () => {
   const [notificationCount, setNotificationCount] = useState(3);
+  const { vendorProfile, signOut } = useAuth();
+  const navigate = useNavigate();
+  
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (vendorProfile?.vendor_name) {
+      return vendorProfile.vendor_name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .toUpperCase()
+        .substring(0, 2);
+    }
+    return "VP";
+  };
+
+  const handleProfileClick = () => {
+    navigate('/profile');
+  };
   
   return (
     <header className="h-16 border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
@@ -39,10 +60,12 @@ const VendorHeader: React.FC = () => {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
               <Avatar className="h-8 w-8 border border-sanskara-gold/50">
-                <AvatarImage src="https://i.pravatar.cc/300" />
-                <AvatarFallback className="bg-sanskara-amber text-sanskara-maroon">VP</AvatarFallback>
+                <AvatarImage src="" />
+                <AvatarFallback className="bg-sanskara-amber text-sanskara-maroon">{getInitials()}</AvatarFallback>
               </Avatar>
-              <span className="font-medium text-sm hidden md:block">Vendor Profile</span>
+              <span className="font-medium text-sm hidden md:block">
+                {vendorProfile?.vendor_name || 'Vendor Profile'}
+              </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground hidden md:block" />
             </DropdownMenuTrigger>
             
@@ -52,23 +75,26 @@ const VendorHeader: React.FC = () => {
                   <User className="h-4 w-4 text-sanskara-maroon" />
                 </div>
                 <div className="flex flex-col space-y-0.5">
-                  <p className="text-sm font-medium">Vendor Profile</p>
-                  <p className="text-xs text-muted-foreground">vendor@example.com</p>
+                  <p className="text-sm font-medium">{vendorProfile?.vendor_name || 'Vendor Profile'}</p>
+                  <p className="text-xs text-muted-foreground">{vendorProfile?.contact_email || 'vendor@example.com'}</p>
                 </div>
               </div>
               
               <DropdownMenuSeparator />
               
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem className="cursor-pointer" onClick={handleProfileClick}>
+                <User className="h-4 w-4 mr-2" />
                 Profile Settings
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/settings')}>
+                <Settings className="h-4 w-4 mr-2" />
                 Account Settings
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />
               
-              <DropdownMenuItem className="text-red-500 cursor-pointer flex items-center gap-2">
+              <DropdownMenuItem className="text-red-500 cursor-pointer flex items-center gap-2" onClick={signOut}>
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>
               </DropdownMenuItem>
