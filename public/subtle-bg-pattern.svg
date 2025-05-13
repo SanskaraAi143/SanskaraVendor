@@ -1,0 +1,19 @@
+
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0 0H300V300H0V0Z" fill="white"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M150 20C155.523 20 160 24.4772 160 30C160 35.5228 155.523 40 150 40C144.477 40 140 35.5228 140 30C140 24.4772 144.477 20 150 20Z" fill="#C41E3A" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M150 140C155.523 140 160 144.477 160 150C160 155.523 155.523 160 150 160C144.477 160 140 155.523 140 150C140 144.477 144.477 140 150 140Z" fill="#C41E3A" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M150 260C155.523 260 160 264.477 160 270C160 275.523 155.523 280 150 280C144.477 280 140 275.523 140 270C140 264.477 144.477 260 150 260Z" fill="#C41E3A" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M30 80C35.5228 80 40 84.4772 40 90C40 95.5228 35.5228 100 30 100C24.4772 100 20 95.5228 20 90C20 84.4772 24.4772 80 30 80Z" fill="#D4AF37" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M30 200C35.5228 200 40 204.477 40 210C40 215.523 35.5228 220 30 220C24.4772 220 20 215.523 20 210C20 204.477 24.4772 200 30 200Z" fill="#D4AF37" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M270 80C275.523 80 280 84.4772 280 90C280 95.5228 275.523 100 270 100C264.477 100 260 95.5228 260 90C260 84.4772 264.477 80 270 80Z" fill="#D4AF37" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M270 200C275.523 200 280 204.477 280 210C280 215.523 275.523 220 270 220C264.477 220 260 215.523 260 210C260 204.477 264.477 200 270 200Z" fill="#D4AF37" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M90 30C95.5228 30 100 34.4772 100 40C100 45.5228 95.5228 50 90 50C84.4772 50 80 45.5228 80 40C80 34.4772 84.4772 30 90 30Z" fill="#CB2C90" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M210 30C215.523 30 220 34.4772 220 40C220 45.5228 215.523 50 210 50C204.477 50 200 45.5228 200 40C200 34.4772 204.477 30 210 30Z" fill="#CB2C90" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M90 250C95.5228 250 100 254.477 100 260C100 265.523 95.5228 270 90 270C84.4772 270 80 265.523 80 260C80 254.477 84.4772 250 90 250Z" fill="#CB2C90" fill-opacity="0.05"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M210 250C215.523 250 220 254.477 220 260C220 265.523 215.523 270 210 270C204.477 270 200 265.523 200 260C200 254.477 204.477 250 210 250Z" fill="#CB2C90" fill-opacity="0.05"/>
+  <path d="M75 75L50 50" stroke="#C41E3A" stroke-opacity="0.05" stroke-width="0.5"/>
+  <path d="M75 225L50 250" stroke="#C41E3A" stroke-opacity="0.05" stroke-width="0.5"/>
+  <path d="M225 75L250 50" stroke="#C41E3A" stroke-opacity="0.05" stroke-width="0.5"/>
+  <path d="M225 225L250 250" stroke="#C41E3A" stroke-opacity="0.05" stroke-width="0.5"/>
+</svg>

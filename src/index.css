@@ -1,3 +1,6 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,16 +16,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 346 85% 45%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
+    --secondary: 43 77% 52%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
+    --accent: 315 65% 48%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
     --destructive: 0 84.2% 60.2%;
@@ -34,21 +37,14 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 346 85% 97%;
+    --sidebar-foreground: 346 85% 25%;
+    --sidebar-primary: 346 85% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 346 85% 95%;
+    --sidebar-accent-foreground: 346 85% 25%;
+    --sidebar-border: 346 85% 90%;
+    --sidebar-ring: 43 77% 52%;
   }
 
   .dark {
@@ -61,16 +57,16 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 346 85% 45%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 43 77% 52%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 315 65% 48%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
@@ -79,14 +75,15 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    
+    --sidebar-background: 346 60% 15%;
+    --sidebar-foreground: 346 85% 85%;
+    --sidebar-primary: 346 85% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 346 30% 25%;
+    --sidebar-accent-foreground: 346 85% 85%;
+    --sidebar-border: 346 30% 25%;
+    --sidebar-ring: 43 77% 52%;
   }
 }
 
@@ -96,6 +93,64 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sanskrit;
+    background-image: url('/subtle-bg-pattern.svg');
+    background-repeat: repeat;
+    background-size: 300px 300px;
+    background-attachment: fixed;
+    background-position: center;
+  }
+}
+
+@layer components {
+  .sanskara-card {
+    @apply relative overflow-hidden rounded-lg border p-6 shadow-md transition-all duration-300;
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .sanskara-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, theme('colors.sanskara.red'), theme('colors.sanskara.gold'), theme('colors.sanskara.magenta'));
+  }
+  
+  .sanskara-input {
+    @apply rounded-md border border-sanskara-gold/30 bg-white px-4 py-2 focus:border-sanskara-gold focus:ring-1 focus:ring-sanskara-gold focus:outline-none transition-all duration-200;
+  }
+  
+  .sanskara-button {
+    @apply rounded-md px-4 py-2 font-medium transition-all duration-200 flex items-center justify-center gap-2;
+  }
+  
+  .sanskara-button-primary {
+    @apply sanskara-button bg-sanskara-red text-white hover:bg-sanskara-red/90;
+  }
+  
+  .sanskara-button-secondary {
+    @apply sanskara-button bg-sanskara-gold text-sanskara-maroon hover:bg-sanskara-gold/90;
+  }
+  
+  .sanskara-button-outline {
+    @apply sanskara-button border border-sanskara-red text-sanskara-red hover:bg-sanskara-red/10;
+  }
+  
+  .sanskara-button-ghost {
+    @apply sanskara-button text-sanskara-red hover:bg-sanskara-red/10;
+  }
+  
+  .sanskara-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-sanskara-gold focus:ring-offset-2;
+  }
+  
+  .gradient-text {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-sanskara-red via-sanskara-magenta to-sanskara-orange;
+  }
+  
+  .dashboard-stat {
+    @apply flex flex-col p-4 rounded-lg border transition-all hover:shadow-md;
   }
 }
