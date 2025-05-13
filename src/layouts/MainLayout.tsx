@@ -7,7 +7,8 @@ import VendorHeader from '@/components/VendorHeader';
 
 const MainLayout: React.FC = () => {
   return (
-    <SidebarProvider collapsedWidth={56} defaultCollapsed={false}>
+    // Fix: Remove unsupported props collapsedWidth and defaultCollapsed
+    <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <VendorSidebar />
         

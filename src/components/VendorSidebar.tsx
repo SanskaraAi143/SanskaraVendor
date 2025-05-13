@@ -28,7 +28,9 @@ import {
 } from 'lucide-react';
 
 const VendorSidebar: React.FC = () => {
-  const { collapsed } = useSidebar();
+  // Fix: Access the state instead of collapsed property
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   
   const getNavClass = ({ isActive }: { isActive: boolean }) => {
     return isActive 
@@ -39,7 +41,8 @@ const VendorSidebar: React.FC = () => {
   return (
     <Sidebar
       className={`${collapsed ? "w-16" : "w-64"} transition-all duration-300 bg-sanskara-cream shadow-lg`}
-      collapsible
+      // Fix: Use "icon" instead of true for collapsible prop 
+      collapsible="icon"
     >
       <SidebarTrigger className="m-2 self-end text-sanskara-red hover:text-sanskara-maroon transition-colors" />
       
@@ -58,7 +61,8 @@ const VendorSidebar: React.FC = () => {
       </div>
 
       <SidebarContent className="px-2">
-        <SidebarGroup defaultOpen>
+        {/* Fix: Remove defaultOpen prop as it's not supported */}
+        <SidebarGroup>
           <SidebarGroupLabel className={`${collapsed ? "hidden" : "block"} text-sanskara-maroon`}>
             Management
           </SidebarGroupLabel>
@@ -123,7 +127,8 @@ const VendorSidebar: React.FC = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup defaultOpen={!collapsed}>
+        {/* Fix: Remove defaultOpen prop and handle collapsed state differently */}
+        <SidebarGroup>
           <SidebarGroupLabel className={`${collapsed ? "hidden" : "block"} text-sanskara-maroon`}>
             Team & More
           </SidebarGroupLabel>
