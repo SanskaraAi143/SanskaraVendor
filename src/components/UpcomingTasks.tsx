@@ -12,7 +12,7 @@ interface Task {
   vendor_task_id: string;
   title: string;
   due_date: string;
-  priority: 'high' | 'medium' | 'low' | 'urgent';
+  priority: 'high' | 'medium' | 'low' | 'urgent'; // Fixed type to be union instead of string
   is_complete: boolean;
   booking_id: string | null;
   category: string | null;
@@ -44,7 +44,13 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
           
         if (error) throw error;
         
-        setTaskList(data || []);
+        // Map data to ensure proper typing for priority field
+        const typedTasks = data?.map(task => ({
+          ...task,
+          priority: (task.priority as 'high' | 'medium' | 'low' | 'urgent')
+        }));
+        
+        setTaskList(typedTasks || []);
       } catch (error) {
         console.error('Error fetching tasks:', error);
         toast({

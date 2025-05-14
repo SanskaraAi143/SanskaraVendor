@@ -14,7 +14,7 @@ interface Booking {
   time: string;
   location: string;
   service: string;
-  status: 'confirmed' | 'pending' | 'completed';
+  status: 'confirmed' | 'pending' | 'completed'; // Fixed type to be union instead of string
   user_id: string;
   event_date: string;
   booking_status: string;
@@ -62,11 +62,12 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
           time: "TBD", // Time might not be available
           location: "Location details unavailable",
           service: "Various Services",
-          status: booking.booking_status === 'confirmed' 
+          // Map booking_status to one of the allowed status values
+          status: (booking.booking_status === 'confirmed' 
             ? 'confirmed' 
             : booking.booking_status === 'completed'
               ? 'completed'
-              : 'pending',
+              : 'pending') as 'confirmed' | 'pending' | 'completed',
           user_id: booking.user_id,
           event_date: booking.event_date,
           booking_status: booking.booking_status,

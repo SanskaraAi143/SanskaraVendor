@@ -173,10 +173,15 @@ const Tasks: React.FC = () => {
     }
     
     try {
+      // Create a placeholder booking_id for the task since it's required in the database
+      // In a real application, you might want to handle this differently
+      const placeholderBookingId = '00000000-0000-0000-0000-000000000000';
+      
       const { data, error } = await supabase
         .from('vendor_tasks')
         .insert({
           vendor_id: vendorProfile.vendor_id,
+          booking_id: placeholderBookingId,  // Added required booking_id
           title: newTask.title,
           description: newTask.description,
           due_date: newTask.due_date,
