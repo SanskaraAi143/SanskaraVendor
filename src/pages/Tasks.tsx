@@ -365,7 +365,7 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
-        <Select value={statusFilter || ''} onValueChange={(val) => setStatusFilter(val || null)}>
+        <Select value={statusFilter || 'all'} onValueChange={(val) => setStatusFilter(val === 'all' ? null : val)}>
           <SelectTrigger className="w-full md:w-[180px]">
             <div className="flex items-center">
               <ListFilter className="h-4 w-4 mr-2" />
@@ -373,7 +373,7 @@ const Tasks: React.FC = () => {
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Statuses</SelectItem>
+            <SelectItem value="all">All Statuses</SelectItem>
             {statusOptions.map((status) => (
               <SelectItem key={status} value={status}>
                 {status}
@@ -382,7 +382,7 @@ const Tasks: React.FC = () => {
           </SelectContent>
         </Select>
 
-        <Select value={priorityFilter || ''} onValueChange={(val) => setPriorityFilter(val || null)}>
+        <Select value={priorityFilter || 'all'} onValueChange={(val) => setPriorityFilter(val === 'all' ? null : val)}>
           <SelectTrigger className="w-full md:w-[180px]">
             <div className="flex items-center">
               <Flag className="h-4 w-4 mr-2" />
@@ -390,7 +390,7 @@ const Tasks: React.FC = () => {
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Priorities</SelectItem>
+            <SelectItem value="all">All Priorities</SelectItem>
             {priorityOptions.map((priority) => (
               <SelectItem key={priority} value={priority}>
                 {`${priority.charAt(0).toUpperCase()}${priority.slice(1)} Priority`}

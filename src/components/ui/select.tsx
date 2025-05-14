@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
@@ -109,27 +110,37 @@ const SelectLabel = React.forwardRef<
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
+// Added check to warn about empty string values in SelectItem
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Item
-    ref={ref}
-    className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
-    {...props}
-  >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </SelectPrimitive.ItemIndicator>
-    </span>
+>(({ className, children, value = "", ...props }, ref) => {
+  if (process.env.NODE_ENV !== 'production' && value === "") {
+    console.warn(
+      "Warning: <SelectItem /> has an empty string value. This is not allowed because the Select component uses empty strings to indicate that no selection has been made and to display the placeholder. Please use a non-empty string value."
+    );
+  }
 
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-  </SelectPrimitive.Item>
-))
+  return (
+    <SelectPrimitive.Item
+      ref={ref}
+      className={cn(
+        "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className
+      )}
+      value={value}
+      {...props}
+    >
+      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+        <SelectPrimitive.ItemIndicator>
+          <Check className="h-4 w-4" />
+        </SelectPrimitive.ItemIndicator>
+      </span>
+
+      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    </SelectPrimitive.Item>
+  );
+})
 SelectItem.displayName = SelectPrimitive.Item.displayName
 
 const SelectSeparator = React.forwardRef<
