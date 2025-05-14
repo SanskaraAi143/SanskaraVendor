@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 
 const VendorHeader: React.FC = () => {
   const [notificationCount, setNotificationCount] = useState(3);
-  const { vendorProfile, signOut } = useAuth();
+  const { vendorProfile, user, signOut } = useAuth();
   const navigate = useNavigate();
   
   // Get initials for avatar fallback
@@ -64,7 +64,7 @@ const VendorHeader: React.FC = () => {
                 <AvatarFallback className="bg-sanskara-amber text-sanskara-maroon">{getInitials()}</AvatarFallback>
               </Avatar>
               <span className="font-medium text-sm hidden md:block">
-                {vendorProfile?.vendor_name || 'Vendor Profile'}
+                {vendorProfile?.vendor_name || user?.email || 'Vendor Profile'}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground hidden md:block" />
             </DropdownMenuTrigger>
@@ -76,7 +76,7 @@ const VendorHeader: React.FC = () => {
                 </div>
                 <div className="flex flex-col space-y-0.5">
                   <p className="text-sm font-medium">{vendorProfile?.vendor_name || 'Vendor Profile'}</p>
-                  <p className="text-xs text-muted-foreground">{vendorProfile?.contact_email || 'vendor@example.com'}</p>
+                  <p className="text-xs text-muted-foreground">{vendorProfile?.contact_email || user?.email || ''}</p>
                 </div>
               </div>
               

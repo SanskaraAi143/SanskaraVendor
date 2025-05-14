@@ -3,10 +3,22 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ServiceType {
   service_id: string;
@@ -21,37 +33,69 @@ interface ServiceType {
 const Services: React.FC = () => {
   const [services, setServices] = useState<ServiceType[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   const { vendorProfile } = useAuth();
+  const navigate = useNavigate();
+  
+  const fetchServices = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('vendor_services')
+        .select('*')
+        .eq('vendor_id', vendorProfile.vendor_id)
+        .eq('is_active', true);
+        
+      if (error) throw error;
+      
+      console.log("Fetched services:", data);
+      setServices(data || []);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      toast({
+        title: "Error",
+        description: "Could not load your services",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   useEffect(() => {
-    const fetchServices = async () => {
-      if (!vendorProfile?.vendor_id) return;
-      
-      try {
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from('vendor_services')
-          .select('*')
-          .eq('vendor_id', vendorProfile.vendor_id)
-          .eq('is_active', true);
-          
-        if (error) throw error;
-        
-        setServices(data || []);
-      } catch (error) {
-        console.error('Error fetching services:', error);
-        toast({
-          title: "Error",
-          description: "Could not load your services",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchServices();
   }, [vendorProfile]);
+  
+  const handleDeleteService = async () => {
+    if (!serviceToDelete) return;
+    
+    try {
+      // Instead of actually deleting, we set is_active to false
+      const { error } = await supabase
+        .from('vendor_services')
+        .update({ is_active: false })
+        .eq('service_id', serviceToDelete);
+        
+      if (error) throw error;
+      
+      setServices(services.filter(service => service.service_id !== serviceToDelete));
+      toast({
+        title: "Service deleted",
+        description: "The service has been successfully removed",
+      });
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      toast({
+        title: "Error",
+        description: "Could not delete the service",
+        variant: "destructive",
+      });
+    } finally {
+      setServiceToDelete(null);
+    }
+  };
   
   const formatPrice = (price: number, unit: string | null) => {
     if (!price) return "N/A";
@@ -67,7 +111,10 @@ const Services: React.FC = () => {
             Manage your services offerings
           </p>
         </div>
-        <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+        <Button 
+          className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
+          onClick={() => navigate('/services/add')}
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Service
         </Button>
@@ -89,7 +136,10 @@ const Services: React.FC = () => {
               You haven't added any services yet. Create your first service to start 
               receiving bookings from customers.
             </p>
-            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+            <Button 
+              className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
+              onClick={() => navigate('/services/add')}
+            >
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Your First Service
             </Button>
@@ -122,12 +172,47 @@ const Services: React.FC = () => {
                 )}
               </CardContent>
               <CardFooter className="border-t pt-4 flex justify-between">
-                <Button variant="outline" size="sm" className="flex-1 mr-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 mr-2"
+                  onClick={() => navigate(`/services/edit/${service.service_id}`)}
+                >
                   <Edit className="h-4 w-4 mr-1" /> Edit
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1 border-red-200 text-red-600 hover:bg-red-50">
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete
-                </Button>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                      onClick={() => setServiceToDelete(service.service_id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" /> Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                        Delete Service
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this service? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setServiceToDelete(null)}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-500 hover:bg-red-600"
+                        onClick={handleDeleteService}
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardFooter>
             </Card>
           ))}

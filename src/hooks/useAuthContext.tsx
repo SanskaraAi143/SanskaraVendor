@@ -11,6 +11,9 @@ type VendorProfile = {
   vendor_category: string;
   contact_email: string;
   is_verified: boolean;
+  phone_number?: string;
+  website_url?: string;
+  description?: string;
 }
 
 type AuthContextType = {
@@ -22,6 +25,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, metadata?: any) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshVendorProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,6 +42,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchVendorProfile = async (userId: string) => {
     try {
       setIsLoadingProfile(true);
+      console.log("Fetching vendor profile for user:", userId);
+      
       const { data, error } = await supabase
         .from('vendors')
         .select('*')
@@ -50,7 +56,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data) {
+        console.log("Vendor profile found:", data);
         setVendorProfile(data as VendorProfile);
+      } else {
+        console.log("No vendor profile found for user:", userId);
       }
     } catch (error) {
       console.error('Error fetching vendor profile:', error);
@@ -59,10 +68,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Function to manually refresh vendor profile data
+  const refreshVendorProfile = async () => {
+    if (user?.id) {
+      await fetchVendorProfile(user.id);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        console.log("Auth state changed:", event);
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
@@ -84,6 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      console.log("Got existing session:", currentSession ? "yes" : "no");
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       
@@ -100,7 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -136,7 +154,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user_type: 'vendor'
       };
       
-      const { error } = await supabase.auth.signUp({
+      console.log("Signing up with metadata:", vendorMetadata);
+      
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -193,7 +213,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       isLoadingProfile,
       signIn, 
       signUp, 
-      signOut 
+      signOut,
+      refreshVendorProfile
     }}>
       {children}
     </AuthContext.Provider>

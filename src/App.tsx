@@ -7,7 +7,10 @@ import Calendar from './pages/Calendar';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Services from './pages/Services';
+import AddService from './pages/AddService';
+import EditService from './pages/EditService';
 import Staff from './pages/Staff';
+import Tasks from './pages/Tasks';
 import NotFound from './pages/NotFound';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -34,7 +37,10 @@ function App() {
         <Route path="bookings" element={<Bookings />} />
         <Route path="calendar" element={<Calendar />} />
         <Route path="services" element={<Services />} />
+        <Route path="services/add" element={<AddService />} />
+        <Route path="services/edit/:serviceId" element={<EditService />} />
         <Route path="staff" element={<Staff />} />
+        <Route path="tasks" element={<Tasks />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
       </Route>

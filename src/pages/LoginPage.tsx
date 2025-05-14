@@ -1,38 +1,54 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EyeIcon, EyeOffIcon, UserIcon, KeyIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, UserIcon, KeyIcon, Loader, CheckCircle } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/hooks/useAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Form, FormField, FormItem, FormControl, FormMessage } from '@/components/ui/form';
+import { Form, FormField, FormItem, FormControl, FormMessage, FormLabel, FormDescription } from '@/components/ui/form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-const signupSchema = loginSchema.extend({
-  vendorName: z.string().min(2, 'Vendor name must be at least 2 characters'),
-  vendorCategory: z.string().min(2, 'Please select a category'),
-  displayName: z.string().min(2, 'Display name must be at least 2 characters'),
+const signupSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  vendorName: z.string().min(2, 'Business name must be at least 2 characters'),
+  vendorCategory: z.string().min(1, 'Please select a category'),
+  displayName: z.string().min(2, 'Your name must be at least 2 characters'),
+  phone: z.string().optional(),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 type SignupFormValues = z.infer<typeof signupSchema>;
 
+const categories = [
+  "Venue", "Catering", "Photography", "Videography", "Decor", 
+  "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
+];
+
 const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const { isLoading, signIn, signUp } = useAuth();
+  const { isLoading, user, signIn, signUp } = useAuth();
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
   
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -49,7 +65,8 @@ const LoginPage: React.FC = () => {
       password: '',
       vendorName: '',
       vendorCategory: '',
-      displayName: ''
+      displayName: '',
+      phone: '',
     }
   });
   
@@ -57,13 +74,25 @@ const LoginPage: React.FC = () => {
     signIn(data.email, data.password);
   };
   
-  const onSignup = (data: SignupFormValues) => {
-    signUp(data.email, data.password, {
-      vendor_name: data.vendorName,
-      vendor_category: data.vendorCategory,
-      display_name: data.displayName
-    });
-    setActiveTab('login');
+  const onSignup = async (data: SignupFormValues) => {
+    try {
+      await signUp(data.email, data.password, {
+        vendor_name: data.vendorName,
+        vendor_category: data.vendorCategory,
+        display_name: data.displayName,
+        phone_number: data.phone || null
+      });
+      setSignupSuccess(true);
+      
+      // Reset form and switch to login tab after a delay
+      setTimeout(() => {
+        signupForm.reset();
+        setActiveTab('login');
+        setSignupSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Signup error:', error);
+    }
   };
   
   return (
@@ -101,12 +130,11 @@ const LoginPage: React.FC = () => {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <Label htmlFor="email">Email</Label>
+                      <FormLabel>Email</FormLabel>
                       <div className="relative">
                         <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <FormControl>
                           <Input 
-                            id="email" 
                             type="email" 
                             placeholder="vendor@example.com" 
                             className="pl-10 sanskara-input"
@@ -125,7 +153,7 @@ const LoginPage: React.FC = () => {
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
+                        <FormLabel>Password</FormLabel>
                         <a href="#" className="text-xs text-sanskara-maroon hover:text-sanskara-red">
                           Forgot password?
                         </a>
@@ -134,7 +162,6 @@ const LoginPage: React.FC = () => {
                         <KeyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <FormControl>
                           <Input 
-                            id="password" 
                             type={showPassword ? "text" : "password"} 
                             className="pl-10 pr-10 sanskara-input"
                             {...field}
@@ -163,8 +190,8 @@ const LoginPage: React.FC = () => {
                   disabled={isLoading}
                 >
                   {isLoading ? (
-                    <div className="flex items-center">
-                      <div className="h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                    <div className="flex items-center justify-center">
+                      <Loader className="h-4 w-4 animate-spin mr-2" />
                       Signing In...
                     </div>
                   ) : (
@@ -176,145 +203,167 @@ const LoginPage: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="signup">
-            <Form {...signupForm}>
-              <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
-                <FormField
-                  control={signupForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Label htmlFor="signup-email">Email</Label>
-                      <div className="relative">
-                        <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {signupSuccess ? (
+              <Alert className="mb-6 bg-green-50 border-green-200">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <AlertTitle className="text-green-800">Registration Successful!</AlertTitle>
+                <AlertDescription className="text-green-700">
+                  Your account has been created. You can now sign in with your credentials.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Form {...signupForm}>
+                <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
+                  <FormField
+                    control={signupForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <div className="relative">
+                          <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              type="email" 
+                              placeholder="vendor@example.com" 
+                              className="pl-10 sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <div className="relative">
+                          <KeyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              type={showPassword ? "text" : "password"} 
+                              className="pl-10 pr-10 sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                          <button 
+                            type="button" 
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2" 
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOffIcon className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <EyeIcon className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+                        <FormDescription className="text-xs">
+                          Password must be at least 6 characters long
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="vendorName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Name</FormLabel>
                         <FormControl>
                           <Input 
-                            id="signup-email" 
-                            type="email" 
-                            placeholder="vendor@example.com" 
-                            className="pl-10 sanskara-input"
+                            placeholder="Your Business Name" 
+                            className="sanskara-input"
                             {...field}
                           />
                         </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signupForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Label htmlFor="signup-password">Password</Label>
-                      <div className="relative">
-                        <KeyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="vendorCategory"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Category</FormLabel>
+                        <FormControl>
+                          <select 
+                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                            {...field}
+                          >
+                            <option value="">Select a category</option>
+                            {categories.map(category => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="displayName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Your Name</FormLabel>
                         <FormControl>
                           <Input 
-                            id="signup-password" 
-                            type={showPassword ? "text" : "password"} 
-                            className="pl-10 pr-10 sanskara-input"
+                            placeholder="Your Name" 
+                            className="sanskara-input"
                             {...field}
                           />
                         </FormControl>
-                        <button 
-                          type="button" 
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2" 
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <EyeOffIcon className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <EyeIcon className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </button>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number (Optional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="+91 98765 43210" 
+                            className="sanskara-input"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-sanskara-gold hover:bg-sanskara-amber text-sanskara-maroon" 
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center">
+                        <Loader className="h-4 w-4 animate-spin mr-2" />
+                        Creating Account...
                       </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signupForm.control}
-                  name="vendorName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Label htmlFor="vendor-name">Vendor Business Name</Label>
-                      <FormControl>
-                        <Input 
-                          id="vendor-name" 
-                          placeholder="Your Business Name" 
-                          className="sanskara-input"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signupForm.control}
-                  name="vendorCategory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Label htmlFor="vendor-category">Business Category</Label>
-                      <FormControl>
-                        <select 
-                          id="vendor-category"
-                          className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                          {...field}
-                        >
-                          <option value="">Select a category</option>
-                          <option value="Venue">Venue</option>
-                          <option value="Catering">Catering</option>
-                          <option value="Photography">Photography</option>
-                          <option value="Decor">Decor</option>
-                          <option value="Clothing">Clothing</option>
-                          <option value="Music">Music</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signupForm.control}
-                  name="displayName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Label htmlFor="display-name">Your Name</Label>
-                      <FormControl>
-                        <Input 
-                          id="display-name" 
-                          placeholder="Your Name" 
-                          className="sanskara-input"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <Button 
-                  type="submit" 
-                  className="w-full bg-sanskara-gold hover:bg-sanskara-amber text-sanskara-maroon" 
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center">
-                      <div className="h-4 w-4 border-2 border-t-transparent border-sanskara-maroon rounded-full animate-spin mr-2"></div>
-                      Creating Account...
-                    </div>
-                  ) : (
-                    'Create Account'
-                  )}
-                </Button>
-              </form>
-            </Form>
+                    ) : (
+                      'Create Account'
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            )}
           </TabsContent>
         </Tabs>
         
