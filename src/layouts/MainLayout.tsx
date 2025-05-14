@@ -1,26 +1,67 @@
 
-import React from 'react';
-import { Outlet } from 'react-router-dom';
-import { SidebarProvider } from "@/components/ui/sidebar";
+import React, { useEffect, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import VendorSidebar from '@/components/VendorSidebar';
 import VendorHeader from '@/components/VendorHeader';
+import { useAuth } from '@/hooks/useAuthContext';
+import { Toaster } from '@/components/ui/toaster';
+import { useMobile } from '@/hooks/use-mobile';
 
 const MainLayout: React.FC = () => {
+  const { vendorProfile, isLoadingProfile } = useAuth();
+  const { isMobile } = useMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const location = useLocation();
+
+  // Toggle sidebar when screen size changes
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
+  }, [isMobile]);
+
+  // Add a class to the body for route transitions
+  useEffect(() => {
+    document.body.classList.add('page-transition');
+    const timeout = setTimeout(() => {
+      document.body.classList.remove('page-transition');
+    }, 300);
+    
+    return () => {
+      clearTimeout(timeout);
+      document.body.classList.remove('page-transition');
+    };
+  }, [location.pathname]);
+
   return (
-    // Fix: Remove unsupported props collapsedWidth and defaultCollapsed
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <VendorSidebar />
+    <div className="flex h-screen overflow-hidden bg-sanskara-cream/10">
+      {/* Sidebar */}
+      <VendorSidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+      />
+      
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <VendorHeader 
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          vendorProfile={vendorProfile}
+          isLoadingProfile={isLoadingProfile}
+        />
         
-        <div className="flex-1">
-          <VendorHeader />
-          
-          <main className="p-4 md:p-6">
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="container mx-auto max-w-7xl">
             <Outlet />
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
-    </SidebarProvider>
+
+      {/* Toast notifications */}
+      <Toaster />
+    </div>
   );
 };
 

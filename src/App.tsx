@@ -1,5 +1,5 @@
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
@@ -15,9 +15,16 @@ import NotFound from './pages/NotFound';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuthContext';
+import { useEffect } from 'react';
 
 function App() {
   const { user } = useAuth();
+  const location = useLocation();
+  
+  // This effect prevents the scroll position from jumping when navigating
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
   
   return (
     <Routes>

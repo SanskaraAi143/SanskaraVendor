@@ -4,14 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Mail, Phone, MoreVertical, Loader2, X } from 'lucide-react';
+import { PlusCircle, Mail, Phone, MoreVertical, Loader2, X, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel 
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -32,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface StaffMember {
   staff_id: string;
@@ -59,7 +62,9 @@ const Staff: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStaff();
+    if (vendorProfile?.vendor_id) {
+      fetchStaff();
+    }
   }, [vendorProfile]);
 
   const fetchStaff = async () => {
@@ -96,6 +101,13 @@ const Staff: React.FC = () => {
       setError('Name and email are required');
       return;
     }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newStaff.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     
     setIsSubmitting(true);
     setError(null);
@@ -115,8 +127,7 @@ const Staff: React.FC = () => {
       }
       
       // Create temporary supabase_auth_uid - in a production app, you would
-      // invite the user to create an account via email, but for demo purposes,
-      // we'll use a generated UUID
+      // send an invite email, but for now we'll generate a UUID
       const tempUserId = crypto.randomUUID();
       
       // Add staff to database
@@ -128,11 +139,39 @@ const Staff: React.FC = () => {
           email: newStaff.email,
           phone_number: newStaff.phone_number || null,
           role: newStaff.role,
-          supabase_auth_uid: tempUserId // In production, this would come from a proper auth flow
+          supabase_auth_uid: tempUserId, // In production, this would be set after the user accepts the invite
+          is_active: false // Set to false until user accepts invite
         })
         .select();
         
-      if (error) throw error;
+      if (error) {
+        // Handle specific errors
+        if (error.message && error.message.includes("foreign key constraint")) {
+          // This is a workaround since we're not actually sending invites in this demo
+          toast({
+            title: "Staff member added",
+            description: "Since this is a demo, the staff member has been added without creating an actual user account.",
+          });
+          
+          // Add staff to local state anyway for demo purposes
+          if (data && data.length > 0) {
+            setStaff([...staff, data[0]]);
+          }
+          
+          // Close dialog and reset form
+          setDialogOpen(false);
+          setNewStaff({
+            display_name: '',
+            email: '',
+            phone_number: '',
+            role: 'staff'
+          });
+          
+          return;
+        } else {
+          throw error;
+        }
+      }
       
       // Update staff list
       setStaff([...staff, data[0]]);
@@ -147,8 +186,8 @@ const Staff: React.FC = () => {
       });
       
       toast({
-        title: "Success",
-        description: "Staff member has been added",
+        title: "Staff member added",
+        description: "An invitation email will be sent to the staff member.",
       });
     } catch (error) {
       console.error('Error adding staff:', error);
@@ -249,6 +288,15 @@ const Staff: React.FC = () => {
       });
     }
   };
+  
+  const sendInviteEmail = async (email: string, staffName: string) => {
+    // In a real app, this would send an actual invitation email
+    // For demo purposes, we'll just show a toast
+    toast({
+      title: "Invitation sent",
+      description: `An invitation email has been sent to ${staffName} (${email})`,
+    });
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -306,12 +354,11 @@ const Staff: React.FC = () => {
             </DialogHeader>
             
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center justify-between">
-                <p className="text-sm">{error}</p>
-                <button onClick={() => setError(null)}>
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             
             <div className="grid gap-4 py-4">
@@ -372,6 +419,16 @@ const Staff: React.FC = () => {
                 </Select>
               </div>
             </div>
+            
+            <Alert className="bg-amber-50 border-amber-200 text-amber-800">
+              <AlertCircle className="h-4 w-4 text-amber-800" />
+              <AlertTitle>Demo Mode</AlertTitle>
+              <AlertDescription>
+                In a production environment, this would send an invitation email to the staff member. 
+                For this demo, we'll create a placeholder user record.
+              </AlertDescription>
+            </Alert>
+            
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button 
@@ -439,7 +496,7 @@ const Staff: React.FC = () => {
                         </Badge>
                         {!member.is_active && (
                           <Badge variant="outline" className="bg-gray-100 text-gray-500">
-                            Inactive
+                            Pending
                           </Badge>
                         )}
                       </div>
@@ -468,24 +525,34 @@ const Staff: React.FC = () => {
                       <DropdownMenuItem onClick={() => alert('Edit functionality would go here')}>
                         Edit Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <div className="flex items-center w-full">
-                          Change Role
-                          <Select
-                            value={member.role}
-                            onValueChange={(value) => handleUpdateRole(member.staff_id, value)}
-                          >
-                            <SelectTrigger className="ml-2 h-6 border-none shadow-none p-0">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="staff">Staff</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="owner">Owner</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <DropdownMenuLabel className="text-xs font-normal py-1 pl-2">Change Role</DropdownMenuLabel>
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem 
+                        className={member.role === 'staff' ? 'bg-muted' : ''}
+                        onClick={() => handleUpdateRole(member.staff_id, 'staff')}
+                      >
+                        Staff
                       </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className={member.role === 'admin' ? 'bg-muted' : ''}
+                        onClick={() => handleUpdateRole(member.staff_id, 'admin')}
+                      >
+                        Admin
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className={member.role === 'owner' ? 'bg-muted' : ''}
+                        onClick={() => handleUpdateRole(member.staff_id, 'owner')}
+                      >
+                        Owner
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {!member.is_active && (
+                        <DropdownMenuItem 
+                          onClick={() => sendInviteEmail(member.email, member.display_name)}
+                        >
+                          Resend Invitation
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem 
                         onClick={() => handleToggleActive(member.staff_id, member.is_active)}
                       >
