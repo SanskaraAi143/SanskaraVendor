@@ -4,11 +4,34 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Mail, Phone, MoreVertical } from 'lucide-react';
+import { PlusCircle, Mail, Phone, MoreVertical, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface StaffMember {
   staff_id: string;
@@ -24,35 +47,208 @@ const Staff: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { vendorProfile } = useAuth();
 
+  // New staff member dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newStaff, setNewStaff] = useState({
+    display_name: '',
+    email: '',
+    phone_number: '',
+    role: 'staff'
+  });
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    const fetchStaff = async () => {
-      if (!vendorProfile?.vendor_id) return;
-      
-      try {
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from('vendor_staff')
-          .select('*')
-          .eq('vendor_id', vendorProfile.vendor_id)
-          .order('role', { ascending: false });
-          
-        if (error) throw error;
-        
-        setStaff(data || []);
-      } catch (error) {
-        console.error('Error fetching staff:', error);
-        toast({
-          title: "Error",
-          description: "Could not load your staff members",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchStaff();
   }, [vendorProfile]);
+
+  const fetchStaff = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('vendor_staff')
+        .select('*')
+        .eq('vendor_id', vendorProfile.vendor_id)
+        .order('role', { ascending: false });
+        
+      if (error) throw error;
+      
+      setStaff(data || []);
+    } catch (error) {
+      console.error('Error fetching staff:', error);
+      toast({
+        title: "Error",
+        description: "Could not load your staff members",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddStaff = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    // Validation
+    if (!newStaff.display_name || !newStaff.email) {
+      setError('Name and email are required');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      // Check if email already exists
+      const { data: existingStaff } = await supabase
+        .from('vendor_staff')
+        .select('email')
+        .eq('email', newStaff.email)
+        .eq('vendor_id', vendorProfile.vendor_id);
+        
+      if (existingStaff && existingStaff.length > 0) {
+        setError('A staff member with this email already exists');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Create temporary supabase_auth_uid - in a production app, you would
+      // invite the user to create an account via email, but for demo purposes,
+      // we'll use a generated UUID
+      const tempUserId = crypto.randomUUID();
+      
+      // Add staff to database
+      const { data, error } = await supabase
+        .from('vendor_staff')
+        .insert({
+          vendor_id: vendorProfile.vendor_id,
+          display_name: newStaff.display_name,
+          email: newStaff.email,
+          phone_number: newStaff.phone_number || null,
+          role: newStaff.role,
+          supabase_auth_uid: tempUserId // In production, this would come from a proper auth flow
+        })
+        .select();
+        
+      if (error) throw error;
+      
+      // Update staff list
+      setStaff([...staff, data[0]]);
+      
+      // Close dialog and reset form
+      setDialogOpen(false);
+      setNewStaff({
+        display_name: '',
+        email: '',
+        phone_number: '',
+        role: 'staff'
+      });
+      
+      toast({
+        title: "Success",
+        description: "Staff member has been added",
+      });
+    } catch (error) {
+      console.error('Error adding staff:', error);
+      setError('Failed to add staff member. Please try again.');
+      toast({
+        title: "Error",
+        description: "Could not add staff member",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateRole = async (staffId: string, role: string) => {
+    try {
+      const { error } = await supabase
+        .from('vendor_staff')
+        .update({ role })
+        .eq('staff_id', staffId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setStaff(staff.map(member => 
+        member.staff_id === staffId ? { ...member, role } : member
+      ));
+      
+      toast({
+        title: "Role updated",
+        description: `Staff member's role has been updated to ${role}`,
+      });
+    } catch (error) {
+      console.error('Error updating staff role:', error);
+      toast({
+        title: "Error",
+        description: "Could not update staff role",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleActive = async (staffId: string, currentStatus: boolean) => {
+    try {
+      const newStatus = !currentStatus;
+      const { error } = await supabase
+        .from('vendor_staff')
+        .update({ is_active: newStatus })
+        .eq('staff_id', staffId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setStaff(staff.map(member => 
+        member.staff_id === staffId ? { ...member, is_active: newStatus } : member
+      ));
+      
+      toast({
+        title: newStatus ? "Staff activated" : "Staff deactivated",
+        description: `Staff member has been ${newStatus ? 'activated' : 'deactivated'}`,
+      });
+    } catch (error) {
+      console.error('Error toggling staff active status:', error);
+      toast({
+        title: "Error",
+        description: "Could not update staff status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveStaff = async (staffId: string, staffName: string) => {
+    if (!confirm(`Are you sure you want to remove ${staffName} from your staff?`)) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('vendor_staff')
+        .delete()
+        .eq('staff_id', staffId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setStaff(staff.filter(member => member.staff_id !== staffId));
+      
+      toast({
+        title: "Staff removed",
+        description: `${staffName} has been removed from your staff`,
+      });
+    } catch (error) {
+      console.error('Error removing staff:', error);
+      toast({
+        title: "Error",
+        description: "Could not remove staff member",
+        variant: "destructive",
+      });
+    }
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -94,10 +290,107 @@ const Staff: React.FC = () => {
             Manage your team members and permissions
           </p>
         </div>
-        <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Team Member
-        </Button>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Team Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Team Member</DialogTitle>
+              <DialogDescription>
+                Add a new staff member to your team. They will receive an email invitation.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center justify-between">
+                <p className="text-sm">{error}</p>
+                <button onClick={() => setError(null)}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  placeholder="Full Name"
+                  className="col-span-3"
+                  value={newStaff.display_name}
+                  onChange={e => setNewStaff({...newStaff, display_name: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@example.com"
+                  className="col-span-3"
+                  value={newStaff.email}
+                  onChange={e => setNewStaff({...newStaff, email: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone" className="text-right">
+                  Phone
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  className="col-span-3"
+                  value={newStaff.phone_number}
+                  onChange={e => setNewStaff({...newStaff, phone_number: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="role" className="text-right">
+                  Role
+                </Label>
+                <Select
+                  value={newStaff.role}
+                  onValueChange={value => setNewStaff({...newStaff, role: value})}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    {staff.length === 0 && <SelectItem value="owner">Owner</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={handleAddStaff}
+                disabled={isSubmitting}
+                className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>Add Team Member</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       
       {isLoading ? (
@@ -115,7 +408,10 @@ const Staff: React.FC = () => {
             <p className="text-muted-foreground text-center mb-6 max-w-md">
               You haven't added any team members yet. Add staff to delegate tasks and manage your business more efficiently.
             </p>
-            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+            <Button 
+              className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
+              onClick={() => setDialogOpen(true)}
+            >
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Team Member
             </Button>
@@ -169,9 +465,38 @@ const Staff: React.FC = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                      <DropdownMenuItem>Change Role</DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600">Remove</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => alert('Edit functionality would go here')}>
+                        Edit Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem>
+                        <div className="flex items-center w-full">
+                          Change Role
+                          <Select
+                            value={member.role}
+                            onValueChange={(value) => handleUpdateRole(member.staff_id, value)}
+                          >
+                            <SelectTrigger className="ml-2 h-6 border-none shadow-none p-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="staff">Staff</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="owner">Owner</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleToggleActive(member.staff_id, member.is_active)}
+                      >
+                        {member.is_active ? 'Deactivate Account' : 'Activate Account'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="text-red-600"
+                        onClick={() => handleRemoveStaff(member.staff_id, member.display_name)}
+                      >
+                        Remove
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,8 +7,27 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { CalendarIcon, Clock, MapPin, User } from 'lucide-react';
+import { CalendarIcon, Clock, MapPin, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface BookingEvent {
   booking_id: string;
@@ -36,109 +56,232 @@ const Calendar: React.FC = () => {
   const [availabilityInfo, setAvailabilityInfo] = useState<AvailabilityInfo | null>(null);
   const { vendorProfile } = useAuth();
 
-  // Fetch bookings and availability
+  // New availability state
+  const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
+  const [newAvailability, setNewAvailability] = useState({
+    date: '',
+    status: 'available',
+    notes: ''
+  });
+
   useEffect(() => {
-    const fetchCalendarData = async () => {
-      if (!vendorProfile?.vendor_id) return;
-      
-      setIsLoading(true);
-      try {
-        // Fetch bookings
-        const { data: bookingsData, error: bookingsError } = await supabase
-          .from('bookings')
-          .select(`
-            booking_id,
-            event_date,
-            booking_status,
-            user_id,
-            notes_for_vendor
-          `)
-          .eq('vendor_id', vendorProfile.vendor_id);
-          
-        if (bookingsError) throw bookingsError;
-        
-        // Fetch availability
-        const { data: availData, error: availError } = await supabase
-          .from('vendor_availability')
-          .select('*')
-          .eq('vendor_id', vendorProfile.vendor_id);
-          
-        if (availError) throw availError;
-        
-        // Process bookings data
-        setBookings(bookingsData || []);
-        
-        // Process availability data
-        const availMap: {[key: string]: string} = {};
-        availData?.forEach(item => {
-          availMap[item.available_date] = item.status;
-        });
-        setAvailability(availMap);
-        
-      } catch (error) {
-        console.error('Error fetching calendar data:', error);
-        toast({
-          title: "Error",
-          description: "Could not load calendar data",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchCalendarData();
   }, [vendorProfile]);
+
+  // Fetch bookings and availability
+  const fetchCalendarData = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    setIsLoading(true);
+    try {
+      // Fetch bookings
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          booking_id,
+          event_date,
+          booking_status,
+          user_id,
+          notes_for_vendor
+        `)
+        .eq('vendor_id', vendorProfile.vendor_id);
+        
+      if (bookingsError) throw bookingsError;
+      
+      // Fetch availability
+      const { data: availData, error: availError } = await supabase
+        .from('vendor_availability')
+        .select('*')
+        .eq('vendor_id', vendorProfile.vendor_id);
+        
+      if (availError) throw availError;
+      
+      // Process bookings data
+      setBookings(bookingsData || []);
+      
+      // Process availability data
+      const availMap: {[key: string]: string} = {};
+      availData?.forEach(item => {
+        availMap[item.available_date] = item.status;
+      });
+      setAvailability(availMap);
+      
+      // Update day events for the currently selected date
+      if (selectedDate) {
+        updateDayEvents(selectedDate, bookingsData || [], availMap);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+      toast({
+        title: "Error",
+        description: "Could not load calendar data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Update displayed events when date changes
   useEffect(() => {
     if (selectedDate) {
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      updateDayEvents(selectedDate, bookings, availability);
+    }
+  }, [selectedDate]);
+
+  const updateDayEvents = (date: Date, bookings: BookingEvent[], availability: {[key: string]: string}) => {
+    const formattedDate = format(date, 'yyyy-MM-dd');
+    
+    // Filter bookings for selected date
+    const filteredEvents = bookings.filter(booking => 
+      booking.event_date === formattedDate
+    );
+    
+    setDayEvents(filteredEvents);
+    
+    // Get availability info for the selected date
+    const availStatus = availability[formattedDate];
+    if (availStatus) {
+      const availabilityData = {
+        availability_id: '',
+        available_date: formattedDate,
+        status: availStatus,
+        notes: ''
+      };
+      setAvailabilityInfo(availabilityData);
+    } else {
+      setAvailabilityInfo(null);
+    }
+  };
+
+  const setAvailabilityStatus = async (status: string) => {
+    if (!vendorProfile?.vendor_id || !selectedDate) return;
+    
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    
+    try {
+      // Check if there's already an availability record for this date
+      const { data: existingData, error: checkError } = await supabase
+        .from('vendor_availability')
+        .select('availability_id')
+        .eq('vendor_id', vendorProfile.vendor_id)
+        .eq('available_date', formattedDate);
+        
+      if (checkError) throw checkError;
       
-      // Filter bookings for selected date
-      const filteredEvents = bookings.filter(booking => 
-        booking.event_date === formattedDate
-      );
+      let result;
       
-      setDayEvents(filteredEvents);
+      if (existingData && existingData.length > 0) {
+        // Update existing record
+        result = await supabase
+          .from('vendor_availability')
+          .update({ status })
+          .eq('availability_id', existingData[0].availability_id);
+      } else {
+        // Insert new record
+        result = await supabase
+          .from('vendor_availability')
+          .insert({
+            vendor_id: vendorProfile.vendor_id,
+            available_date: formattedDate,
+            status
+          });
+      }
       
-      // Get availability info for the selected date
-      const availStatus = availability[formattedDate];
-      if (availStatus) {
+      if (result.error) throw result.error;
+      
+      // Update local state
+      const newAvailability = { ...availability };
+      newAvailability[formattedDate] = status;
+      setAvailability(newAvailability);
+      
+      // Update availability info
+      if (availabilityInfo) {
+        setAvailabilityInfo({
+          ...availabilityInfo,
+          status
+        });
+      } else {
         setAvailabilityInfo({
           availability_id: '',
           available_date: formattedDate,
-          status: availStatus,
+          status,
           notes: ''
         });
-      } else {
-        setAvailabilityInfo(null);
       }
+      
+      toast({
+        title: "Availability updated",
+        description: `You are now marked as ${status} on ${format(selectedDate, 'MMMM d, yyyy')}`,
+      });
+    } catch (error) {
+      console.error('Error setting availability:', error);
+      toast({
+        title: "Error",
+        description: "Could not update availability",
+        variant: "destructive",
+      });
     }
-  }, [selectedDate, bookings, availability]);
+  };
 
-  // Calendar day rendering with booking indicators
-  const renderCalendarDay = (day: Date) => {
-    const dateStr = format(day, 'yyyy-MM-dd');
-    const hasBooking = bookings.some(b => b.event_date === dateStr);
-    const availStatus = availability[dateStr];
-    
-    let className = '';
-    
-    if (availStatus === 'unavailable') {
-      className = 'bg-red-100 text-red-800 rounded-full';
-    } else if (availStatus === 'tentative') {
-      className = 'bg-amber-100 text-amber-800 rounded-full';
+  const handleAddAvailability = async () => {
+    if (!vendorProfile?.vendor_id || !newAvailability.date) {
+      toast({
+        title: "Error",
+        description: "Date is required",
+        variant: "destructive",
+      });
+      return;
     }
     
-    if (hasBooking) {
-      return <div className={`relative ${className}`}>
-        {day.getDate()}
-        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-sanskara-red rounded-full"></div>
-      </div>
+    try {
+      const { error } = await supabase
+        .from('vendor_availability')
+        .insert({
+          vendor_id: vendorProfile.vendor_id,
+          available_date: newAvailability.date,
+          status: newAvailability.status,
+          notes: newAvailability.notes || null
+        });
+        
+      if (error) throw error;
+      
+      // Update local state
+      const newAvailabilityMap = { ...availability };
+      newAvailabilityMap[newAvailability.date] = newAvailability.status;
+      setAvailability(newAvailabilityMap);
+      
+      // If the added availability is for the selected date, update the availabilityInfo
+      if (selectedDate && format(selectedDate, 'yyyy-MM-dd') === newAvailability.date) {
+        setAvailabilityInfo({
+          availability_id: '',
+          available_date: newAvailability.date,
+          status: newAvailability.status,
+          notes: newAvailability.notes || ''
+        });
+      }
+      
+      // Reset form and close dialog
+      setNewAvailability({
+        date: '',
+        status: 'available',
+        notes: ''
+      });
+      setAvailabilityDialogOpen(false);
+      
+      toast({
+        title: "Availability added",
+        description: `Availability for ${format(new Date(newAvailability.date), 'MMMM d, yyyy')} has been set to ${newAvailability.status}`,
+      });
+    } catch (error) {
+      console.error('Error adding availability:', error);
+      toast({
+        title: "Error",
+        description: "Could not add availability",
+        variant: "destructive",
+      });
     }
-    
-    return <div className={className}>{day.getDate()}</div>;
   };
   
   const getStatusColor = (status: string) => {
@@ -169,6 +312,35 @@ const Calendar: React.FC = () => {
     }
   };
 
+  const getDisplayStatus = (status: string) => {
+    // Convert snake_case to Title Case
+    return status
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Function to render day cells with appropriate indicators
+  const dayHasEvent = (day: Date) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const hasBooking = bookings.some(b => b.event_date === dateStr);
+    const availStatus = availability[dateStr];
+    
+    let classNames = '';
+    
+    if (availStatus === 'unavailable') {
+      classNames += 'bg-red-50 ';
+    } else if (availStatus === 'tentative') {
+      classNames += 'bg-amber-50 ';
+    }
+    
+    if (hasBooking) {
+      classNames += 'font-bold text-sanskara-red';
+    }
+    
+    return classNames;
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -195,8 +367,33 @@ const Calendar: React.FC = () => {
                 selected={selectedDate}
                 onSelect={setSelectedDate}
                 className="rounded-md border pointer-events-auto"
-                components={{
-                  // Fix the TypeScript error by removing custom Day component
+                modifiers={{
+                  hasEvent: (date) => {
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    return bookings.some(b => b.event_date === dateStr);
+                  },
+                  unavailable: (date) => {
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    return availability[dateStr] === 'unavailable';
+                  },
+                  tentative: (date) => {
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    return availability[dateStr] === 'tentative';
+                  }
+                }}
+                modifiersStyles={{
+                  hasEvent: {
+                    fontWeight: 'bold',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '4px',
+                    textDecorationColor: 'var(--sanskara-red)',
+                  },
+                  unavailable: {
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  },
+                  tentative: {
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  }
                 }}
               />
             )}
@@ -222,9 +419,31 @@ const Calendar: React.FC = () => {
                 </Badge>
                 
                 <div className="mt-2 flex justify-between">
-                  <Button variant="outline" size="sm">Set as Available</Button>
-                  <Button variant="outline" size="sm" className="border-red-200 text-red-600">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setAvailabilityStatus('available')}
+                    className={availabilityInfo.status === 'available' ? 'bg-green-50 border-green-200' : ''}
+                  >
+                    Set as Available
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setAvailabilityStatus('unavailable')}
+                    className={`${availabilityInfo.status === 'unavailable' ? 'bg-red-50' : ''} border-red-200 text-red-600`}
+                  >
                     Mark Unavailable
+                  </Button>
+                </div>
+                <div className="mt-2 flex justify-between">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setAvailabilityStatus('tentative')}
+                    className={availabilityInfo.status === 'tentative' ? 'bg-amber-50 border-amber-200' : ''}
+                  >
+                    Mark as Tentative
                   </Button>
                 </div>
               </div>
@@ -242,9 +461,7 @@ const Calendar: React.FC = () => {
                           variant="outline"
                           className={getStatusColor(event.booking_status)}
                         >
-                          {event.booking_status.split('_').map(word => 
-                            word.charAt(0).toUpperCase() + word.slice(1)
-                          ).join(' ')}
+                          {getDisplayStatus(event.booking_status)}
                         </Badge>
                       </div>
                       
@@ -281,9 +498,70 @@ const Calendar: React.FC = () => {
             ) : (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">No events scheduled for this day</p>
-                <Button className="mt-4 bg-sanskara-red text-white hover:bg-sanskara-maroon">
-                  Add Availability
-                </Button>
+                <Dialog open={availabilityDialogOpen} onOpenChange={setAvailabilityDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="mt-4 bg-sanskara-red text-white hover:bg-sanskara-maroon">
+                      <Plus className="h-4 w-4 mr-2" /> Add Availability
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Availability</DialogTitle>
+                      <DialogDescription>
+                        Set your availability for specific dates.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="date" className="text-right">Date</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          className="col-span-3"
+                          value={newAvailability.date}
+                          onChange={(e) => setNewAvailability({...newAvailability, date: e.target.value})}
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="status" className="text-right">Status</Label>
+                        <Select
+                          value={newAvailability.status}
+                          onValueChange={(value) => setNewAvailability({...newAvailability, status: value})}
+                        >
+                          <SelectTrigger className="col-span-3">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="available">Available</SelectItem>
+                            <SelectItem value="unavailable">Unavailable</SelectItem>
+                            <SelectItem value="tentative">Tentative</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="notes" className="text-right">Notes</Label>
+                        <Textarea
+                          id="notes"
+                          placeholder="Any notes about this day"
+                          className="col-span-3"
+                          value={newAvailability.notes}
+                          onChange={(e) => setNewAvailability({...newAvailability, notes: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setAvailabilityDialogOpen(false)}>Cancel</Button>
+                      <Button 
+                        onClick={handleAddAvailability} 
+                        className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
+                      >
+                        Add Availability
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </CardContent>

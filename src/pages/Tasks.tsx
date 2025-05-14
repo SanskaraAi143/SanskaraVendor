@@ -30,6 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface Task {
   vendor_task_id: string;
@@ -45,57 +49,70 @@ interface Task {
 
 const statusOptions = ["To Do", "In Progress", "Under Review", "Completed", "On Hold"];
 const priorityOptions = ["low", "medium", "high", "urgent"];
+const categoryOptions = ["Administrative", "Client Work", "Marketing", "Operations", "Follow-up"];
 
 const Tasks: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    due_date: '',
+    priority: 'medium',
+    category: '',
+    status: 'To Do'
+  });
   const { vendorProfile } = useAuth();
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      if (!vendorProfile?.vendor_id) return;
-
-      try {
-        setIsLoading(true);
-        let query = supabase
-          .from('vendor_tasks')
-          .select('*')
-          .eq('vendor_id', vendorProfile.vendor_id);
-        
-        if (statusFilter) {
-          query = query.eq('status', statusFilter);
-        }
-        
-        if (priorityFilter) {
-          query = query.eq('priority', priorityFilter);
-        }
-        
-        const { data, error } = await query.order('due_date', { ascending: true });
-
-        if (error) throw error;
-        setTasks(data || []);
-      } catch (error: any) {
-        console.error('Error fetching tasks:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load tasks',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchTasks();
   }, [vendorProfile, statusFilter, priorityFilter]);
+
+  const fetchTasks = async () => {
+    if (!vendorProfile?.vendor_id) return;
+
+    try {
+      setIsLoading(true);
+      let query = supabase
+        .from('vendor_tasks')
+        .select('*')
+        .eq('vendor_id', vendorProfile.vendor_id);
+      
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+      
+      if (priorityFilter) {
+        query = query.eq('priority', priorityFilter);
+      }
+      
+      const { data, error } = await query.order('due_date', { ascending: true });
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error: any) {
+      console.error('Error fetching tasks:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load tasks',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
       const { error } = await supabase
         .from('vendor_tasks')
-        .update({ status: newStatus, is_complete: newStatus === 'Completed' })
+        .update({ 
+          status: newStatus, 
+          is_complete: newStatus === 'Completed'
+        })
         .eq('vendor_task_id', taskId);
 
       if (error) throw error;
@@ -116,6 +133,80 @@ const Tasks: React.FC = () => {
       toast({
         title: 'Error',
         description: 'Failed to update task status',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('vendor_tasks')
+        .delete()
+        .eq('vendor_task_id', taskId);
+        
+      if (error) throw error;
+      
+      setTasks(tasks.filter(task => task.vendor_task_id !== taskId));
+      
+      toast({
+        title: 'Task deleted',
+        description: 'Task has been successfully deleted',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete task',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const createTask = async () => {
+    if (!vendorProfile?.vendor_id || !newTask.title || !newTask.due_date) {
+      toast({
+        title: 'Validation Error',
+        description: 'Title and due date are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('vendor_tasks')
+        .insert({
+          vendor_id: vendorProfile.vendor_id,
+          title: newTask.title,
+          description: newTask.description,
+          due_date: newTask.due_date,
+          priority: newTask.priority,
+          category: newTask.category || null,
+          status: newTask.status
+        })
+        .select();
+        
+      if (error) throw error;
+      
+      setTasks([...tasks, data[0]]);
+      setDialogOpen(false);
+      setNewTask({
+        title: '',
+        description: '',
+        due_date: '',
+        priority: 'medium',
+        category: '',
+        status: 'To Do'
+      });
+      
+      toast({
+        title: 'Task created',
+        description: 'New task has been created successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create task',
         variant: 'destructive',
       });
     }
@@ -169,10 +260,103 @@ const Tasks: React.FC = () => {
           <h1 className="text-3xl font-bold gradient-text">Tasks</h1>
           <p className="text-muted-foreground mt-1">Manage and track your team's tasks</p>
         </div>
-        <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Create Task
-        </Button>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Task
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Task</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Task Title *</Label>
+                <Input 
+                  id="title" 
+                  placeholder="Enter task title" 
+                  value={newTask.title} 
+                  onChange={(e) => setNewTask({...newTask, title: e.target.value})} 
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea 
+                  id="description" 
+                  placeholder="Enter task description"
+                  value={newTask.description} 
+                  onChange={(e) => setNewTask({...newTask, description: e.target.value})} 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="due_date">Due Date *</Label>
+                  <Input 
+                    id="due_date" 
+                    type="date" 
+                    value={newTask.due_date} 
+                    onChange={(e) => setNewTask({...newTask, due_date: e.target.value})}
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority</Label>
+                  <Select value={newTask.priority} onValueChange={(val) => setNewTask({...newTask, priority: val})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priorityOptions.map(priority => (
+                        <SelectItem key={priority} value={priority}>
+                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select value={newTask.category} onValueChange={(val) => setNewTask({...newTask, category: val})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryOptions.map(category => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={newTask.status} onValueChange={(val) => setNewTask({...newTask, status: val})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map(status => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white" onClick={createTask}>Create Task</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
@@ -228,7 +412,7 @@ const Tasks: React.FC = () => {
                 ? "No tasks match your current filters. Try changing your filters or create a new task."
                 : "You haven't created any tasks yet. Add your first task to start managing your workflow."}
             </p>
-            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
+            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white" onClick={() => setDialogOpen(true)}>
               <PlusCircle className="mr-2 h-4 w-4" />
               Create First Task
             </Button>
@@ -323,7 +507,10 @@ const Tasks: React.FC = () => {
                               {status}
                             </DropdownMenuItem>
                           ))}
-                          <DropdownMenuItem className="text-red-600">
+                          <DropdownMenuItem 
+                            className="text-red-600"
+                            onClick={() => deleteTask(task.vendor_task_id)}
+                          >
                             Delete Task
                           </DropdownMenuItem>
                         </DropdownMenuContent>
