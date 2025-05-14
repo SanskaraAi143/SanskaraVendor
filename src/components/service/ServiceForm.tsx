@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -79,6 +78,9 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
       const serviceData = {
         ...data,
         vendor_id: vendorProfile.vendor_id,
+        // Ensure all required fields have values
+        service_name: data.service_name,
+        service_category: data.service_category,
       };
       
       let result;

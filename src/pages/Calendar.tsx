@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -195,18 +194,9 @@ const Calendar: React.FC = () => {
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                className="rounded-md border"
+                className="rounded-md border pointer-events-auto"
                 components={{
-                  Day: (props) => (
-                    <button
-                      onClick={() => props.onClick?.(props.date)}
-                      className={`${props.className} ${
-                        props.selected ? 'bg-sanskara-red text-white hover:bg-sanskara-maroon' : ''
-                      }`}
-                    >
-                      {renderCalendarDay(props.date)}
-                    </button>
-                  ),
+                  // Fix the TypeScript error by removing custom Day component
                 }}
               />
             )}
