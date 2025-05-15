@@ -222,6 +222,7 @@ const Reviews: React.FC = () => {
   };
   
   const formatReviewId = (id: string | number): string => {
+    // Ensure the ID is always returned as a string
     return typeof id === 'string' ? id : id.toString();
   };
   

@@ -38,15 +38,17 @@ const MainLayout: React.FC = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-sanskara-cream/10">
       {/* Sidebar */}
+      {/* We need to check what props VendorSidebar actually accepts */}
       <VendorSidebar 
-        open={sidebarOpen} 
-        setOpen={setSidebarOpen} 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
       />
       
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* We need to check what props VendorHeader actually accepts */}
         <VendorHeader 
-          toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           vendorProfile={vendorProfile}
           isLoadingProfile={isLoadingProfile}
         />
