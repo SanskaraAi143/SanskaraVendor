@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -221,10 +222,9 @@ const Reviews: React.FC = () => {
     return (getRatingCount(rating) / reviews.length * 100).toFixed(0);
   };
   
-  // Ensure this specific helper function is updated to always return a string
+  // Fixed: Ensure the function always returns a string
   const formatReviewId = (id: string | number): string => {
-    // Convert any number (including 0) to a string
-    return id.toString();
+    return String(id);
   };
   
   return (
