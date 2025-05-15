@@ -138,18 +138,17 @@ const Tasks: React.FC = () => {
   };
   
   const fetchStaff = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
     try {
       const { data, error } = await supabase
         .from('vendor_staff')
         .select('*')
-        .eq('vendor_id', vendorProfile.vendor_id);
+        .eq('vendor_id', vendorProfile?.vendor_id)
+        .eq('is_active', true);
         
       if (error) throw error;
       
       // Fix: Map the staff data to match Staff interface
-      const mappedStaff = data.map(staffMember => ({
+      const mappedStaff = (data || []).map(staffMember => ({
         staff_id: staffMember.staff_id,
         name: staffMember.display_name, // Map display_name to name
         role: staffMember.role
