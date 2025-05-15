@@ -89,11 +89,15 @@ const Settings: React.FC = () => {
         addressData = data.address as AddressSettings;
       }
       
-      let notifSettings = {
+      let notifSettings: NotificationSettings = {
         email_notifications: true,
         booking_updates: true,
         marketing_notifications: false
       };
+      
+      if (data.notification_settings && typeof data.notification_settings === 'object') {
+        notifSettings = data.notification_settings as NotificationSettings;
+      }
       
       // Initialize settings with vendor data
       const vendorSettings: VendorSettings = {
@@ -162,15 +166,15 @@ const Settings: React.FC = () => {
     setIsSaving(true);
     
     try {
-      // Prepare the data for update
+      // Prepare the data for update - convert to format expected by Supabase
       const updateData = {
         vendor_name: settings.vendor_name,
         contact_email: settings.contact_email,
         phone_number: settings.phone_number,
         website_url: settings.website_url,
         description: settings.description,
-        address: settings.address,
-        notification_settings: notificationSettings
+        address: settings.address as object, // Fix: Cast to object type
+        notification_settings: notificationSettings as object // Fix: Cast to object type
       };
       
       // Update vendor profile

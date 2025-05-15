@@ -148,7 +148,14 @@ const Tasks: React.FC = () => {
         
       if (error) throw error;
       
-      setStaff(data || []);
+      // Fix: Map the staff data to match Staff interface
+      const mappedStaff = data.map(staffMember => ({
+        staff_id: staffMember.staff_id,
+        name: staffMember.display_name, // Map display_name to name
+        role: staffMember.role
+      }));
+      
+      setStaff(mappedStaff);
     } catch (error) {
       console.error('Error fetching staff:', error);
     }
