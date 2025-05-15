@@ -15,39 +15,44 @@ import NotFound from './pages/NotFound';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuthContext';
+import { DataCacheProvider } from './hooks/useDataCache';
+import Reviews from './pages/Reviews';
 
 function App() {
   const { user } = useAuth();
   
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route 
-        path="/login" 
-        element={user ? <Navigate to="/" replace /> : <LoginPage />} 
-      />
-      
-      {/* Protected routes */}
-      <Route path="/" element={
-        <ProtectedRoute>
-          <MainLayout />
-        </ProtectedRoute>
-      }>
-        <Route index element={<Dashboard />} />
-        <Route path="bookings" element={<Bookings />} />
-        <Route path="calendar" element={<Calendar />} />
-        <Route path="services" element={<Services />} />
-        <Route path="services/add" element={<AddService />} />
-        <Route path="services/edit/:serviceId" element={<EditService />} />
-        <Route path="staff" element={<Staff />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-      
-      {/* 404 route */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <DataCacheProvider>
+      <Routes>
+        {/* Public routes */}
+        <Route 
+          path="/login" 
+          element={user ? <Navigate to="/" replace /> : <LoginPage />} 
+        />
+        
+        {/* Protected routes */}
+        <Route path="/" element={
+          <ProtectedRoute>
+            <MainLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<Dashboard />} />
+          <Route path="bookings" element={<Bookings />} />
+          <Route path="calendar" element={<Calendar />} />
+          <Route path="services" element={<Services />} />
+          <Route path="services/add" element={<AddService />} />
+          <Route path="services/edit/:serviceId" element={<EditService />} />
+          <Route path="staff" element={<Staff />} />
+          <Route path="tasks" element={<Tasks />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="reviews" element={<Reviews />} />
+        </Route>
+        
+        {/* 404 route */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </DataCacheProvider>
   );
 }
 

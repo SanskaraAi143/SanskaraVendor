@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { CalendarIcon, Clock, MapPin, User, Plus } from 'lucide-react';
+import { CalendarIcon, Clock, MapPin, User, Plus, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -38,6 +38,7 @@ interface BookingEvent {
   booking_status: string;
   start_time?: string;
   user_id: string;
+  notes_for_vendor?: string;
 }
 
 interface AvailabilityInfo {
@@ -55,6 +56,8 @@ const Calendar: React.FC = () => {
   const [dayEvents, setDayEvents] = useState<BookingEvent[]>([]);
   const [availabilityInfo, setAvailabilityInfo] = useState<AvailabilityInfo | null>(null);
   const { vendorProfile } = useAuth();
+  const [selectedEvent, setSelectedEvent] = useState<BookingEvent | null>(null);
+  const [eventDetailsOpen, setEventDetailsOpen] = useState(false);
 
   // New availability state
   const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
@@ -87,6 +90,22 @@ const Calendar: React.FC = () => {
         .eq('vendor_id', vendorProfile.vendor_id);
         
       if (bookingsError) throw bookingsError;
+
+      // Fetch user info for each booking
+      const enhancedBookings = await Promise.all(
+        (bookingsData || []).map(async (booking) => {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('display_name')
+            .eq('user_id', booking.user_id)
+            .single();
+          
+          return {
+            ...booking,
+            client_name: userData?.display_name || 'Unknown Client'
+          };
+        })
+      );
       
       // Fetch availability
       const { data: availData, error: availError } = await supabase
@@ -97,7 +116,7 @@ const Calendar: React.FC = () => {
       if (availError) throw availError;
       
       // Process bookings data
-      setBookings(bookingsData || []);
+      setBookings(enhancedBookings);
       
       // Process availability data
       const availMap: {[key: string]: string} = {};
@@ -108,7 +127,7 @@ const Calendar: React.FC = () => {
       
       // Update day events for the currently selected date
       if (selectedDate) {
-        updateDayEvents(selectedDate, bookingsData || [], availMap);
+        updateDayEvents(selectedDate, enhancedBookings, availMap);
       }
       
     } catch (error) {
@@ -320,6 +339,11 @@ const Calendar: React.FC = () => {
       .join(' ');
   };
 
+  const handleViewEventDetails = (event: BookingEvent) => {
+    setSelectedEvent(event);
+    setEventDetailsOpen(true);
+  };
+
   // Function to render day cells with appropriate indicators
   const dayHasEvent = (day: Date) => {
     const dateStr = format(day, 'yyyy-MM-dd');
@@ -468,7 +492,7 @@ const Calendar: React.FC = () => {
                       <div className="text-xs space-y-1 mt-2">
                         <div className="flex items-center text-muted-foreground">
                           <User className="h-3 w-3 mr-1.5" />
-                          <span>Client ID: {event.user_id.substring(0, 8)}</span>
+                          <span>{event.client_name || `Client ID: ${event.user_id.substring(0, 8)}`}</span>
                         </div>
                         <div className="flex items-center text-muted-foreground">
                           <CalendarIcon className="h-3 w-3 mr-1.5" />
@@ -488,7 +512,21 @@ const Calendar: React.FC = () => {
                         )}
                       </div>
                       
-                      <Button size="sm" variant="link" className="mt-1 h-auto p-0 text-sanskara-red">
+                      {event.notes_for_vendor && (
+                        <div className="mt-3 bg-gray-50 p-2 rounded-md">
+                          <div className="flex items-start">
+                            <Info className="h-3 w-3 mt-1 mr-1.5 text-muted-foreground" />
+                            <p className="text-xs text-muted-foreground">{event.notes_for_vendor}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button 
+                        size="sm" 
+                        variant="link" 
+                        className="mt-1 h-auto p-0 text-sanskara-red"
+                        onClick={() => handleViewEventDetails(event)}
+                      >
                         View Details
                       </Button>
                     </div>
@@ -567,6 +605,56 @@ const Calendar: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Event Details Dialog */}
+      <Dialog open={eventDetailsOpen} onOpenChange={setEventDetailsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Booking Details</DialogTitle>
+            <DialogDescription>
+              Details for booking #{selectedEvent?.booking_id?.substring(0, 8)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between">
+              <p className="font-medium">Status</p>
+              <Badge
+                variant="outline"
+                className={selectedEvent?.booking_status ? getStatusColor(selectedEvent.booking_status) : ''}
+              >
+                {selectedEvent?.booking_status ? getDisplayStatus(selectedEvent.booking_status) : 'Unknown'}
+              </Badge>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="font-medium">Client</p>
+              <p>{selectedEvent?.client_name || 'Unknown Client'}</p>
+            </div>
+            
+            <div className="space-y-1">
+              <p className="font-medium">Event Date</p>
+              <p>{selectedEvent?.event_date ? format(new Date(selectedEvent.event_date), 'MMMM d, yyyy') : 'Unknown Date'}</p>
+            </div>
+            
+            {selectedEvent?.notes_for_vendor && (
+              <div className="space-y-1">
+                <p className="font-medium">Notes</p>
+                <p className="text-sm text-muted-foreground">{selectedEvent.notes_for_vendor}</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              className="w-full bg-sanskara-red hover:bg-sanskara-maroon text-white"
+              onClick={() => setEventDetailsOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

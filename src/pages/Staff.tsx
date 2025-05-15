@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Mail, Phone, MoreVertical, Loader2, X } from 'lucide-react';
+import { PlusCircle, Mail, Phone, MoreVertical, Loader2, X, RefreshCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface StaffMember {
   staff_id: string;
@@ -40,6 +41,8 @@ interface StaffMember {
   phone_number: string | null;
   role: string;
   is_active: boolean;
+  invitation_sent?: boolean;
+  invitation_status?: string;
 }
 
 const Staff: React.FC = () => {
@@ -57,6 +60,7 @@ const Staff: React.FC = () => {
     role: 'staff'
   });
   const [error, setError] = useState<string | null>(null);
+  const [showInviteInfo, setShowInviteInfo] = useState(false);
 
   useEffect(() => {
     fetchStaff();
@@ -115,8 +119,7 @@ const Staff: React.FC = () => {
       }
       
       // Create temporary supabase_auth_uid - in a production app, you would
-      // invite the user to create an account via email, but for demo purposes,
-      // we'll use a generated UUID
+      // invite the user to create an account via email
       const tempUserId = crypto.randomUUID();
       
       // Add staff to database
@@ -128,14 +131,21 @@ const Staff: React.FC = () => {
           email: newStaff.email,
           phone_number: newStaff.phone_number || null,
           role: newStaff.role,
-          supabase_auth_uid: tempUserId // In production, this would come from a proper auth flow
+          supabase_auth_uid: tempUserId, // This would be replaced with a proper auth ID after invitation acceptance
+          invitation_status: 'pending'
         })
         .select();
         
       if (error) throw error;
       
       // Update staff list
-      setStaff([...staff, data[0]]);
+      const newStaffMember = {
+        ...data[0],
+        invitation_sent: true,
+        invitation_status: 'pending'
+      };
+      
+      setStaff([...staff, newStaffMember]);
       
       // Close dialog and reset form
       setDialogOpen(false);
@@ -145,6 +155,9 @@ const Staff: React.FC = () => {
         phone_number: '',
         role: 'staff'
       });
+      
+      // Show invite info dialog
+      setShowInviteInfo(true);
       
       toast({
         title: "Success",
@@ -248,6 +261,14 @@ const Staff: React.FC = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleResendInvitation = (staffEmail: string) => {
+    // In a production app, you would call a function to resend the invitation email
+    toast({
+      title: "Invitation resent",
+      description: `An invitation has been resent to ${staffEmail}`,
+    });
   };
 
   const getInitials = (name: string) => {
@@ -392,6 +413,35 @@ const Staff: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Invite Information Dialog */}
+      <Dialog open={showInviteInfo} onOpenChange={setShowInviteInfo}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Team Member Added</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Alert className="mb-4">
+              <AlertTitle>Staff member has been added</AlertTitle>
+              <AlertDescription>
+                In a production environment, an invitation email would be sent to the new staff member with instructions to create their account.
+              </AlertDescription>
+            </Alert>
+            <p className="text-sm text-muted-foreground mb-4">
+              For this demo, staff accounts are added directly to the database. In a real application, you would need to:
+            </p>
+            <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground">
+              <li>Configure email sending in Supabase</li>
+              <li>Create an invitation link with a secure token</li>
+              <li>Send an email to the staff member with the invitation link</li>
+              <li>Create a page to handle the invitation acceptance process</li>
+            </ol>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowInviteInfo(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {isLoading ? (
         <div className="flex justify-center items-center py-20">
@@ -442,6 +492,11 @@ const Staff: React.FC = () => {
                             Inactive
                           </Badge>
                         )}
+                        {member.invitation_status === 'pending' && (
+                          <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">
+                            Pending Invitation
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center text-sm text-muted-foreground gap-4 mt-1">
                         <span className="flex items-center">
@@ -468,6 +523,16 @@ const Staff: React.FC = () => {
                       <DropdownMenuItem onClick={() => alert('Edit functionality would go here')}>
                         Edit Details
                       </DropdownMenuItem>
+                      
+                      {member.invitation_status === 'pending' && (
+                        <DropdownMenuItem onClick={() => handleResendInvitation(member.email)}>
+                          <div className="flex items-center">
+                            <RefreshCcw className="mr-2 h-4 w-4" />
+                            Resend Invitation
+                          </div>
+                        </DropdownMenuItem>
+                      )}
+                      
                       <DropdownMenuItem>
                         <div className="flex items-center w-full">
                           Change Role

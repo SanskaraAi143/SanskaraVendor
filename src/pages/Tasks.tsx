@@ -11,6 +11,7 @@ import {
   Flag,
   ListFilter,
   MoreHorizontal,
+  User,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,6 +46,12 @@ interface Task {
   is_complete: boolean;
   category: string;
   assigned_staff_id: string | null;
+  staff_name?: string;
+}
+
+interface StaffMember {
+  staff_id: string;
+  display_name: string;
 }
 
 const statusOptions = ["To Do", "In Progress", "Under Review", "Completed", "On Hold"];
@@ -53,22 +60,29 @@ const categoryOptions = ["Administrative", "Client Work", "Marketing", "Operatio
 
 const Tasks: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     due_date: '',
     priority: 'medium',
     category: '',
-    status: 'To Do'
+    status: 'To Do',
+    assigned_staff_id: '',
   });
   const { vendorProfile } = useAuth();
 
   useEffect(() => {
-    fetchTasks();
+    if (vendorProfile?.vendor_id) {
+      fetchTasks();
+      fetchStaffMembers();
+    }
   }, [vendorProfile, statusFilter, priorityFilter]);
 
   const fetchTasks = async () => {
@@ -92,7 +106,27 @@ const Tasks: React.FC = () => {
       const { data, error } = await query.order('due_date', { ascending: true });
 
       if (error) throw error;
-      setTasks(data || []);
+      
+      // Get staff names for assigned tasks
+      const enhancedTasks = await Promise.all(
+        (data || []).map(async (task) => {
+          if (task.assigned_staff_id) {
+            const { data: staffData } = await supabase
+              .from('vendor_staff')
+              .select('display_name')
+              .eq('staff_id', task.assigned_staff_id)
+              .single();
+              
+            return {
+              ...task,
+              staff_name: staffData?.display_name || 'Unknown Staff'
+            };
+          }
+          return task;
+        })
+      );
+      
+      setTasks(enhancedTasks);
     } catch (error: any) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -102,6 +136,29 @@ const Tasks: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchStaffMembers = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('vendor_staff')
+        .select('staff_id, display_name')
+        .eq('vendor_id', vendorProfile.vendor_id)
+        .eq('is_active', true);
+        
+      if (error) throw error;
+      
+      setStaffList(data || []);
+    } catch (error) {
+      console.error('Error fetching staff members:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load staff members',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -187,13 +244,27 @@ const Tasks: React.FC = () => {
           due_date: newTask.due_date,
           priority: newTask.priority,
           category: newTask.category || null,
-          status: newTask.status
+          status: newTask.status,
+          assigned_staff_id: newTask.assigned_staff_id || null
         })
         .select();
         
       if (error) throw error;
       
-      setTasks([...tasks, data[0]]);
+      // If staff is assigned, get their name
+      let newTaskWithStaff = data[0];
+      
+      if (newTask.assigned_staff_id) {
+        const staffMember = staffList.find(staff => staff.staff_id === newTask.assigned_staff_id);
+        if (staffMember) {
+          newTaskWithStaff = {
+            ...newTaskWithStaff,
+            staff_name: staffMember.display_name
+          };
+        }
+      }
+      
+      setTasks([...tasks, newTaskWithStaff]);
       setDialogOpen(false);
       setNewTask({
         title: '',
@@ -201,7 +272,8 @@ const Tasks: React.FC = () => {
         due_date: '',
         priority: 'medium',
         category: '',
-        status: 'To Do'
+        status: 'To Do',
+        assigned_staff_id: '',
       });
       
       toast({
@@ -209,12 +281,67 @@ const Tasks: React.FC = () => {
         description: 'New task has been created successfully',
       });
     } catch (error: any) {
+      console.error("Task creation error:", error);
       toast({
         title: 'Error',
         description: 'Failed to create task',
         variant: 'destructive',
       });
     }
+  };
+
+  const updateTask = async () => {
+    if (!currentTask || !currentTask.title) return;
+    
+    try {
+      const { error } = await supabase
+        .from('vendor_tasks')
+        .update({
+          title: currentTask.title,
+          description: currentTask.description,
+          due_date: currentTask.due_date,
+          priority: currentTask.priority,
+          category: currentTask.category || null,
+          status: currentTask.status,
+          assigned_staff_id: currentTask.assigned_staff_id
+        })
+        .eq('vendor_task_id', currentTask.vendor_task_id);
+        
+      if (error) throw error;
+      
+      // Update staff name if assigned staff changed
+      let updatedTask = { ...currentTask };
+      
+      if (currentTask.assigned_staff_id) {
+        const staffMember = staffList.find(staff => staff.staff_id === currentTask.assigned_staff_id);
+        if (staffMember) {
+          updatedTask.staff_name = staffMember.display_name;
+        }
+      }
+      
+      setTasks(tasks.map(task => 
+        task.vendor_task_id === updatedTask.vendor_task_id ? updatedTask : task
+      ));
+      
+      setEditDialogOpen(false);
+      
+      toast({
+        title: 'Task updated',
+        description: 'Task has been updated successfully',
+      });
+    } catch (error) {
+      console.error("Task update error:", error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditTask = (task: Task) => {
+    setCurrentTask(task);
+    setEditDialogOpen(true);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -355,6 +482,22 @@ const Tasks: React.FC = () => {
                   </Select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="assigned_staff">Assign To</Label>
+                <Select value={newTask.assigned_staff_id} onValueChange={(val) => setNewTask({...newTask, assigned_staff_id: val})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {staffList.map(staff => (
+                      <SelectItem key={staff.staff_id} value={staff.staff_id}>
+                        {staff.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -483,6 +626,12 @@ const Tasks: React.FC = () => {
                               <span>#{task.category}</span>
                             </div>
                           )}
+                          {task.staff_name && (
+                            <div className="text-xs flex items-center text-muted-foreground">
+                              <User className="h-3 w-3 mr-1" />
+                              <span>{task.staff_name}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -500,8 +649,9 @@ const Tasks: React.FC = () => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem>Edit Task</DropdownMenuItem>
-                          <DropdownMenuItem>Assign Staff</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditTask(task)}>
+                            Edit Task
+                          </DropdownMenuItem>
                           <DropdownMenuLabel>Set Status</DropdownMenuLabel>
                           {statusOptions.map((status) => (
                             <DropdownMenuItem
@@ -528,6 +678,132 @@ const Tasks: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Task Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+          </DialogHeader>
+          {currentTask && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Task Title *</Label>
+                <Input 
+                  id="edit-title" 
+                  placeholder="Enter task title" 
+                  value={currentTask.title} 
+                  onChange={(e) => setCurrentTask({...currentTask, title: e.target.value})} 
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea 
+                  id="edit-description" 
+                  placeholder="Enter task description"
+                  value={currentTask.description} 
+                  onChange={(e) => setCurrentTask({...currentTask, description: e.target.value})} 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-due_date">Due Date *</Label>
+                  <Input 
+                    id="edit-due_date" 
+                    type="date" 
+                    value={currentTask.due_date} 
+                    onChange={(e) => setCurrentTask({...currentTask, due_date: e.target.value})}
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-priority">Priority</Label>
+                  <Select 
+                    value={currentTask.priority} 
+                    onValueChange={(val) => setCurrentTask({...currentTask, priority: val})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priorityOptions.map(priority => (
+                        <SelectItem key={priority} value={priority}>
+                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select 
+                    value={currentTask.category || ''} 
+                    onValueChange={(val) => setCurrentTask({...currentTask, category: val})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {categoryOptions.map(category => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select 
+                    value={currentTask.status} 
+                    onValueChange={(val) => setCurrentTask({...currentTask, status: val})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map(status => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-assigned_staff">Assign To</Label>
+                <Select 
+                  value={currentTask.assigned_staff_id || ''} 
+                  onValueChange={(val) => setCurrentTask({...currentTask, assigned_staff_id: val || null})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {staffList.map(staff => (
+                      <SelectItem key={staff.staff_id} value={staff.staff_id}>
+                        {staff.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white" onClick={updateTask}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
