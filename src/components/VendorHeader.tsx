@@ -14,9 +14,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/hooks/useAuthContext';
 import { useNavigate } from 'react-router-dom';
 
-const VendorHeader: React.FC = () => {
+interface VendorHeaderProps {
+  vendorProfile?: any;
+  isLoadingProfile?: boolean;
+}
+
+const VendorHeader: React.FC<VendorHeaderProps> = ({ vendorProfile, isLoadingProfile }) => {
   const [notificationCount, setNotificationCount] = useState(3);
-  const { vendorProfile, user, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   
   // Get initials for avatar fallback
@@ -24,7 +29,7 @@ const VendorHeader: React.FC = () => {
     if (vendorProfile?.vendor_name) {
       return vendorProfile.vendor_name
         .split(' ')
-        .map(word => word[0])
+        .map((word: string) => word[0])
         .join('')
         .toUpperCase()
         .substring(0, 2);

@@ -221,9 +221,10 @@ const Reviews: React.FC = () => {
     return (getRatingCount(rating) / reviews.length * 100).toFixed(0);
   };
   
+  // Ensure this specific helper function is updated to always return a string
   const formatReviewId = (id: string | number): string => {
-    // Ensure the ID is always returned as a string
-    return typeof id === 'string' ? id : id.toString();
+    // Convert any number (including 0) to a string
+    return id.toString();
   };
   
   return (
