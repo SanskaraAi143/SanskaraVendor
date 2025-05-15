@@ -28,6 +28,14 @@ interface NotificationSettings {
   marketing_notifications: boolean;
 }
 
+interface AddressSettings {
+  street?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+}
+
 interface VendorSettings {
   vendor_id: string;
   vendor_name: string;
@@ -35,13 +43,7 @@ interface VendorSettings {
   phone_number: string;
   website_url: string;
   description: string;
-  address: {
-    street?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    country?: string;
-  };
+  address: AddressSettings;
   notification_settings: NotificationSettings;
 }
 
@@ -74,6 +76,25 @@ const Settings: React.FC = () => {
       
       if (error) throw error;
       
+      // Parse JSON data or initialize defaults
+      let addressData: AddressSettings = { 
+        street: '', 
+        city: '', 
+        state: '', 
+        postal_code: '', 
+        country: '' 
+      };
+      
+      if (data.address && typeof data.address === 'object') {
+        addressData = data.address as AddressSettings;
+      }
+      
+      let notifSettings = {
+        email_notifications: true,
+        booking_updates: true,
+        marketing_notifications: false
+      };
+      
       // Initialize settings with vendor data
       const vendorSettings: VendorSettings = {
         vendor_id: data.vendor_id,
@@ -82,26 +103,12 @@ const Settings: React.FC = () => {
         phone_number: data.phone_number || '',
         website_url: data.website_url || '',
         description: data.description || '',
-        address: data.address || {
-          street: '',
-          city: '',
-          state: '',
-          postal_code: '',
-          country: ''
-        },
-        notification_settings: data.notification_settings || {
-          email_notifications: true,
-          booking_updates: true,
-          marketing_notifications: false
-        }
+        address: addressData,
+        notification_settings: notifSettings
       };
       
       setSettings(vendorSettings);
-      
-      // Set notification settings
-      if (data.notification_settings) {
-        setNotificationSettings(data.notification_settings);
-      }
+      setNotificationSettings(notifSettings);
     } catch (error) {
       console.error('Error fetching settings:', error);
       toast({
@@ -127,19 +134,25 @@ const Settings: React.FC = () => {
     if (name.includes('.')) {
       // Handle nested fields (like address.street)
       const [parent, child] = name.split('.');
-      setSettings(prev => ({
-        ...prev!,
-        [parent]: {
-          ...prev![parent as keyof VendorSettings],
-          [child]: value
-        }
-      }));
+      setSettings(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [parent]: {
+            ...(prev[parent as keyof VendorSettings] as any),
+            [child]: value
+          }
+        };
+      });
     } else {
       // Handle top-level fields
-      setSettings(prev => ({
-        ...prev!,
-        [name]: value
-      }));
+      setSettings(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [name]: value
+        };
+      });
     }
   };
   

@@ -110,7 +110,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         bookingId: bookingData.booking_id,
         clientName: userData.display_name || 'Unknown Client',
         clientEmail: userData.email || 'N/A',
-        clientPhone: userData.phone_number || 'N/A',
+        clientPhone: 'N/A', // Default to N/A since it might not exist in users table
         eventDate: bookingData.event_date,
         status: bookingData.booking_status,
         totalAmount: bookingData.total_amount,
@@ -130,7 +130,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
           isComplete: task.is_complete
         })),
         notes: bookingData.notes_for_vendor,
-        location: bookingData.location
+        location: bookingData.notes_for_user || 'No location specified' // Use notes_for_user as a fallback for location
       };
       
       setBooking(formattedBooking);

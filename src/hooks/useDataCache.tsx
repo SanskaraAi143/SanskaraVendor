@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useReducer, ReactNode, useCallback } from 'react';
 
 // Define cache entity types
@@ -51,10 +52,9 @@ const DataCacheContext = createContext<{
 
 // Create reducer
 const dataCacheReducer = (state: DataCacheState, action: DataCacheAction): DataCacheState => {
-  const cacheKey = action.id ? `${action.entityType}-${action.id}` : action.entityType;
-  
   switch (action.type) {
-    case 'SET_LOADING':
+    case 'SET_LOADING': {
+      const cacheKey = action.id ? `${action.entityType}-${action.id}` : action.entityType;
       return {
         ...state,
         [cacheKey]: {
@@ -64,7 +64,9 @@ const dataCacheReducer = (state: DataCacheState, action: DataCacheAction): DataC
           error: null,
         },
       };
-    case 'SET_DATA':
+    }
+    case 'SET_DATA': {
+      const cacheKey = action.id ? `${action.entityType}-${action.id}` : action.entityType;
       return {
         ...state,
         [cacheKey]: {
@@ -74,7 +76,9 @@ const dataCacheReducer = (state: DataCacheState, action: DataCacheAction): DataC
           error: null,
         },
       };
-    case 'SET_ERROR':
+    }
+    case 'SET_ERROR': {
+      const cacheKey = action.id ? `${action.entityType}-${action.id}` : action.entityType;
       return {
         ...state,
         [cacheKey]: {
@@ -84,8 +88,9 @@ const dataCacheReducer = (state: DataCacheState, action: DataCacheAction): DataC
           error: action.error,
         },
       };
-    case 'INVALIDATE_CACHE':
-      // Keep the key but reset its state
+    }
+    case 'INVALIDATE_CACHE': {
+      const cacheKey = action.id ? `${action.entityType}-${action.id}` : action.entityType;
       return {
         ...state,
         [cacheKey]: {
@@ -95,6 +100,7 @@ const dataCacheReducer = (state: DataCacheState, action: DataCacheAction): DataC
           error: null,
         },
       };
+    }
     case 'CLEAR_ALL':
       return {};
     default:
