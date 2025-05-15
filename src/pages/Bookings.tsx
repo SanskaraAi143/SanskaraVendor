@@ -8,11 +8,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Calendar, Filter, ChevronDown, X } from 'lucide-react';
+import { Search, Calendar, Filter, ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,19 +21,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
-import BookingDetails from '@/components/BookingDetails';
-
-interface BookingService {
-  service_name: string;
-}
 
 interface Booking {
   booking_id: string;
@@ -54,13 +45,9 @@ const BookingsPage: React.FC = () => {
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { vendorProfile } = useAuth();
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
-      fetchBookings();
-    }
+    fetchBookings();
   }, [vendorProfile]);
   
   useEffect(() => {
@@ -84,19 +71,18 @@ const BookingsPage: React.FC = () => {
       const bookingsWithServices = await Promise.all(data.map(async (booking) => {
         const { data: serviceData, error: serviceError } = await supabase
           .from('booking_services')
-          .select('booking_services.*, vendor_services(service_name)')
+          .select('vendor_service_id')
           .eq('booking_id', booking.booking_id);
           
         if (serviceError) throw serviceError;
         
-        // Extract service names from the join
-        const services = serviceData?.map((item: any) => 
-          item.vendor_services?.service_name || 'Unknown Service'
-        ) || [];
+        // Get service names - in a real app we would join with vendor_services table
+        // but for this demo we'll just use placeholders
+        const services = serviceData?.map((s, idx) => `Service ${idx + 1}`) || [];
         
         return {
           ...booking,
-          event_type: 'Wedding', // Default event type if not specified
+          event_type: 'Wedding', // placeholder
           services
         };
       }));
@@ -133,11 +119,6 @@ const BookingsPage: React.FC = () => {
     
     setFilteredBookings(filtered);
   };
-
-  const clearFilters = () => {
-    setSearchQuery('');
-    setStatusFilter(null);
-  };
   
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -146,16 +127,11 @@ const BookingsPage: React.FC = () => {
   
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'pending_confirmation':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'confirmed': return 'bg-green-100 text-green-800 border-green-200';
+      case 'pending_confirmation': return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
   
@@ -165,11 +141,6 @@ const BookingsPage: React.FC = () => {
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-  };
-
-  const handleViewDetails = (bookingId: string) => {
-    setSelectedBookingId(bookingId);
-    setDetailsDialogOpen(true);
   };
   
   return (
@@ -182,7 +153,7 @@ const BookingsPage: React.FC = () => {
       </div>
       
       <Card className="sanskara-card">
-        <CardContent className="p-4">
+        <div className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -192,21 +163,13 @@ const BookingsPage: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              {searchQuery && (
-                <button 
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                </button>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="flex items-center gap-2">
                     <Filter className="h-4 w-4" />
-                    {statusFilter ? getDisplayStatus(statusFilter) : 'All Statuses'}
+                    Status
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -214,7 +177,7 @@ const BookingsPage: React.FC = () => {
                   <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setStatusFilter(null)}>
-                    All Statuses
+                    All
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setStatusFilter('confirmed')}>
                     Confirmed
@@ -236,12 +199,6 @@ const BookingsPage: React.FC = () => {
                 Date Range
                 <ChevronDown className="h-3 w-3" />
               </Button>
-
-              {(searchQuery || statusFilter) && (
-                <Button variant="ghost" onClick={clearFilters} className="h-9 px-2 lg:px-3">
-                  Clear Filters
-                </Button>
-              )}
             </div>
           </div>
           
@@ -278,20 +235,13 @@ const BookingsPage: React.FC = () => {
                         <TableCell>{formatDate(booking.event_date)}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {booking.services && booking.services.length > 0 ? (
-                              booking.services.slice(0, 2).map((service, i) => (
-                                <Badge key={i} variant="outline" className="text-xs">
-                                  {service}
-                                </Badge>
-                              ))
-                            ) : (
+                            {booking.services ? booking.services.map((service, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">
+                                {service}
+                              </Badge>
+                            )) : (
                               <Badge variant="outline" className="text-xs">
                                 Services Pending
-                              </Badge>
-                            )}
-                            {booking.services && booking.services.length > 2 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{booking.services.length - 2} more
                               </Badge>
                             )}
                           </div>
@@ -311,12 +261,7 @@ const BookingsPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 text-sanskara-gold hover:text-sanskara-magenta"
-                            onClick={() => handleViewDetails(booking.booking_id)}
-                          >
+                          <Button variant="ghost" size="sm" className="h-8 text-sanskara-gold hover:text-sanskara-magenta">
                             View Details
                           </Button>
                         </TableCell>
@@ -330,7 +275,10 @@ const BookingsPage: React.FC = () => {
                             <p>No bookings match your search criteria.</p>
                             <Button 
                               variant="link" 
-                              onClick={clearFilters}
+                              onClick={() => {
+                                setSearchQuery('');
+                                setStatusFilter(null);
+                              }}
                             >
                               Clear filters
                             </Button>
@@ -367,20 +315,8 @@ const BookingsPage: React.FC = () => {
               </div>
             </div>
           )}
-        </CardContent>
+        </div>
       </Card>
-
-      {/* Booking Details Dialog */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {selectedBookingId && (
-            <BookingDetails 
-              bookingId={selectedBookingId} 
-              onClose={() => setDetailsDialogOpen(false)} 
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

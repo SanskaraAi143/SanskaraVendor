@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { CalendarIcon, Clock, MapPin, User, Plus, Info } from 'lucide-react';
+import { CalendarIcon, Clock, MapPin, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -28,11 +28,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 interface BookingEvent {
   booking_id: string;
@@ -43,14 +38,13 @@ interface BookingEvent {
   booking_status: string;
   start_time?: string;
   user_id: string;
-  notes_for_vendor?: string | null;
 }
 
 interface AvailabilityInfo {
   availability_id: string;
   available_date: string;
   status: string;
-  notes?: string | null;
+  notes?: string;
 }
 
 const Calendar: React.FC = () => {
@@ -61,8 +55,6 @@ const Calendar: React.FC = () => {
   const [dayEvents, setDayEvents] = useState<BookingEvent[]>([]);
   const [availabilityInfo, setAvailabilityInfo] = useState<AvailabilityInfo | null>(null);
   const { vendorProfile } = useAuth();
-  const [selectedBooking, setSelectedBooking] = useState<BookingEvent | null>(null);
-  const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
 
   // New availability state
   const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
@@ -73,9 +65,7 @@ const Calendar: React.FC = () => {
   });
 
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
-      fetchCalendarData();
-    }
+    fetchCalendarData();
   }, [vendorProfile]);
 
   // Fetch bookings and availability
@@ -118,7 +108,7 @@ const Calendar: React.FC = () => {
       
       // Update day events for the currently selected date
       if (selectedDate) {
-        updateDayEvents(selectedDate, bookingsData || [], availMap, availData || []);
+        updateDayEvents(selectedDate, bookingsData || [], availMap);
       }
       
     } catch (error) {
@@ -135,12 +125,12 @@ const Calendar: React.FC = () => {
 
   // Update displayed events when date changes
   useEffect(() => {
-    if (selectedDate && vendorProfile?.vendor_id) {
-      updateDayEvents(selectedDate, bookings, availability, []);
+    if (selectedDate) {
+      updateDayEvents(selectedDate, bookings, availability);
     }
   }, [selectedDate]);
 
-  const updateDayEvents = (date: Date, bookings: BookingEvent[], availability: {[key: string]: string}, availabilityData: AvailabilityInfo[] = []) => {
+  const updateDayEvents = (date: Date, bookings: BookingEvent[], availability: {[key: string]: string}) => {
     const formattedDate = format(date, 'yyyy-MM-dd');
     
     // Filter bookings for selected date
@@ -152,14 +142,12 @@ const Calendar: React.FC = () => {
     
     // Get availability info for the selected date
     const availStatus = availability[formattedDate];
-    const availInfo = availabilityData.find(a => a.available_date === formattedDate);
-    
-    if (availStatus || availInfo) {
+    if (availStatus) {
       const availabilityData = {
-        availability_id: availInfo?.availability_id || '',
+        availability_id: '',
         available_date: formattedDate,
-        status: availStatus || availInfo?.status || '',
-        notes: availInfo?.notes || ''
+        status: availStatus,
+        notes: ''
       };
       setAvailabilityInfo(availabilityData);
     } else {
@@ -176,7 +164,7 @@ const Calendar: React.FC = () => {
       // Check if there's already an availability record for this date
       const { data: existingData, error: checkError } = await supabase
         .from('vendor_availability')
-        .select('availability_id, notes')
+        .select('availability_id')
         .eq('vendor_id', vendorProfile.vendor_id)
         .eq('available_date', formattedDate);
         
@@ -216,10 +204,10 @@ const Calendar: React.FC = () => {
         });
       } else {
         setAvailabilityInfo({
-          availability_id: existingData?.[0]?.availability_id || '',
+          availability_id: '',
           available_date: formattedDate,
           status,
-          notes: existingData?.[0]?.notes || ''
+          notes: ''
         });
       }
       
@@ -227,10 +215,6 @@ const Calendar: React.FC = () => {
         title: "Availability updated",
         description: `You are now marked as ${status} on ${format(selectedDate, 'MMMM d, yyyy')}`,
       });
-      
-      // Refresh data to get the latest changes
-      fetchCalendarData();
-      
     } catch (error) {
       console.error('Error setting availability:', error);
       toast({
@@ -290,10 +274,6 @@ const Calendar: React.FC = () => {
         title: "Availability added",
         description: `Availability for ${format(new Date(newAvailability.date), 'MMMM d, yyyy')} has been set to ${newAvailability.status}`,
       });
-      
-      // Refresh data to get the latest changes
-      fetchCalendarData();
-      
     } catch (error) {
       console.error('Error adding availability:', error);
       toast({
@@ -302,11 +282,6 @@ const Calendar: React.FC = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const handleViewBookingDetails = (booking: BookingEvent) => {
-    setSelectedBooking(booking);
-    setBookingDetailsOpen(true);
   };
   
   const getStatusColor = (status: string) => {
@@ -343,6 +318,27 @@ const Calendar: React.FC = () => {
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  // Function to render day cells with appropriate indicators
+  const dayHasEvent = (day: Date) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const hasBooking = bookings.some(b => b.event_date === dateStr);
+    const availStatus = availability[dateStr];
+    
+    let classNames = '';
+    
+    if (availStatus === 'unavailable') {
+      classNames += 'bg-red-50 ';
+    } else if (availStatus === 'tentative') {
+      classNames += 'bg-amber-50 ';
+    }
+    
+    if (hasBooking) {
+      classNames += 'font-bold text-sanskara-red';
+    }
+    
+    return classNames;
   };
 
   return (
@@ -414,24 +410,15 @@ const Calendar: React.FC = () => {
           <CardContent className="space-y-4">
             {availabilityInfo && (
               <div className="mb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-medium">Availability Status</p>
-                  <Badge
-                    variant="outline"
-                    className={getAvailabilityColor(availabilityInfo.status)}
-                  >
-                    {availabilityInfo.status.charAt(0).toUpperCase() + availabilityInfo.status.slice(1)}
-                  </Badge>
-                </div>
+                <p className="text-sm font-medium mb-1">Availability Status</p>
+                <Badge
+                  variant="outline"
+                  className={getAvailabilityColor(availabilityInfo.status)}
+                >
+                  {availabilityInfo.status.charAt(0).toUpperCase() + availabilityInfo.status.slice(1)}
+                </Badge>
                 
-                {availabilityInfo.notes && (
-                  <div className="mt-2 text-sm bg-muted p-3 rounded-md">
-                    <p className="font-medium mb-1">Notes:</p>
-                    <p className="text-muted-foreground">{availabilityInfo.notes}</p>
-                  </div>
-                )}
-                
-                <div className="mt-3 flex justify-between">
+                <div className="mt-2 flex justify-between">
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -467,7 +454,7 @@ const Calendar: React.FC = () => {
                 <h3 className="font-medium mb-2">Events ({dayEvents.length})</h3>
                 <div className="space-y-3">
                   {dayEvents.map((event) => (
-                    <div key={event.booking_id} className="p-3 border rounded-md bg-white hover:shadow-sm transition-shadow">
+                    <div key={event.booking_id} className="p-3 border rounded-md">
                       <div className="flex justify-between items-start">
                         <h4 className="font-medium">Booking #{event.booking_id.substring(0, 8)}</h4>
                         <Badge
@@ -477,12 +464,6 @@ const Calendar: React.FC = () => {
                           {getDisplayStatus(event.booking_status)}
                         </Badge>
                       </div>
-                      
-                      {event.notes_for_vendor && (
-                        <div className="bg-muted/50 rounded p-2 my-2 text-xs">
-                          <p className="text-muted-foreground">{event.notes_for_vendor}</p>
-                        </div>
-                      )}
                       
                       <div className="text-xs space-y-1 mt-2">
                         <div className="flex items-center text-muted-foreground">
@@ -507,12 +488,7 @@ const Calendar: React.FC = () => {
                         )}
                       </div>
                       
-                      <Button 
-                        size="sm" 
-                        variant="link" 
-                        className="mt-1 h-auto p-0 text-sanskara-red"
-                        onClick={() => handleViewBookingDetails(event)}
-                      >
+                      <Button size="sm" variant="link" className="mt-1 h-auto p-0 text-sanskara-red">
                         View Details
                       </Button>
                     </div>
@@ -591,66 +567,6 @@ const Calendar: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Booking Details Dialog */}
-      <Dialog open={bookingDetailsOpen} onOpenChange={setBookingDetailsOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Booking Details</DialogTitle>
-            <DialogDescription>
-              {selectedBooking && `Booking ID: ${selectedBooking.booking_id}`}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedBooking && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Status</h3>
-                <Badge
-                  variant="outline"
-                  className={getStatusColor(selectedBooking.booking_status)}
-                >
-                  {getDisplayStatus(selectedBooking.booking_status)}
-                </Badge>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Client Information</h3>
-                  <div className="bg-muted rounded-md p-3">
-                    <p className="text-sm"><span className="font-medium">Client ID:</span> {selectedBooking.user_id}</p>
-                    <p className="text-sm mt-1"><span className="font-medium">Event Date:</span> {format(new Date(selectedBooking.event_date), 'MMMM d, yyyy')}</p>
-                    {selectedBooking.start_time && (
-                      <p className="text-sm mt-1"><span className="font-medium">Start Time:</span> {selectedBooking.start_time}</p>
-                    )}
-                    {selectedBooking.location && (
-                      <p className="text-sm mt-1"><span className="font-medium">Location:</span> {selectedBooking.location}</p>
-                    )}
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Notes</h3>
-                  <div className="bg-muted rounded-md p-3 min-h-[100px]">
-                    {selectedBooking.notes_for_vendor ? (
-                      <p className="text-sm">{selectedBooking.notes_for_vendor}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No notes provided for this booking.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="pt-4 flex justify-between border-t">
-                <Button variant="outline" onClick={() => setBookingDetailsOpen(false)}>Close</Button>
-                <Button className="bg-sanskara-red text-white hover:bg-sanskara-maroon">
-                  Update Status
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

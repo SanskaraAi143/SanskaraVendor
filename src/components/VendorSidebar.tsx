@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 
 const VendorSidebar: React.FC = () => {
+  // Fix: Access the state instead of collapsed property
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   
@@ -40,6 +41,7 @@ const VendorSidebar: React.FC = () => {
   return (
     <Sidebar
       className={`${collapsed ? "w-16" : "w-64"} transition-all duration-300 bg-sanskara-cream shadow-lg`}
+      // Fix: Use "icon" instead of true for collapsible prop 
       collapsible="icon"
     >
       <SidebarTrigger className="m-2 self-end text-sanskara-red hover:text-sanskara-maroon transition-colors" />
@@ -59,6 +61,7 @@ const VendorSidebar: React.FC = () => {
       </div>
 
       <SidebarContent className="px-2">
+        {/* Fix: Remove defaultOpen prop as it's not supported */}
         <SidebarGroup>
           <SidebarGroupLabel className={`${collapsed ? "hidden" : "block"} text-sanskara-maroon`}>
             Management
@@ -124,6 +127,7 @@ const VendorSidebar: React.FC = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Fix: Remove defaultOpen prop and handle collapsed state differently */}
         <SidebarGroup>
           <SidebarGroupLabel className={`${collapsed ? "hidden" : "block"} text-sanskara-maroon`}>
             Team & More
