@@ -8,6 +8,7 @@ import { AddressSection } from '@/components/settings/AddressSection';
 import { NotificationSection, NotificationSettings } from '@/components/settings/NotificationSection';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
+import { Json } from '@/integrations/supabase/types';
 
 interface AddressSettings {
   street?: string;
@@ -82,12 +83,13 @@ const Settings: React.FC = () => {
       };
       
       // Check for notification_settings in the data
-      if (data.notification_settings) {
+      const vendorData = data as any; // Use "any" temporarily to access potential notification_settings
+      if (vendorData.notification_settings) {
         try {
-          if (typeof data.notification_settings === 'object') {
-            notifSettings = data.notification_settings as NotificationSettings;
-          } else if (typeof data.notification_settings === 'string') {
-            notifSettings = JSON.parse(data.notification_settings);
+          if (typeof vendorData.notification_settings === 'object') {
+            notifSettings = vendorData.notification_settings as NotificationSettings;
+          } else if (typeof vendorData.notification_settings === 'string') {
+            notifSettings = JSON.parse(vendorData.notification_settings);
           }
         } catch (e) {
           console.error('Error parsing notification settings:', e);
@@ -161,16 +163,15 @@ const Settings: React.FC = () => {
     setIsSaving(true);
     
     try {
-      // Convert address and notification_settings to the expected format
-      // Use JSON.stringify to ensure they are correctly formatted for Supabase
+      // Convert address and notification_settings to the expected format for Supabase
       const updateData = {
         vendor_name: settings.vendor_name,
         contact_email: settings.contact_email,
         phone_number: settings.phone_number,
         website_url: settings.website_url,
         description: settings.description,
-        address: settings.address,
-        notification_settings: notificationSettings
+        address: settings.address as unknown as Json,
+        notification_settings: notificationSettings as unknown as Json
       };
       
       // Update vendor profile
