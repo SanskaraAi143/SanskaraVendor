@@ -1,6 +1,7 @@
+
 // This creates a toast notification system
 import * as React from "react"
-import { toast as sonnerToast } from "sonner"
+import { toast as sonnerToast, Toaster } from "sonner"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -127,12 +128,21 @@ type Toast = Omit<ToasterToast, "id">
 function toast({ title, description, variant, action }: Toast) {
   const id = genId()
 
-  // Use the sonner toast instead of the internal system
-  sonnerToast(title as string, {
+  // Use the sonner toast with the appropriate styling based on variant
+  const options: any = {
     description,
     id,
     action,
-  })
+  }
+
+  // Apply styling based on variant
+  if (variant === "destructive") {
+    options.style = { backgroundColor: "var(--destructive)", color: "white" }
+  } else if (variant === "success") {
+    options.style = { backgroundColor: "#f0fdf4", color: "#166534", borderColor: "#86efac" }
+  }
+
+  sonnerToast(title as string, options)
 
   return id
 }
@@ -157,4 +167,4 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+export { useToast, toast, Toaster }

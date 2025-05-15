@@ -8,7 +8,6 @@ import { AddressSection } from '@/components/settings/AddressSection';
 import { NotificationSection, NotificationSettings } from '@/components/settings/NotificationSection';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
-import { Json } from '@/integrations/supabase/types';
 
 interface AddressSettings {
   street?: string;
@@ -68,7 +67,12 @@ const Settings: React.FC = () => {
       };
       
       if (data.address && typeof data.address === 'object') {
-        addressData = data.address as AddressSettings;
+        try {
+          // Try to parse as AddressSettings
+          addressData = data.address as AddressSettings;
+        } catch (e) {
+          console.error('Error parsing address data:', e);
+        }
       }
       
       let notifSettings: NotificationSettings = {
@@ -77,10 +81,17 @@ const Settings: React.FC = () => {
         marketing_notifications: false
       };
       
-      // Check if the notification_settings property exists in the data
-      const rawData = data as any;
-      if (rawData.notification_settings && typeof rawData.notification_settings === 'object') {
-        notifSettings = rawData.notification_settings as NotificationSettings;
+      // Check for notification_settings in the data
+      if (data.notification_settings) {
+        try {
+          if (typeof data.notification_settings === 'object') {
+            notifSettings = data.notification_settings as NotificationSettings;
+          } else if (typeof data.notification_settings === 'string') {
+            notifSettings = JSON.parse(data.notification_settings);
+          }
+        } catch (e) {
+          console.error('Error parsing notification settings:', e);
+        }
       }
       
       // Initialize settings with vendor data
@@ -150,19 +161,16 @@ const Settings: React.FC = () => {
     setIsSaving(true);
     
     try {
-      // Convert address and notification_settings to JSON compatible format
-      const jsonAddress = settings.address as unknown as Json;
-      const jsonNotificationSettings = notificationSettings as unknown as Json;
-      
-      // Prepare the data for update
+      // Convert address and notification_settings to the expected format
+      // Use JSON.stringify to ensure they are correctly formatted for Supabase
       const updateData = {
         vendor_name: settings.vendor_name,
         contact_email: settings.contact_email,
         phone_number: settings.phone_number,
         website_url: settings.website_url,
         description: settings.description,
-        address: jsonAddress,
-        notification_settings: jsonNotificationSettings
+        address: settings.address,
+        notification_settings: notificationSettings
       };
       
       // Update vendor profile
@@ -175,7 +183,8 @@ const Settings: React.FC = () => {
       
       toast({
         title: 'Settings saved',
-        description: 'Your settings have been updated successfully'
+        description: 'Your settings have been updated successfully',
+        variant: 'success'
       });
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -202,7 +211,8 @@ const Settings: React.FC = () => {
       
       toast({
         title: 'Account deactivated',
-        description: 'Your account has been temporarily deactivated'
+        description: 'Your account has been temporarily deactivated',
+        variant: 'success'
       });
     } catch (error) {
       console.error('Error deactivating account:', error);
