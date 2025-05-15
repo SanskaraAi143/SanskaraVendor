@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -86,12 +85,19 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, onClose }) =
         // Fetch user details
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('user_id, display_name, email, phone_number, wedding_date, wedding_location')
-          .eq('supabase_auth_uid', bookingData.user_id)
+          .select('user_id, display_name, email, wedding_date, wedding_location')
+          .eq('user_id', bookingData.user_id)
           .single();
           
         if (!userError && userData) {
-          setUser(userData);
+          setUser({
+            user_id: userData.user_id,
+            display_name: userData.display_name,
+            email: userData.email,
+            phone_number: '', // This field doesn't exist in the users table
+            wedding_date: userData.wedding_date,
+            wedding_location: userData.wedding_location
+          });
         }
         
         // Fetch services

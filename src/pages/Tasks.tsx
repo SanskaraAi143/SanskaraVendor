@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,8 @@ import {
   Pencil,
   Trash,
   ListFilter,
-  X
+  X,
+  User
 } from 'lucide-react';
 import {
   Dialog,
@@ -131,7 +131,13 @@ const Tasks: React.FC = () => {
         
       if (error) throw error;
       
-      setTasks(data || []);
+      // Ensure we cast all tasks to have a valid Priority type
+      const typedTasks: Task[] = data?.map(task => ({
+        ...task,
+        priority: (task.priority as string || 'medium').toLowerCase() as Priority
+      })) || [];
+      
+      setTasks(typedTasks);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -285,8 +291,14 @@ const Tasks: React.FC = () => {
         
       if (error) throw error;
       
-      // Update local state
-      setTasks([...tasks, data[0]]);
+      // Update local state - ensure the returned task has the correct priority type
+      if (data && data[0]) {
+        const typedTask: Task = {
+          ...data[0],
+          priority: data[0].priority.toLowerCase() as Priority
+        };
+        setTasks([...tasks, typedTask]);
+      }
       
       // Reset form and close dialog
       resetForm();
@@ -338,7 +350,7 @@ const Tasks: React.FC = () => {
       // Update local state
       setTasks(tasks.map(task => 
         task.vendor_task_id === currentTask.vendor_task_id
-          ? { ...task, ...updatedTask }
+          ? { ...task, ...updatedTask, priority: updatedTask.priority as Priority }
           : task
       ));
       

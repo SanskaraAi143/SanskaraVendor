@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -222,6 +221,10 @@ const Reviews: React.FC = () => {
     return (getRatingCount(rating) / reviews.length * 100).toFixed(0);
   };
   
+  const formatReviewId = (id: string | number): string => {
+    return typeof id === 'string' ? id : id.toString();
+  };
+  
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -339,7 +342,7 @@ const Reviews: React.FC = () => {
             ) : (
               <div className="space-y-5">
                 {filteredReviews.map((review) => (
-                  <div key={review.review_id} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
+                  <div key={formatReviewId(review.review_id)} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
                         <Avatar className="h-10 w-10">

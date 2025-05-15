@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertCircle, Check, Info, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 
 interface VendorSettings {
   vendor_name: string;
@@ -99,7 +99,18 @@ const Settings: React.FC = () => {
         
       if (error) throw error;
       
-      // Parse and set the data
+      // Parse and safely set the address and notification preferences
+      const vendorAddress = typeof data.address === 'object' && data.address !== null 
+        ? data.address as { street?: string; city?: string; state?: string; postal_code?: string; country?: string; }
+        : { street: '', city: '', state: '', postal_code: '', country: 'India' };
+      
+      const notificationPrefs = {
+        email_bookings: true,
+        email_reviews: true,
+        sms_bookings: false,
+        sms_reviews: false
+      };
+      
       setVendorSettings({
         vendor_name: data.vendor_name || '',
         vendor_category: data.vendor_category || '',
@@ -107,20 +118,8 @@ const Settings: React.FC = () => {
         phone_number: data.phone_number || '',
         website_url: data.website_url || '',
         description: data.description || '',
-        address: data.address || {
-          street: '',
-          city: '',
-          state: '',
-          postal_code: '',
-          country: 'India'
-        },
-        notification_preferences: {
-          email_bookings: true,
-          email_reviews: true,
-          sms_bookings: false,
-          sms_reviews: false,
-          ...data.notification_preferences
-        }
+        address: vendorAddress,
+        notification_preferences: notificationPrefs
       });
     } catch (error) {
       console.error('Error fetching vendor settings:', error);

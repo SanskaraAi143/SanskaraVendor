@@ -5,11 +5,11 @@ import VendorSidebar from '@/components/VendorSidebar';
 import VendorHeader from '@/components/VendorHeader';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Toaster } from '@/components/ui/toaster';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const MainLayout: React.FC = () => {
   const { vendorProfile, isLoadingProfile } = useAuth();
-  const { isMobile } = useMobile();
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const location = useLocation();
 
@@ -39,14 +39,14 @@ const MainLayout: React.FC = () => {
     <div className="flex h-screen overflow-hidden bg-sanskara-cream/10">
       {/* Sidebar */}
       <VendorSidebar 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
+        open={sidebarOpen} 
+        setOpen={setSidebarOpen} 
       />
       
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <VendorHeader 
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           vendorProfile={vendorProfile}
           isLoadingProfile={isLoadingProfile}
         />
