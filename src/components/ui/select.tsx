@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
@@ -110,15 +109,15 @@ const SelectLabel = React.forwardRef<
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
-// Added check to warn about empty string values in SelectItem
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, value = "", ...props }, ref) => {
-  if (process.env.NODE_ENV !== 'production' && value === "") {
-    console.warn(
-      "Warning: <SelectItem /> has an empty string value. This is not allowed because the Select component uses empty strings to indicate that no selection has been made and to display the placeholder. Please use a non-empty string value."
+>(({ className, children, value, ...props }, ref) => {
+  if (process.env.NODE_ENV !== 'production' && (value === undefined || value === "")) {
+    console.error(
+      "Error: <SelectItem /> must have a non-empty string value. Empty strings or undefined values are not allowed."
     );
+    return null; // Prevent rendering if value is invalid
   }
 
   return (

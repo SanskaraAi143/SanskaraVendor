@@ -1,0 +1,201 @@
+Vendor Management Platform – Vendor Side Flow & Design
+
+1. User Journey
+- User visits website.
+- User provides location, tradition, and budget preferences during onboarding.
+- User enters AI chat:
+    - Greet user.
+    - Show available vendors & recommendations based on preferences/styles.
+- User may request to contact a vendor.
+    - Most vendors offer end-to-end services (catering, decor, venue, DJ, etc.).
+- AI checks vendor availability for the requested date and informs the user.
+- User can book an appointment for a pre-wedding visit.
+- After the visit:
+    - Collect feedback from both vendor and user about proceeding.
+- If proceeding:
+    - Handle advance payments (lock a portion on our side).
+    - Curate and assign to-do lists for both user and vendor sides (timelines, dependencies, priorities).
+    - AI follows up on tasks in the background.
+
+2. User Portal
+- Main interaction via AI chat.
+- Access to:
+    - To-do lists
+    - Moodboards
+    - Events (editable by user)
+
+3. Vendor Portal
+- Vendor updates venue availability on the website.
+- Incentive: Access to our customer base (we take a commission).
+- Features:
+    - Calendar dashboard (events, tasks, date availability)
+    - Notifications for booking/visit requests
+    - Double confirmation via WhatsApp if vendor doesn’t update availability
+    - Vendor profile (name, place, available services)
+    - Service management (add/edit services, assign service managers)
+    - Separate logins for vendor and service accounts
+    - Service members manage specific services (can be in-house or third-party)
+    - Escalation to vendor if service member doesn’t respond
+
+4. Services
+- Each service includes:
+    - Name
+    - Description
+    - Cost
+    - Limitations
+    - Customizability
+    - Third-party/in-house flag
+    - Negotiable flag
+- Service members onboarded with contact info (phone/email) for login.
+
+5. Payments
+- Two flows:
+    1. User pays offline at vendor site (vendor must update us for commission).
+    2. User pays via our portal (benefits apply if payment is through our gateway).
+
+6. Support & Escalation
+- If AI delegation fails:
+    - User can request to contact vendor directly.
+    - User can reach out to platform support for manual intervention.
+
+7. Additional Features
+- Vendor review system.
+- Websearch agent to gather more vendor/service info.
+- Notifications:
+    - To users (vendor updates, task deadlines, reminders, custom requests)
+    - To vendors (availability checks, task reminders, user requests)
+    - WhatsApp integration for real-time updates
+- Highly customizable to-do list templates for both user and vendor sides.
+
+Database, Frontend, and Backend Designs (Supabase)
+
+Database (Supabase)
+- Users: id, name, contact, preferences, etc.
+- Vendors: id, name, location, profile details, commission info, etc.
+- Services: id, vendor_id, name, description, cost, limitations, customizable, third_party, negotiable, service_manager_id, etc.
+- Service Members: id, vendor_id, service_id, name, contact, role, etc.
+- Availability: id, vendor_id, service_id, date, is_available, updated_by, etc.
+- Appointments/Visits: id, user_id, vendor_id, service_id, date, status, feedback, etc.
+- Payments: id, user_id, vendor_id, service_id, amount, method, status, commission, etc.
+- ToDos: id, assigned_to (user/vendor/service_member), description, due_date, status, dependencies, priority, etc.
+- Notifications: id, recipient_id, type, message, status, channel (web, WhatsApp), etc.
+- Reviews: id, user_id, vendor_id, service_id, rating, comment, date, etc.
+
+Frontend
+- Vendor Portal:
+    - Login (vendor/service member)
+    - Dashboard (calendar, tasks, events)
+    - Availability management
+    - Service management
+    - Notifications
+    - Profile & review management
+- User Portal:
+    - AI chat interface
+    - Vendor/service recommendations
+    - To-do lists, moodboards, events
+    - Appointment booking
+    - Payment interface
+    - Notifications
+
+Backend
+- Use Supabase for:
+    - Database
+    - Auth (vendor, service member, user roles)
+    - Real-time updates (availability, notifications)
+- API endpoints for:
+    - Vendor/service management
+    - Availability checks/updates
+    - Appointment scheduling
+    - Payment processing
+    - Notifications (including WhatsApp integration)
+    - Review system
+    - To-do/task management
+
+User Schema Edits (if required)
+- Ensure user schema includes:
+    - Preferences (location, tradition, budget)
+    - Contact info (for notifications)
+    - Linked appointments, payments, to-dos
+
+
+
+
+
+
+
+
+Now i want to implement the vendor managment side of the platform , the flow looks something like this
+
+user visits website
+
+user gives the location, tradition and budget preferences while onboarding
+
+comes to ai chat, we will greet and let them know the available vendors and recommendations based on thier preferences and styles
+
+user might request to contact one of the vendors
+most vendors have end to end services - like cater, decor, venue, dj set etc
+
+ai checks the vendor availabity for the specific date and lets user know
+can book appointment for a visit before wedding
+
+after visit we will get inputs from both vendor and user about the status if user want to proceed or not
+
+if user want to proceed with vendor proceed with advance payments and we will lock some part our side
+
+we will curate a list of todo's to the user side and vendor side , their timelines, any dependencies and prioritize them and follow up them via AI
+this should be going in background of ai agents
+
+The user interaction is mostly via AI chat
+
+The user side portal has access to todo's, moodboards and events related pages which user can edit manually
+
+The vendor is the one responisible for updating the venue availablity in the website
+
+vendor's incentive is the provision of our coustomers to them (we take a small commission out of it)
+
+vendor portal will have a calender dashboard showing all the events/ tasks planned and date availabilties for ease
+
+or he will be notified and requested if a given date is available for booking and doing a visit or something .
+
+The logic is if vendor misses to update the avialability atleast we double confirm with vendor via whatsapp to get realtime update
+
+a vendor profile will be available for each vendor while onboarding them with details like , name,place, services available
+
+services - service name, description, cost, limitations, coustomizabiltiy , is third party or in house and is negotiable or not
+
+services under a vendor will be managed by other person - so the updates should be taken from him(onboarding services members to the portal)
+
+The service member can be implemented like while onboarding vendors,vendor will add service's and the phone number or mail they give for the service will be used by service user to login to that account to access the service dashboard
+
+This to will be like in the portal start show vendor login / service account login seperately
+
+service member is other person undet the same vendor but taking care of this service(can be of same organization or third party involvement) - service related tasks are directly contacted to the service person if not responded it will be escalated to the vendor
+
+thier are two possibilites for user doing payments
+
+User visits the vendor site and do the registration process and payment confirmation offline
+
+User after visit comes to the portal and do the advance payments
+User gets benifits only if payment is done though our gatway or if he does it offline vendor has to update us about it and make commission for us for future trusted partnership
+
+Ai can do mistakes and if thier are two points of contact if user faces issue with ai doing delegation
+
+request to reach out to vendor
+
+reach out to our support so we can do manual check
+
+A review system for the vendors
+
+A websearch agent which will gather more info about the vendor and thier services
+
+Notifications to the users when vendor provides update, task deadline notifications , reminders, and timely update of each vendors tasks and thier updates, any coustom requests from vendor.
+
+updates can be provided via whatsapp to user
+
+in vendor side - if user request to check availabity notify the vendor, vendor side task reminders and notifications, any coustom requests from users
+
+plan a templete of todo lists for vendor and user sides, should be highly coustomizable as per user needs.
+
+Based on this can you provide the vendor side database, frontend and backend designs, i want to use supabase for database and auth.
+
+suggest any edits required in the user schema if required only

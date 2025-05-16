@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,7 +54,7 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!vendorProfile?.vendor_id) {
       toast({
         title: 'Error',
@@ -64,7 +63,7 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       });
       return;
     }
-    
+
     if (!formData.display_name || !formData.email) {
       toast({
         title: 'Required fields missing',
@@ -75,39 +74,96 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     }
 
     setIsSubmitting(true);
-    
+
     try {
-      // Create a temporary UUID that will be replaced with the actual auth ID after invitation
-      const tempAuthId = crypto.randomUUID();
-      
-      const { error } = await supabase
-        .from('vendor_staff')
+      // Check if the user already exists in the users table
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('users')
+        .select('supabase_auth_uid') // Updated to use supabase_auth_uid instead of user_id
+        .eq('email', formData.email)
+        .single();
+
+      if (userCheckError && userCheckError.code !== 'PGRST116') {
+        throw userCheckError;
+      }
+
+      let supabaseAuthUid = existingUser?.supabase_auth_uid; // Updated to use supabase_auth_uid
+
+      // If the user does not exist, invite them
+      if (!supabaseAuthUid) {
+        // Invite the user via email
+        const { data: inviteResponse, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+          formData.email
+        );
+
+        if (inviteError) {
+          throw new Error('Failed to invite user: ' + inviteError.message);
+        }
+
+        toast({
+          title: 'Invitation Sent',
+          description: 'The user has been invited. They need to accept the invitation before being added to the staff list.',
+          variant: 'info',
+        });
+
+        // Exit early since the user needs to accept the invitation first
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Retry mechanism to ensure user exists in the users table
+      if (!supabaseAuthUid) {
+        for (let i = 0; i < 3; i++) {
+          const { data: userCheck, error: retryError } = await supabase
+            .from('users')
+            .select('supabase_auth_uid')
+            .eq('email', formData.email)
+            .single();
+
+          if (retryError) {
+            console.warn('Retry failed:', retryError);
+          } else if (userCheck?.supabase_auth_uid) {
+            supabaseAuthUid = userCheck.supabase_auth_uid;
+            break;
+          }
+
+          // Wait for a short delay before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        if (!supabaseAuthUid) {
+          throw new Error('User creation delayed or failed. Please try again.');
+        }
+      }
+
+      // Insert invitation into vendor_staff_invite table
+      const { error: inviteInsertError } = await supabase
+        .from('vendor_staff_invite')
         .insert({
           vendor_id: vendorProfile.vendor_id,
-          supabase_auth_uid: tempAuthId, // Temporary ID
-          display_name: formData.display_name,
           email: formData.email,
-          phone_number: formData.phone_number || null,
           role: formData.role,
-          invitation_status: 'pending'
+          invitation_status: 'pending',
         });
-      
-      if (error) throw error;
-      
+
+      if (inviteInsertError) {
+        throw new Error('Failed to create invitation: ' + inviteInsertError.message);
+      }
+
       toast({
-        title: 'Staff member added',
-        description: 'Staff member has been added successfully and invitation is pending',
+        title: 'Invitation Created',
+        description: 'The invitation has been created successfully.',
         variant: 'success',
       });
-      
+
       // Reset form
       setFormData({
         display_name: '',
         email: '',
         phone_number: '',
-        role: 'staff'
+        role: 'staff',
       });
-      
+
       // Call success callback if provided
       if (onSuccess) {
         onSuccess();
@@ -123,6 +179,23 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       setIsSubmitting(false);
     }
   };
+
+  React.useEffect(() => {
+    const subscription = supabase
+      .channel('realtime:vendor_staff')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_staff' }, payload => {
+        console.log('Change received!', payload);
+        // Optionally, update the staff list dynamically here
+        if (onSuccess) {
+          onSuccess();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [onSuccess]);
 
   return (
     <Card>

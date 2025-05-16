@@ -1,0 +1,3 @@
+based on @docs , help implement the backend and api's for the frontend code(frontend code is in @sanskara-ai-weddings-planner , rewrite the frontend to interact with api's , create a sepetate folder for backed and api's , make sure everthing is compatible each other(refer docs when needed) - implement full code
+
+the frontend is using firebase for authentication but i need supabase(refer docs)

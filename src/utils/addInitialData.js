@@ -1,4 +1,3 @@
-
 // This is a utility script to add initial data for testing purposes
 // You can copy-paste this to your browser console while logged in to add some test data
 
@@ -28,7 +27,29 @@ const addInitialData = async () => {
   console.log('Adding test data for vendor:', vendorId);
   
   try {
-    // Add some staff members
+    // Ensure the supabase_auth_uid exists in the users table
+    const users = [
+      {
+        supabase_auth_uid: '1663284d-e830-4957-8dac-a1a0b48b4631',
+        email: 'rahul@example.com',
+        display_name: 'Rahul Sharma'
+      },
+      {
+        supabase_auth_uid: '2b7c9e4f-3d5a-4b8e-9c2d-5a1b2c3d4e5f',
+        email: 'priya@example.com',
+        display_name: 'Priya Singh'
+      }
+    ];
+
+    const { error: usersError } = await supabase
+      .from('users')
+      .insert(users)
+      .onConflict('supabase_auth_uid'); // Avoid duplicate entries
+
+    if (usersError) throw new Error(`Error adding users: ${usersError.message}`);
+    console.log('Ensured users exist in the users table');
+
+    // Update staff members to use valid supabase_auth_uid
     const staffMembers = [
       {
         vendor_id: vendorId,
@@ -36,7 +57,7 @@ const addInitialData = async () => {
         email: 'rahul@example.com',
         phone_number: '+91 98765 43210',
         role: 'admin',
-        supabase_auth_uid: crypto.randomUUID()
+        supabase_auth_uid: '1663284d-e830-4957-8dac-a1a0b48b4631'
       },
       {
         vendor_id: vendorId,
@@ -44,7 +65,7 @@ const addInitialData = async () => {
         email: 'priya@example.com',
         phone_number: '+91 87654 32109',
         role: 'staff',
-        supabase_auth_uid: crypto.randomUUID()
+        supabase_auth_uid: '2b7c9e4f-3d5a-4b8e-9c2d-5a1b2c3d4e5f'
       }
     ];
     

@@ -4,8 +4,9 @@ import type { Database } from './types';
 
 const SUPABASE_URL = "https://lylsxoupakajkuisjdfl.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5bHN4b3VwYWthamt1aXNqZGZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNjMyMzIsImV4cCI6MjA2MDkzOTIzMn0.IROcW1X2sHSbx9zOUsbxsN9TFoR6tyO0C8POlk2GCmo";
+const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || SUPABASE_PUBLISHABLE_KEY; // Use Vite's environment variable support
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
