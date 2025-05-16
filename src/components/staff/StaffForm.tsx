@@ -92,6 +92,8 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       }
       
       // Insert directly into vendor_staff table with invited state
+      // We need to provide a placeholder for supabase_auth_uid since it's required 
+      // by the table schema but not available yet (will be updated when user accepts invitation)
       const { error: staffInsertError } = await supabase
         .from('vendor_staff')
         .insert({
@@ -101,7 +103,8 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
           phone_number: formData.phone_number || null,
           role: formData.role,
           is_active: true,
-          invitation_status: 'pending'
+          invitation_status: 'pending',
+          supabase_auth_uid: '00000000-0000-0000-0000-000000000000' // Placeholder that will be updated later
         });
 
       if (staffInsertError) {
@@ -139,12 +142,15 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     }
   };
 
-  // Listen for realtime updates on the vendor_staff table
+  // Set up realtime subscription for staff changes
   React.useEffect(() => {
     const subscription = supabase
-      .channel('realtime:vendor_staff')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_staff' }, payload => {
-        console.log('Change received!', payload);
+      .channel('public:vendor_staff')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'vendor_staff' 
+      }, () => {
         // Refresh the staff list dynamically
         if (onSuccess) {
           onSuccess();

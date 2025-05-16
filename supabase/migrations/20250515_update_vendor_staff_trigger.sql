@@ -13,7 +13,7 @@ BEGIN
             updated_at = NOW()
         WHERE 
             email = NEW.email AND
-            (invitation_status = 'pending' OR invitation_status IS NULL);
+            (invitation_status = 'pending' OR invitation_status IS NULL OR supabase_auth_uid = '00000000-0000-0000-0000-000000000000');
     END IF;
     
     RETURN NEW;
