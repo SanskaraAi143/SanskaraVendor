@@ -17,6 +17,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuthContext';
 import { DataCacheProvider } from './hooks/useDataCache';
 import Reviews from './pages/Reviews';
+import Payments from './pages/Payments';
+import Notifications from './pages/Notifications';
 
 function App() {
   const { user } = useAuth();
@@ -44,6 +46,8 @@ function App() {
           <Route path="services/edit/:serviceId" element={<EditService />} />
           <Route path="staff" element={<Staff />} />
           <Route path="tasks" element={<Tasks />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
           <Route path="reviews" element={<Reviews />} />
