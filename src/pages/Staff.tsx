@@ -73,6 +73,7 @@ const StaffPage: React.FC = () => {
         table: 'vendor_staff',
         filter: `vendor_id=eq.${vendorProfile.vendor_id}`
       }, () => {
+        console.log('Staff changes detected, refreshing list');
         fetchStaffMembers();
       })
       .subscribe();

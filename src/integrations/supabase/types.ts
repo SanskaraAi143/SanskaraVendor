@@ -844,7 +844,7 @@ export type Database = {
           role: string
           staff_id: string
           state: string
-          supabase_auth_uid: string
+          supabase_auth_uid: string | null
           updated_at: string | null
           vendor_id: string
         }
@@ -858,7 +858,7 @@ export type Database = {
           role?: string
           staff_id?: string
           state?: string
-          supabase_auth_uid: string
+          supabase_auth_uid?: string | null
           updated_at?: string | null
           vendor_id: string
         }
@@ -872,7 +872,7 @@ export type Database = {
           role?: string
           staff_id?: string
           state?: string
-          supabase_auth_uid?: string
+          supabase_auth_uid?: string | null
           updated_at?: string | null
           vendor_id?: string
         }

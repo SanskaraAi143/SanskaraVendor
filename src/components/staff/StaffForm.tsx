@@ -102,15 +102,13 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
           role: formData.role,
           is_active: true,
           invitation_status: 'pending',
-          // Use a placeholder UUID that will be replaced when the user accepts the invitation
-          supabase_auth_uid: '00000000-0000-0000-0000-000000000000'
+          // We don't need to provide a supabase_auth_uid since it's now nullable
         });
 
       if (staffInsertError) {
         throw new Error('Failed to add staff member: ' + staffInsertError.message);
       }
 
-      // Send invitation email (in a real app this would trigger an email)
       toast({
         title: 'Staff Invited',
         description: 'The staff member has been invited successfully.',

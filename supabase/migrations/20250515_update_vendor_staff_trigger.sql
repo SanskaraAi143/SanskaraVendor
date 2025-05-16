@@ -13,7 +13,7 @@ BEGIN
             updated_at = NOW()
         WHERE 
             email = NEW.email AND
-            (invitation_status = 'pending' OR invitation_status IS NULL OR supabase_auth_uid = '00000000-0000-0000-0000-000000000000');
+            invitation_status = 'pending';
     END IF;
     
     RETURN NEW;
@@ -21,7 +21,8 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create the trigger on auth.users
-CREATE OR REPLACE TRIGGER staff_invitation_accepted_trigger
+DROP TRIGGER IF EXISTS staff_invitation_accepted_trigger ON auth.users;
+CREATE TRIGGER staff_invitation_accepted_trigger
 AFTER INSERT OR UPDATE ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION handle_staff_invitation_accepted();
