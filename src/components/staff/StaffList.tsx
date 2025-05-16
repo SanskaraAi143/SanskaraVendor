@@ -81,9 +81,13 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
   const { user } = useAuth();
   const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleToggleActive = async (staffId: string, isCurrentlyActive: boolean) => {
     try {
+      setIsProcessing(true);
+      console.log("Toggling staff active status:", staffId, "Current status:", isCurrentlyActive);
+      
       const { error } = await supabase
         .from('vendor_staff')
         .update({ is_active: !isCurrentlyActive })
@@ -94,7 +98,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       toast({
         title: isCurrentlyActive ? 'Staff Deactivated' : 'Staff Activated',
         description: `Staff member has been ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully.`,
-        variant: 'success',
       });
       
       // Refresh the list
@@ -106,11 +109,16 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
         description: 'Failed to update staff status',
         variant: 'destructive',
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
   
   const handleResendInvitation = async (staffId: string, email: string) => {
     try {
+      setIsProcessing(true);
+      console.log("Resending invitation for staff:", staffId, email);
+      
       // Update the invitation status to trigger a new email
       const { error } = await supabase
         .from('vendor_staff_invite')
@@ -119,12 +127,12 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       
       if (error) {
         console.error('Error updating invitation:', error);
+        throw error;
       }
       
       toast({
         title: 'Invitation Resent',
         description: `Invitation has been resent to ${email}`,
-        variant: 'success',
       });
       
       onRefresh();
@@ -135,6 +143,8 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
         description: 'Failed to resend invitation',
         variant: 'destructive',
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
   
@@ -147,6 +157,9 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
     if (!staffToDelete) return;
     
     try {
+      setIsProcessing(true);
+      console.log("Deleting staff member:", staffToDelete.staff_id);
+      
       const { error } = await supabase
         .from('vendor_staff')
         .delete()
@@ -157,10 +170,9 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       toast({
         title: 'Staff Deleted',
         description: 'Staff member has been removed successfully.',
-        variant: 'success',
       });
       
-      // Also delete the invitation
+      // Also delete the invitation if it exists
       await supabase
         .from('vendor_staff_invite')
         .delete()
@@ -178,6 +190,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
     } finally {
       setIsAlertOpen(false);
       setStaffToDelete(null);
+      setIsProcessing(false);
     }
   };
   
@@ -225,7 +238,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                   {/* Only show actions for other staff members */}
                   {staff.email !== user?.email && (
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild disabled={isProcessing}>
                         <Button variant="ghost" size="icon">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -268,9 +281,13 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteStaff} className="bg-red-600 hover:bg-red-700">
-              Remove
+            <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteStaff} 
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Processing...' : 'Remove'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

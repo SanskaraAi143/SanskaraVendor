@@ -18,16 +18,22 @@ const StaffPage: React.FC = () => {
   }, [vendorProfile]);
   
   const fetchStaffMembers = async () => {
+    if (!vendorProfile?.vendor_id) return;
+    
     setIsLoading(true);
     
     try {
+      console.log("Fetching staff for vendor:", vendorProfile.vendor_id);
+      
       const { data, error } = await supabase
         .from('vendor_staff')
         .select('*')
-        .eq('vendor_id', vendorProfile?.vendor_id)
+        .eq('vendor_id', vendorProfile.vendor_id)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
+      
+      console.log("Staff data fetched:", data);
       
       if (data) {
         // Transform data to match Staff interface

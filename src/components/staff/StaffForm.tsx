@@ -92,8 +92,6 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       }
       
       // Insert directly into vendor_staff table with invited state
-      // We need to provide a placeholder for supabase_auth_uid since it's required 
-      // by the table schema but not available yet (will be updated when user accepts invitation)
       const { error: staffInsertError } = await supabase
         .from('vendor_staff')
         .insert({
@@ -104,7 +102,8 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
           role: formData.role,
           is_active: true,
           invitation_status: 'pending',
-          supabase_auth_uid: '00000000-0000-0000-0000-000000000000' // Placeholder that will be updated later
+          // Use a placeholder UUID that will be replaced when the user accepts the invitation
+          supabase_auth_uid: '00000000-0000-0000-0000-000000000000'
         });
 
       if (staffInsertError) {
@@ -115,7 +114,6 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       toast({
         title: 'Staff Invited',
         description: 'The staff member has been invited successfully.',
-        variant: 'success',
       });
 
       // Reset form
@@ -144,12 +142,15 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
 
   // Set up realtime subscription for staff changes
   React.useEffect(() => {
-    const subscription = supabase
+    if (!vendorProfile?.vendor_id) return;
+    
+    const channel = supabase
       .channel('public:vendor_staff')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'vendor_staff' 
+        table: 'vendor_staff',
+        filter: `vendor_id=eq.${vendorProfile.vendor_id}`
       }, () => {
         // Refresh the staff list dynamically
         if (onSuccess) {
@@ -159,9 +160,9 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(channel);
     };
-  }, [onSuccess]);
+  }, [onSuccess, vendorProfile?.vendor_id]);
 
   return (
     <Card>
