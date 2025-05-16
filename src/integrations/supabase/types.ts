@@ -843,6 +843,7 @@ export type Database = {
           phone_number: string | null
           role: string
           staff_id: string
+          state: string
           supabase_auth_uid: string
           updated_at: string | null
           vendor_id: string
@@ -856,6 +857,7 @@ export type Database = {
           phone_number?: string | null
           role?: string
           staff_id?: string
+          state?: string
           supabase_auth_uid: string
           updated_at?: string | null
           vendor_id: string
@@ -869,6 +871,7 @@ export type Database = {
           phone_number?: string | null
           role?: string
           staff_id?: string
+          state?: string
           supabase_auth_uid?: string
           updated_at?: string | null
           vendor_id?: string
@@ -876,6 +879,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "vendor_staff_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["vendor_id"]
+          },
+        ]
+      }
+      vendor_staff_invite: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          invitation_status: string
+          role: string
+          updated_at: string | null
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          invitation_status?: string
+          role: string
+          updated_at?: string | null
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          invitation_status?: string
+          role?: string
+          updated_at?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_staff_invite_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"

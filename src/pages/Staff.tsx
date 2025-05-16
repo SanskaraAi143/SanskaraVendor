@@ -7,7 +7,7 @@ import StaffForm from '@/components/staff/StaffForm';
 import StaffList, { Staff } from '@/components/staff/StaffList';
 
 const StaffPage: React.FC = () => {
-  const { vendorProfile } = useAuth();
+  const { vendorProfile, user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [staffMembers, setStaffMembers] = useState<Staff[]>([]);
   
@@ -29,18 +29,20 @@ const StaffPage: React.FC = () => {
       
       if (error) throw error;
       
-      // Transform data to match Staff interface
-      const transformedData = data.map(staff => ({
-        staff_id: staff.staff_id,
-        display_name: staff.display_name,
-        email: staff.email,
-        phone_number: staff.phone_number,
-        role: staff.role,
-        is_active: staff.is_active,
-        invitation_status: staff.invitation_status
-      }));
-      
-      setStaffMembers(transformedData);
+      if (data) {
+        // Transform data to match Staff interface
+        const transformedData = data.map(staff => ({
+          staff_id: staff.staff_id,
+          display_name: staff.display_name,
+          email: staff.email,
+          phone_number: staff.phone_number,
+          role: staff.role,
+          is_active: staff.is_active,
+          invitation_status: staff.invitation_status
+        }));
+        
+        setStaffMembers(transformedData);
+      }
     } catch (error) {
       console.error('Error fetching staff members:', error);
       toast({
@@ -52,6 +54,27 @@ const StaffPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+  
+  // Set up realtime subscription for staff changes
+  useEffect(() => {
+    if (!vendorProfile?.vendor_id) return;
+    
+    const channel = supabase
+      .channel('public:vendor_staff')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'vendor_staff',
+        filter: `vendor_id=eq.${vendorProfile.vendor_id}`
+      }, () => {
+        fetchStaffMembers();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [vendorProfile?.vendor_id]);
   
   return (
     <div className="space-y-6">

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,66 +77,6 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     setIsSubmitting(true);
 
     try {
-      // Check if the user already exists in the users table
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from('users')
-        .select('supabase_auth_uid') // Updated to use supabase_auth_uid instead of user_id
-        .eq('email', formData.email)
-        .single();
-
-      if (userCheckError && userCheckError.code !== 'PGRST116') {
-        throw userCheckError;
-      }
-
-      let supabaseAuthUid = existingUser?.supabase_auth_uid; // Updated to use supabase_auth_uid
-
-      // If the user does not exist, invite them
-      if (!supabaseAuthUid) {
-        // Invite the user via email
-        const { data: inviteResponse, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-          formData.email
-        );
-
-        if (inviteError) {
-          throw new Error('Failed to invite user: ' + inviteError.message);
-        }
-
-        toast({
-          title: 'Invitation Sent',
-          description: 'The user has been invited. They need to accept the invitation before being added to the staff list.',
-          variant: 'info',
-        });
-
-        // Exit early since the user needs to accept the invitation first
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Retry mechanism to ensure user exists in the users table
-      if (!supabaseAuthUid) {
-        for (let i = 0; i < 3; i++) {
-          const { data: userCheck, error: retryError } = await supabase
-            .from('users')
-            .select('supabase_auth_uid')
-            .eq('email', formData.email)
-            .single();
-
-          if (retryError) {
-            console.warn('Retry failed:', retryError);
-          } else if (userCheck?.supabase_auth_uid) {
-            supabaseAuthUid = userCheck.supabase_auth_uid;
-            break;
-          }
-
-          // Wait for a short delay before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-
-        if (!supabaseAuthUid) {
-          throw new Error('User creation delayed or failed. Please try again.');
-        }
-      }
-
       // Insert invitation into vendor_staff_invite table
       const { error: inviteInsertError } = await supabase
         .from('vendor_staff_invite')
@@ -149,10 +90,28 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       if (inviteInsertError) {
         throw new Error('Failed to create invitation: ' + inviteInsertError.message);
       }
+      
+      // Insert directly into vendor_staff table with invited state
+      const { error: staffInsertError } = await supabase
+        .from('vendor_staff')
+        .insert({
+          vendor_id: vendorProfile.vendor_id,
+          email: formData.email,
+          display_name: formData.display_name,
+          phone_number: formData.phone_number || null,
+          role: formData.role,
+          is_active: true,
+          invitation_status: 'pending'
+        });
 
+      if (staffInsertError) {
+        throw new Error('Failed to add staff member: ' + staffInsertError.message);
+      }
+
+      // Send invitation email (in a real app this would trigger an email)
       toast({
-        title: 'Invitation Created',
-        description: 'The invitation has been created successfully.',
+        title: 'Staff Invited',
+        description: 'The staff member has been invited successfully.',
         variant: 'success',
       });
 
@@ -172,7 +131,7 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       console.error('Error adding staff:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add staff member',
+        description: 'Failed to add staff member: ' + (error instanceof Error ? error.message : 'Unknown error'),
         variant: 'destructive',
       });
     } finally {
@@ -180,12 +139,13 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     }
   };
 
+  // Listen for realtime updates on the vendor_staff table
   React.useEffect(() => {
     const subscription = supabase
       .channel('realtime:vendor_staff')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_staff' }, payload => {
         console.log('Change received!', payload);
-        // Optionally, update the staff list dynamically here
+        // Refresh the staff list dynamically
         if (onSuccess) {
           onSuccess();
         }
@@ -264,10 +224,10 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding...
+                Inviting...
               </>
             ) : (
-              'Add Staff Member'
+              'Invite Staff Member'
             )}
           </Button>
         </CardFooter>
