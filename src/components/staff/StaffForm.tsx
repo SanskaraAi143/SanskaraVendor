@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,6 +76,25 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     setIsSubmitting(true);
 
     try {
+      // Invite the user via email
+      const { data: inviteResponse, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        formData.email
+      );
+
+      if (inviteError) {
+        throw new Error('Failed to invite user: ' + inviteError.message);
+      }
+
+      // Debug log for invitation response
+      console.log('Invitation response:', inviteResponse);
+
+      // Correct the variant type for the toast
+      toast({
+        title: 'Invitation Sent',
+        description: 'The user has been invited. They need to verify their email before being added as active staff.',
+        variant: 'default' // Changed from 'info' to 'default' to match the allowed types
+      });
+
       // Insert invitation into vendor_staff_invite table
       const { error: inviteInsertError } = await supabase
         .from('vendor_staff_invite')
@@ -90,8 +108,20 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       if (inviteInsertError) {
         throw new Error('Failed to create invitation: ' + inviteInsertError.message);
       }
+
+      // Debug log for vendor_staff_invite insertion
+      console.log('Inserting into vendor_staff_invite:', {
+        vendor_id: vendorProfile.vendor_id,
+        email: formData.email,
+        role: formData.role,
+        invitation_status: 'pending'
+      });
       
       // Insert directly into vendor_staff table with invited state
+      // Try to get the invited user's auth UID from the invite response
+      const supabase_auth_uid =
+        inviteResponse?.user?.id || null;
+
       const { error: staffInsertError } = await supabase
         .from('vendor_staff')
         .insert({
@@ -102,7 +132,7 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
           role: formData.role,
           is_active: true,
           invitation_status: 'pending',
-          // We don't need to provide a supabase_auth_uid since it's now nullable
+          supabase_auth_uid, // Insert the auth UID if available
         });
 
       if (staffInsertError) {
