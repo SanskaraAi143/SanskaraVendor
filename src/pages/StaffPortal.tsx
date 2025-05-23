@@ -101,7 +101,7 @@ const StaffPortal: React.FC = () => {
       <div className="container mx-auto py-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold gradient-text">Staff Portal</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Welcome {staffData.display_name} - Manage your profile and portfolio
           </p>
         </div>
