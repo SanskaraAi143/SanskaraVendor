@@ -43,22 +43,26 @@ export interface PortfolioItem {
 // Helper functions for staff profiles
 export const staffProfilesTable = {
   async select(query: { staff_id: string }) {
-    return await supabase.rpc('get_staff_profile', { p_staff_id: query.staff_id });
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('get_staff_profile', { p_staff_id: query.staff_id });
   },
 
   async insert(data: Partial<StaffProfile>) {
-    return await supabase.rpc('insert_staff_profile', data);
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('insert_staff_profile', data);
   },
 
   async update(data: Partial<StaffProfile>) {
-    return await supabase.rpc('update_staff_profile', data);
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('update_staff_profile', data);
   }
 };
 
 // Helper functions for portfolio items
 export const portfolioItemsTable = {
   async select(query: { staff_id: string }) {
-    return await supabase.rpc('get_portfolio_items', { p_staff_id: query.staff_id });
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('get_portfolio_items', { p_staff_id: query.staff_id });
   },
 
   async insert(data: {
@@ -72,15 +76,18 @@ export const portfolioItemsTable = {
     p_featured: boolean;
     p_metadata: any;
   }) {
-    return await supabase.rpc('add_portfolio_item', data);
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('add_portfolio_item', data);
   },
 
   async deleteItem(id: string) {
-    return await supabase.rpc('delete_portfolio_item', { p_id: id });
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('delete_portfolio_item', { p_id: id });
   },
 
   async updateFeatured(id: string, featured: boolean) {
-    return await supabase.rpc('update_portfolio_item_featured', { 
+    // Use type assertion to bypass TypeScript's type checking
+    return await (supabase.rpc as any)('update_portfolio_item_featured', { 
       p_id: id, 
       p_featured: featured 
     });
