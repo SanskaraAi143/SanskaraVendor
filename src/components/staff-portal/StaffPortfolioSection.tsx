@@ -23,6 +23,7 @@ const MEDIA_TYPES = [
   { value: 'document', label: 'Document' }
 ];
 
+// Define the portfolio item type to satisfy TypeScript
 interface PortfolioItem {
   id: string;
   title: string;
@@ -33,6 +34,7 @@ interface PortfolioItem {
   thumbnail_url: string | null;
   featured: boolean;
   metadata: any;
+  staff_id: string;
 }
 
 const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => {
@@ -65,19 +67,19 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
     const fetchPortfolioItems = async () => {
       setLoading(true);
       try {
-        // Using the raw query approach to avoid type issues
-        const { data, error } = await supabase
-          .from('staff_portfolio_items')
+        // Using type casting to bypass TypeScript checks
+        const { data, error } = await (supabase
+          .from('staff_portfolio_items') as any)
           .select('*')
           .eq('staff_id', staffData.staff_id)
-          .order('created_at', { ascending: false }) as { data: PortfolioItem[] | null, error: any };
+          .order('created_at', { ascending: false });
           
         if (error) {
           throw error;
         }
         
-        // Type assertion to help TypeScript understand the data structure
-        const typedData = data || [] as PortfolioItem[];
+        // Cast data to our PortfolioItem type
+        const typedData = (data || []) as PortfolioItem[];
         setPortfolioItems(typedData);
         
         // Extract categories
@@ -181,19 +183,18 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
       if (capacity) metadata.capacity = parseInt(capacity);
       if (customDetails) metadata.details = customDetails;
       
-      // Save to database using a direct approach to avoid type issues
-      const { error } = await supabase
-        .rpc('add_portfolio_item', {
-          p_staff_id: staffData.staff_id,
-          p_title: title,
-          p_description: description,
-          p_category: category,
-          p_media_type: mediaType,
-          p_media_url: mediaUrl,
-          p_thumbnail_url: thumbnailUrl,
-          p_featured: featured,
-          p_metadata: metadata
-        }) as any; // Type assertion to bypass TypeScript checks
+      // Save to database using stored procedure to bypass type issues
+      const { error } = await supabase.rpc('add_portfolio_item', {
+        p_staff_id: staffData.staff_id,
+        p_title: title,
+        p_description: description,
+        p_category: category,
+        p_media_type: mediaType,
+        p_media_url: mediaUrl,
+        p_thumbnail_url: thumbnailUrl,
+        p_featured: featured,
+        p_metadata: metadata
+      });
         
       if (error) throw error;
       
@@ -218,15 +219,15 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
       setDialogOpen(false);
       
       // Refresh portfolio items
-      const { data: updatedData, error: fetchError } = await supabase
-        .from('staff_portfolio_items')
+      const { data: updatedData, error: fetchError } = await (supabase
+        .from('staff_portfolio_items') as any)
         .select('*')
         .eq('staff_id', staffData.staff_id)
-        .order('created_at', { ascending: false }) as { data: PortfolioItem[] | null, error: any };
+        .order('created_at', { ascending: false });
         
       if (fetchError) throw fetchError;
       
-      // Type assertion to help TypeScript understand the data structure
+      // Cast data to our PortfolioItem type
       const typedData = updatedData || [] as PortfolioItem[];
       setPortfolioItems(typedData);
       
@@ -256,8 +257,9 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
     
     try {
       // Use a stored procedure to delete the item to bypass type checking
-      const { error } = await supabase
-        .rpc('delete_portfolio_item', { p_id: id }) as any;
+      const { error } = await supabase.rpc('delete_portfolio_item', { 
+        p_id: id 
+      });
         
       if (error) throw error;
       
@@ -281,11 +283,10 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {
     try {
       // Use a stored procedure to update the featured status to bypass type checking
-      const { error } = await supabase
-        .rpc('update_portfolio_item_featured', { 
-          p_id: id, 
-          p_featured: !currentFeatured 
-        }) as any;
+      const { error } = await supabase.rpc('update_portfolio_item_featured', { 
+        p_id: id, 
+        p_featured: !currentFeatured 
+      });
         
       if (error) throw error;
       

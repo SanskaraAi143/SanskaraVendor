@@ -12,10 +12,27 @@ interface StaffProfileProps {
   staffData: any;
 }
 
+// Define the profile data type to satisfy TypeScript
+interface StaffProfileData {
+  id: string;
+  staff_id: string;
+  bio: string | null;
+  specialization: string | null;
+  years_experience: number | null;
+  certifications: string[] | null;
+  social_links: {
+    website?: string;
+    instagram?: string;
+    facebook?: string;
+    twitter?: string;
+  } | null;
+  profile_image_url: string | null;
+}
+
 const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [profileData, setProfileData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<StaffProfileData | null>(null);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -36,8 +53,9 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
     const fetchProfileData = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('vendor_staff_profiles')
+        // Use any type casting to bypass TypeScript checks for the new table
+        const { data, error } = await (supabase
+          .from('vendor_staff_profiles') as any)
           .select('*')
           .eq('staff_id', staffData.staff_id)
           .single();
@@ -47,20 +65,22 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
         }
         
         if (data) {
-          setProfileData(data);
-          setBio(data.bio || '');
-          setSpecialization(data.specialization || '');
-          setYearsExperience(data.years_experience?.toString() || '');
-          setCertifications((data.certifications || []).join(', '));
+          // Cast the data to our interface
+          const typedData = data as StaffProfileData;
+          setProfileData(typedData);
+          setBio(typedData.bio || '');
+          setSpecialization(typedData.specialization || '');
+          setYearsExperience(typedData.years_experience?.toString() || '');
+          setCertifications((typedData.certifications || []).join(', '));
           
-          const socialLinks = data.social_links || {};
+          const socialLinks = typedData.social_links || {};
           setWebsite(socialLinks.website || '');
           setInstagram(socialLinks.instagram || '');
           setFacebook(socialLinks.facebook || '');
           setTwitter(socialLinks.twitter || '');
           
-          if (data.profile_image_url) {
-            setPreviewUrl(data.profile_image_url);
+          if (typedData.profile_image_url) {
+            setPreviewUrl(typedData.profile_image_url);
           }
         }
       } catch (error) {
@@ -150,7 +170,7 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
         years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         certifications: certificationsArray,
         social_links: socialLinks,
-        profile_image_url: imageUrl || null,
+        profile_image_url: imageUrl || previewUrl,
         updated_at: new Date()
       };
       
@@ -168,14 +188,14 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
       let error;
       if (!profileData) {
         // Create new profile
-        const { error: insertError } = await supabase
-          .from('vendor_staff_profiles')
+        const { error: insertError } = await (supabase
+          .from('vendor_staff_profiles') as any)
           .insert(profileDataToSave);
         error = insertError;
       } else {
         // Update existing profile
-        const { error: updateError } = await supabase
-          .from('vendor_staff_profiles')
+        const { error: updateError } = await (supabase
+          .from('vendor_staff_profiles') as any)
           .update(profileDataToSave)
           .eq('id', profileData.id);
         error = updateError;
