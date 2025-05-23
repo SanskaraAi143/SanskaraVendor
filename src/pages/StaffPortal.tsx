@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import StaffProfileSection from '@/components/staff-portal/StaffProfileSection';
 import StaffPortfolioSection from '@/components/staff-portal/StaffPortfolioSection';
+import { createStoredProcedures } from '@/utils/supabaseHelpers';
 
 const StaffPortal: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -71,24 +72,6 @@ const StaffPortal: React.FC = () => {
     
     fetchStaffData();
   }, [navigate]);
-  
-  // Create stored procedures for portfolio management to bypass TypeScript type checking
-  const createStoredProcedures = async () => {
-    try {
-      // Add Portfolio Item
-      await supabase.rpc('create_add_portfolio_item_function', {});
-      
-      // Delete Portfolio Item
-      await supabase.rpc('create_delete_portfolio_item_function', {});
-      
-      // Update Portfolio Item Featured Status
-      await supabase.rpc('create_update_portfolio_item_featured_function', {});
-      
-    } catch (error) {
-      console.error('Error creating stored procedures:', error);
-      // Continue even if this fails - they might already exist
-    }
-  };
   
   if (loading) {
     return (

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, X } from 'lucide-react';
+import { PortfolioItem, portfolioItemsTable } from '@/utils/supabaseHelpers';
 
 interface StaffPortfolioProps {
   staffData: any;
@@ -22,20 +23,6 @@ const MEDIA_TYPES = [
   { value: 'video', label: 'Video' },
   { value: 'document', label: 'Document' }
 ];
-
-// Define the portfolio item type to satisfy TypeScript
-interface PortfolioItem {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  media_type: string;
-  media_url: string;
-  thumbnail_url: string | null;
-  featured: boolean;
-  metadata: any;
-  staff_id: string;
-}
 
 const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => {
   const [loading, setLoading] = useState(true);
@@ -67,12 +54,9 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
     const fetchPortfolioItems = async () => {
       setLoading(true);
       try {
-        // Using type casting to bypass TypeScript checks
-        const { data, error } = await (supabase
-          .from('staff_portfolio_items') as any)
-          .select('*')
-          .eq('staff_id', staffData.staff_id)
-          .order('created_at', { ascending: false });
+        const { data, error } = await portfolioItemsTable.select({ 
+          staff_id: staffData.staff_id 
+        });
           
         if (error) {
           throw error;
@@ -83,11 +67,13 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
         setPortfolioItems(typedData);
         
         // Extract categories
-        const uniqueCategories = [...new Set(typedData.map(item => item.category))];
-        setCategories(uniqueCategories);
-        
-        if (uniqueCategories.length > 0 && !selectedCategory) {
-          setSelectedCategory(uniqueCategories[0]);
+        if (typedData.length > 0) {
+          const uniqueCategories = Array.from(new Set(typedData.map(item => item.category)));
+          setCategories(uniqueCategories as string[]);
+          
+          if (uniqueCategories.length > 0 && !selectedCategory) {
+            setSelectedCategory(uniqueCategories[0] as string);
+          }
         }
       } catch (error) {
         console.error('Error fetching portfolio items:', error);
@@ -183,8 +169,8 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
       if (capacity) metadata.capacity = parseInt(capacity);
       if (customDetails) metadata.details = customDetails;
       
-      // Save to database using stored procedure to bypass type issues
-      const { error } = await supabase.rpc('add_portfolio_item', {
+      // Save to database using our helper function
+      const { error } = await portfolioItemsTable.insert({
         p_staff_id: staffData.staff_id,
         p_title: title,
         p_description: description,
@@ -219,24 +205,24 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
       setDialogOpen(false);
       
       // Refresh portfolio items
-      const { data: updatedData, error: fetchError } = await (supabase
-        .from('staff_portfolio_items') as any)
-        .select('*')
-        .eq('staff_id', staffData.staff_id)
-        .order('created_at', { ascending: false });
+      const { data: updatedData, error: fetchError } = await portfolioItemsTable.select({
+        staff_id: staffData.staff_id
+      });
         
       if (fetchError) throw fetchError;
       
       // Cast data to our PortfolioItem type
-      const typedData = updatedData || [] as PortfolioItem[];
+      const typedData = (updatedData || []) as PortfolioItem[];
       setPortfolioItems(typedData);
       
       // Extract categories
-      const uniqueCategories = [...new Set(typedData.map(item => item.category))];
-      setCategories(uniqueCategories);
-      
-      if (!selectedCategory && uniqueCategories.length > 0) {
-        setSelectedCategory(uniqueCategories[0]);
+      if (typedData.length > 0) {
+        const uniqueCategories = Array.from(new Set(typedData.map(item => item.category)));
+        setCategories(uniqueCategories as string[]);
+        
+        if (!selectedCategory && uniqueCategories.length > 0) {
+          setSelectedCategory(uniqueCategories[0] as string);
+        }
       }
     } catch (error: any) {
       console.error('Error saving portfolio item:', error);
@@ -256,10 +242,8 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
     }
     
     try {
-      // Use a stored procedure to delete the item to bypass type checking
-      const { error } = await supabase.rpc('delete_portfolio_item', { 
-        p_id: id 
-      });
+      // Use our helper function to delete the item
+      const { error } = await portfolioItemsTable.deleteItem(id);
         
       if (error) throw error;
       
@@ -282,11 +266,8 @@ const StaffPortfolioSection: React.FC<StaffPortfolioProps> = ({ staffData }) => 
   
   const toggleFeatured = async (id: string, currentFeatured: boolean) => {
     try {
-      // Use a stored procedure to update the featured status to bypass type checking
-      const { error } = await supabase.rpc('update_portfolio_item_featured', { 
-        p_id: id, 
-        p_featured: !currentFeatured 
-      });
+      // Use our helper function to update featured status
+      const { error } = await portfolioItemsTable.updateFeatured(id, !currentFeatured);
         
       if (error) throw error;
       

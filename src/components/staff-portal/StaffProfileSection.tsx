@@ -7,32 +7,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StaffProfile, staffProfilesTable } from '@/utils/supabaseHelpers';
 
 interface StaffProfileProps {
   staffData: any;
 }
 
-// Define the profile data type to satisfy TypeScript
-interface StaffProfileData {
-  id: string;
-  staff_id: string;
-  bio: string | null;
-  specialization: string | null;
-  years_experience: number | null;
-  certifications: string[] | null;
-  social_links: {
-    website?: string;
-    instagram?: string;
-    facebook?: string;
-    twitter?: string;
-  } | null;
-  profile_image_url: string | null;
-}
-
 const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [profileData, setProfileData] = useState<StaffProfileData | null>(null);
+  const [profileData, setProfileData] = useState<StaffProfile | null>(null);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -53,12 +37,7 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
     const fetchProfileData = async () => {
       setLoading(true);
       try {
-        // Use any type casting to bypass TypeScript checks for the new table
-        const { data, error } = await (supabase
-          .from('vendor_staff_profiles') as any)
-          .select('*')
-          .eq('staff_id', staffData.staff_id)
-          .single();
+        const { data, error } = await staffProfilesTable.select({ staff_id: staffData.staff_id });
           
         if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
           throw error;
@@ -66,7 +45,7 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
         
         if (data) {
           // Cast the data to our interface
-          const typedData = data as StaffProfileData;
+          const typedData = data as StaffProfile;
           setProfileData(typedData);
           setBio(typedData.bio || '');
           setSpecialization(typedData.specialization || '');
@@ -171,7 +150,6 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
         certifications: certificationsArray,
         social_links: socialLinks,
         profile_image_url: imageUrl || previewUrl,
-        updated_at: new Date()
       };
       
       // Update the staff phone number
@@ -188,16 +166,14 @@ const StaffProfileSection: React.FC<StaffProfileProps> = ({ staffData }) => {
       let error;
       if (!profileData) {
         // Create new profile
-        const { error: insertError } = await (supabase
-          .from('vendor_staff_profiles') as any)
-          .insert(profileDataToSave);
+        const { error: insertError } = await staffProfilesTable.insert(profileDataToSave);
         error = insertError;
       } else {
         // Update existing profile
-        const { error: updateError } = await (supabase
-          .from('vendor_staff_profiles') as any)
-          .update(profileDataToSave)
-          .eq('id', profileData.id);
+        const { error: updateError } = await staffProfilesTable.update({
+          ...profileDataToSave,
+          id: profileData.id
+        });
         error = updateError;
       }
       
