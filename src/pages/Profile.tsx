@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader } from 'lucide-react';
@@ -18,20 +17,6 @@ const vendorCategories = [
   "Venue", "Catering", "Photography", "Videography", "Decor", 
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
-
-// Define types for the address and pricing range
-interface AddressData {
-  city: string;
-  state: string;
-  country: string;
-  full_address: string;
-}
-
-interface PricingRangeData {
-  min: string;
-  max: string;
-  currency: string;
-}
 
 const Profile: React.FC = () => {
   const { vendorProfile, user, refreshVendorProfile } = useAuth();

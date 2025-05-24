@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -5,14 +6,14 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
 
 // Define address and pricing range types
-interface AddressData {
+export interface AddressData {
   city: string;
   state: string;
   country: string;
   full_address: string;
 }
 
-interface PricingRangeData {
+export interface PricingRangeData {
   min: string;
   max: string;
   currency: string;
@@ -73,7 +74,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (data) {
         console.log("Vendor profile found:", data);
-        setVendorProfile(data as VendorProfile);
+        
+        // Explicitly cast the data to VendorProfile type with proper handling of JSON fields
+        const profile: VendorProfile = {
+          vendor_id: data.vendor_id,
+          vendor_name: data.vendor_name || '',
+          vendor_category: data.vendor_category || '',
+          contact_email: data.contact_email || '',
+          is_verified: data.is_verified || false,
+          phone_number: data.phone_number || undefined,
+          website_url: data.website_url || undefined,
+          description: data.description || undefined,
+          portfolio_image_urls: data.portfolio_image_urls as string[] || [],
+          address: data.address as unknown as AddressData || undefined,
+          pricing_range: data.pricing_range as unknown as PricingRangeData || undefined
+        };
+        
+        setVendorProfile(profile);
       } else {
         console.log("No vendor profile found for user:", userId);
       }

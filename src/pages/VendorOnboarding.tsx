@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 import ImageUploader from '@/components/ImageUploader';
@@ -19,20 +18,6 @@ const vendorCategories = [
   "Venue", "Catering", "Photography", "Videography", "Decor", 
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
-
-// Define interfaces for address and pricing range
-interface AddressData {
-  city: string;
-  state: string;
-  country: string;
-  full_address: string;
-}
-
-interface PricingRangeData {
-  min: string;
-  max: string;
-  currency: string;
-}
 
 const VendorOnboarding: React.FC = () => {
   const { user, vendorProfile, refreshVendorProfile } = useAuth();
