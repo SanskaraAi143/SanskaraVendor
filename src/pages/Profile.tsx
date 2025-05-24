@@ -19,6 +19,20 @@ const vendorCategories = [
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
 
+// Define types for the address and pricing range
+interface AddressData {
+  city: string;
+  state: string;
+  country: string;
+  full_address: string;
+}
+
+interface PricingRangeData {
+  min: string;
+  max: string;
+  currency: string;
+}
+
 const Profile: React.FC = () => {
   const { vendorProfile, user, refreshVendorProfile } = useAuth();
   
@@ -33,8 +47,8 @@ const Profile: React.FC = () => {
     phone_number: '',
     website_url: '',
     description: '',
-    address: { city: '', state: '', country: 'India', full_address: '' },
-    pricing_range: { min: '', max: '', currency: 'INR' },
+    address: { city: '', state: '', country: 'India', full_address: '' } as AddressData,
+    pricing_range: { min: '', max: '', currency: 'INR' } as PricingRangeData,
   });
   
   // Image upload state
@@ -57,6 +71,11 @@ const Profile: React.FC = () => {
         if (error) throw error;
         
         if (data) {
+          // Parse JSON fields with type safety
+          const address = data.address as AddressData || { city: '', state: '', country: 'India', full_address: '' };
+          const pricing_range = data.pricing_range as PricingRangeData || { min: '', max: '', currency: 'INR' };
+          const portfolio_images = data.portfolio_image_urls as string[] || [];
+          
           setProfile({
             vendor_name: data.vendor_name || '',
             vendor_category: data.vendor_category || '',
@@ -64,12 +83,12 @@ const Profile: React.FC = () => {
             phone_number: data.phone_number || '',
             website_url: data.website_url || '',
             description: data.description || '',
-            address: data.address || { city: '', state: '', country: 'India', full_address: '' },
-            pricing_range: data.pricing_range || { min: '', max: '', currency: 'INR' },
+            address,
+            pricing_range,
           });
           
           // Set existing images
-          setExistingImages(data.portfolio_image_urls || []);
+          setExistingImages(portfolio_images);
         }
       } catch (error) {
         console.error('Error loading vendor data:', error);

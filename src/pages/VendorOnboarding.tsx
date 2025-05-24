@@ -20,6 +20,20 @@ const vendorCategories = [
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
 
+// Define interfaces for address and pricing range
+interface AddressData {
+  city: string;
+  state: string;
+  country: string;
+  full_address: string;
+}
+
+interface PricingRangeData {
+  min: string;
+  max: string;
+  currency: string;
+}
+
 const VendorOnboarding: React.FC = () => {
   const { user, vendorProfile, refreshVendorProfile } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +42,7 @@ const VendorOnboarding: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Form data
+  // Form data with type safety
   const [vendorData, setVendorData] = useState({
     vendor_name: vendorProfile?.vendor_name || '',
     vendor_category: vendorProfile?.vendor_category || '',
@@ -36,13 +50,15 @@ const VendorOnboarding: React.FC = () => {
     phone_number: vendorProfile?.phone_number || '',
     website_url: vendorProfile?.website_url || '',
     description: vendorProfile?.description || '',
-    pricing_range: vendorProfile?.pricing_range || { min: '', max: '', currency: 'INR' },
-    address: vendorProfile?.address || { city: '', state: '', country: 'India', full_address: '' },
+    pricing_range: (vendorProfile?.pricing_range as PricingRangeData) || { min: '', max: '', currency: 'INR' },
+    address: (vendorProfile?.address as AddressData) || { city: '', state: '', country: 'India', full_address: '' },
   });
   
   // Image upload state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>(vendorProfile?.portfolio_image_urls || []);
+  const [existingImages, setExistingImages] = useState<string[]>(
+    (vendorProfile?.portfolio_image_urls as string[]) || []
+  );
   const [isUploading, setIsUploading] = useState(false);
   
   // Setup steps
@@ -66,7 +82,7 @@ const VendorOnboarding: React.FC = () => {
         vendorProfile.contact_email &&
         vendorProfile.description;
       
-      if (isProfileComplete && !vendorProfile.portfolio_image_urls?.length) {
+      if (isProfileComplete && !(vendorProfile.portfolio_image_urls as string[] || []).length) {
         setCurrentStep(3); // Go straight to image upload step
       } else if (isProfileComplete) {
         navigate('/'); // Profile is already complete
