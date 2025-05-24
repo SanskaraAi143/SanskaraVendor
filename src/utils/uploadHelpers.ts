@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -74,24 +73,37 @@ export const uploadMultipleFiles = async (
  * Deletes a file from Supabase Storage
  * @param url Full URL of the file to delete
  * @param bucket Bucket name
+ * @param userId User ID for identifying the file's folder
  * @returns Success status
  */
-export const deleteFile = async (url: string, bucket: string): Promise<boolean> => {
+export const deleteFile = async (url: string, bucket: string, userId: string): Promise<boolean> => {
   try {
+    // Validate the URL
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      throw new Error('Invalid URL provided to deleteFile');
+    }
+
     // Extract the file path from the URL
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
-    const filePath = pathParts.slice(pathParts.indexOf(bucket) + 1).join('/');
-    
+
+    // Ensure the userId is not appended twice
+    const filePathParts = pathParts.slice(pathParts.indexOf(bucket) + 1);
+    const filePath = filePathParts[0] === userId
+      ? filePathParts.join('/')
+      : `${userId}/${filePathParts.join('/')}`;
+
+    console.log('Deleting file at path:', filePath);
+
     const { error } = await supabase.storage
       .from(bucket)
       .remove([filePath]);
-    
+
     if (error) {
       console.error('Error deleting file:', error);
       return false;
     }
-    
+
     return true;
   } catch (error) {
     console.error('Error in deleteFile:', error);

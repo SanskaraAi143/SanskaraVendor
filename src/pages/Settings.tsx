@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,38 +23,39 @@ const Settings: React.FC = () => {
     }
   }, [vendorProfile]);
   
+  const isNotificationSettings = (data: any): data is NotificationSettings => {
+    return (
+      typeof data === 'object' &&
+      'email_notifications' in data && typeof data.email_notifications === 'boolean' &&
+      'booking_updates' in data && typeof data.booking_updates === 'boolean' &&
+      'marketing_notifications' in data && typeof data.marketing_notifications === 'boolean'
+    );
+  };
+
   const fetchSettings = async () => {
     setIsLoading(true);
     try {
-      // Fetch vendor profile details
+      // Fetch user profile details
       const { data, error } = await supabase
-        .from('vendors')
-        .select('*')
-        .eq('vendor_id', vendorProfile?.vendor_id)
+        .from('users')
+        .select('preferences')
+        .eq('supabase_auth_uid', user?.id)
         .single();
-      
+
       if (error) throw error;
-      
-      // Check for notification_settings in the data
-      const vendorData = data as any; // Use "any" temporarily to access potential notification_settings
+
+      // Check for notification_settings in preferences
       let notifSettings: NotificationSettings = {
         email_notifications: true,
         booking_updates: true,
         marketing_notifications: false
       };
-      
-      if (vendorData.notification_settings) {
-        try {
-          if (typeof vendorData.notification_settings === 'object') {
-            notifSettings = vendorData.notification_settings as NotificationSettings;
-          } else if (typeof vendorData.notification_settings === 'string') {
-            notifSettings = JSON.parse(vendorData.notification_settings);
-          }
-        } catch (e) {
-          console.error('Error parsing notification settings:', e);
-        }
+
+      const preferences = data?.preferences as { notification_settings?: NotificationSettings } | null;
+      if (preferences?.notification_settings) {
+        notifSettings = preferences.notification_settings;
       }
-      
+
       setNotificationSettings(notifSettings);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -77,21 +77,23 @@ const Settings: React.FC = () => {
   };
   
   const saveSettings = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
+    if (!user?.id) return;
+
     setIsSaving(true);
-    
+
     try {
-      // Update only notification settings
+      // Update notification settings in preferences
       const { error } = await supabase
-        .from('vendors')
+        .from('users')
         .update({
-          notification_settings: notificationSettings as unknown as Json
+          preferences: {
+            notification_settings: { ...notificationSettings }
+          }
         })
-        .eq('vendor_id', vendorProfile.vendor_id);
-        
+        .eq('supabase_auth_uid', user.id);
+
       if (error) throw error;
-      
+
       toast({
         title: 'Settings saved',
         description: 'Your notification preferences have been updated successfully',

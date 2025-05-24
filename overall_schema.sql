@@ -28,7 +28,8 @@ CREATE TABLE users (
     wedding_date DATE,
     wedding_location TEXT,
     wedding_tradition TEXT,
-    preferences JSONB -- { "budget_min": 5000, "budget_max": 10000, ... }
+    preferences JSONB, -- { "budget_min": 5000, "budget_max": 10000, ... }
+    user_type VARCHAR(50) NOT NULL DEFAULT 'customer' -- New column to differentiate user types
 );
 CREATE INDEX idx_users_supabase_auth_uid ON users (supabase_auth_uid);
 
@@ -474,3 +475,6 @@ CREATE TABLE task_templates (
 -- DROP TABLE IF EXISTS public.reviews CASCADE;
 -- DROP TABLE IF EXISTS public.notifications CASCADE;
 -- DROP TABLE IF EXISTS public.task_templates CASCADE;
+
+ALTER TABLE users
+ADD COLUMN user_type VARCHAR(50) NOT NULL DEFAULT 'customer';

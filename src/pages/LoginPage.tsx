@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,14 +75,15 @@ const LoginPage: React.FC = () => {
   
   const onSignup = async (data: SignupFormValues) => {
     try {
+      const userType = activeTab === 'signup' ? 'vendor' : 'vendor_staff';
       await signUp(data.email, data.password, {
         vendor_name: data.vendorName,
         vendor_category: data.vendorCategory,
         display_name: data.displayName,
         phone_number: data.phone || null
-      });
+      }, userType);
       setSignupSuccess(true);
-      
+
       // Reset form and switch to login tab after a delay
       setTimeout(() => {
         signupForm.reset();

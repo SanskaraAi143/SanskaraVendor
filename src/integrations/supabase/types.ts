@@ -693,6 +693,7 @@ export type Database = {
           wedding_date: string | null
           wedding_location: string | null
           wedding_tradition: string | null
+          user_type: string // Add user_type column
         }
         Insert: {
           created_at?: string | null
@@ -705,6 +706,7 @@ export type Database = {
           wedding_date?: string | null
           wedding_location?: string | null
           wedding_tradition?: string | null
+          user_type?: string // Add user_type column
         }
         Update: {
           created_at?: string | null
@@ -717,6 +719,7 @@ export type Database = {
           wedding_date?: string | null
           wedding_location?: string | null
           wedding_tradition?: string | null
+          user_type?: string // Add user_type column
         }
         Relationships: []
       }
@@ -1125,7 +1128,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {

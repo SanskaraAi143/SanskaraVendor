@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -40,7 +39,7 @@ type AuthContextType = {
   vendorProfile: VendorProfile | null;
   isLoadingProfile: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, metadata?: any) => Promise<void>;
+  signUp: (email: string, password: string, metadata?: any, userType?: 'vendor' | 'vendor_staff' | 'customer') => Promise<void>;
   signOut: () => Promise<void>;
   refreshVendorProfile: () => Promise<void>;
 };
@@ -160,11 +159,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
 
+      // Check user type
+      const { data: userProfile, error: profileError } = await supabase
+        .from('users')
+        .select('user_type')
+        .eq('email', email)
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (userProfile?.user_type === 'vendor_staff') {
+        toast({
+          title: "Access Denied",
+          description: "Vendor staff should use the vendor staff portal.",
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (userProfile?.user_type !== 'vendor') {
+        toast({
+          title: "Access Denied",
+          description: "Only vendors are allowed to log in to the vendor portal.",
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        return;
+      }
+
       toast({
         title: "Login successful",
         description: "Welcome back!",
       });
-      
+
       navigate('/');
     } catch (error: any) {
       toast({
@@ -177,35 +207,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, metadata: any = {}) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    metadata: any = {},
+    userType: 'vendor' | 'vendor_staff' | 'customer'
+  ) => {
     try {
       setIsLoading(true);
-      
-      // Add user_type = vendor to metadata for all signups through this portal
-      const vendorMetadata = {
+
+      // Add user_type to metadata
+      const userMetadata = {
         ...metadata,
-        user_type: 'vendor'
+        user_type: userType,
       };
-      
-      console.log("Signing up with metadata:", vendorMetadata);
-      
+
+      console.log("Signing up with metadata:", userMetadata);
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: vendorMetadata
-        }
+          data: userMetadata,
+        },
       });
 
       if (error) {
         throw error;
       }
 
+      // Update the user_type in the users table
+      if (data.user) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ user_type: userType })
+          .eq('supabase_auth_uid', data.user.id);
+
+        if (updateError) {
+          console.error('Error updating user_type:', updateError);
+          throw updateError;
+        }
+      }
+
       toast({
         title: "Registration successful",
         description: "Please check your email for verification link",
       });
-      
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -220,6 +267,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     try {
       setIsLoading(true);
+
+      // Check if a session exists
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        toast({
+          title: "Session not found",
+          description: "You are already logged out.",
+          variant: "destructive",
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Proceed with logout
       await supabase.auth.signOut();
       navigate('/login');
       toast({
@@ -245,8 +306,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       vendorProfile, 
       isLoadingProfile,
       signIn, 
-      signUp, 
-      signOut,
+      signUp: (email, password, metadata, userType) => signUp(email, password, metadata, userType),
+      signOut, // Add signOut function
       refreshVendorProfile
     }}>
       {children}

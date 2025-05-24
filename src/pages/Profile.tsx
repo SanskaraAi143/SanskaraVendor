@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Edit, MapPin, Phone, Mail, Globe, Building, Tag, CreditCard } from 'lucide-react';
+import { Edit, MapPin, Phone, Mail, Globe, Building, Tag, CreditCard, X, ChevronLeft, ChevronRight, Trash } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 const Profile: React.FC = () => {
@@ -13,10 +12,12 @@ const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
-  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
   useEffect(() => {
     if (!user) return;
-    
+
     const loadVendorData = async () => {
       try {
         setIsLoading(true);
@@ -27,7 +28,7 @@ const Profile: React.FC = () => {
           .single();
 
         if (error) throw error;
-        
+
         if (data) {
           setProfileData(data);
         }
@@ -45,11 +46,55 @@ const Profile: React.FC = () => {
 
     loadVendorData();
   }, [user, vendorProfile]);
-  
+
   const navigateToEditProfile = () => {
     navigate('/profile/edit');
   };
-  
+
+  const openImageViewer = (index: number) => {
+    setCurrentImageIndex(index);
+    setIsModalOpen(true);
+  };
+
+  const closeImageViewer = () => {
+    setIsModalOpen(false);
+  };
+
+  const deleteImage = async (imageUrl: string) => {
+    try {
+      const fileName = imageUrl.split('/').pop();
+      if (!fileName) throw new Error('Invalid image URL');
+
+      const { error } = await supabase.storage.from('portfolio').remove([fileName]);
+      if (error) throw error;
+
+      setProfileData((prev: any) => ({
+        ...prev,
+        portfolio_image_urls: prev.portfolio_image_urls.filter((url: string) => url !== imageUrl),
+      }));
+
+      toast({
+        title: 'Image Deleted',
+        description: 'The image has been successfully deleted.',
+      });
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast({
+        title: 'Error',
+        description: 'Unable to delete the image.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % profileData.portfolio_image_urls.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + profileData.portfolio_image_urls.length) % profileData.portfolio_image_urls.length);
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
@@ -58,7 +103,7 @@ const Profile: React.FC = () => {
       </div>
     );
   }
-  
+
   if (!profileData) {
     return (
       <div className="text-center py-12">
@@ -69,10 +114,9 @@ const Profile: React.FC = () => {
     );
   }
 
-  // Parse JSON fields
   const address = profileData.address || {};
   const pricingRange = profileData.pricing_range || {};
-  
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -180,11 +224,15 @@ const Profile: React.FC = () => {
           <CardContent>
             {profileData.portfolio_image_urls && profileData.portfolio_image_urls.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {profileData.portfolio_image_urls.slice(0, 4).map((url: string, index: number) => (
-                  <div key={index} className="relative aspect-square overflow-hidden rounded-md">
-                    <img 
-                      src={url} 
-                      alt={`Portfolio image ${index + 1}`} 
+                {profileData.portfolio_image_urls.map((url: string, index: number) => (
+                  <div
+                    key={index}
+                    className="relative aspect-square overflow-hidden rounded-md cursor-pointer"
+                    onClick={() => openImageViewer(index)}
+                  >
+                    <img
+                      src={url}
+                      alt={`Portfolio image ${index + 1}`}
                       className="object-cover w-full h-full"
                     />
                   </div>
@@ -196,15 +244,43 @@ const Profile: React.FC = () => {
               </div>
             )}
           </CardContent>
-          <CardFooter className="flex justify-center border-t p-4">
-            <Button variant="outline" onClick={navigateToEditProfile} className="w-full">
-              {profileData.portfolio_image_urls && profileData.portfolio_image_urls.length > 0 
-                ? "Manage Images" 
-                : "Add Images"}
-            </Button>
-          </CardFooter>
         </Card>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="relative w-full max-w-3xl">
+            <button
+              className="absolute top-4 right-4 text-white bg-black bg-opacity-50 rounded-full p-2 z-50"
+              onClick={closeImageViewer}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <div className="relative flex items-center justify-center">
+              <button
+                className="absolute left-[-50px] top-1/2 transform -translate-y-1/2 text-white bg-black bg-opacity-50 rounded-full p-2"
+                onClick={prevImage}
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+              <img
+                src={profileData.portfolio_image_urls[currentImageIndex]}
+                alt={`Image ${currentImageIndex + 1}`}
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+              <button
+                className="absolute right-[-50px] top-1/2 transform -translate-y-1/2 text-white bg-black bg-opacity-50 rounded-full p-2"
+                onClick={nextImage}
+              >
+                <ChevronRight className="h-8 w-8" />
+              </button>
+              <div className="absolute bottom-[-50px] left-1/2 transform -translate-x-1/2 text-white">
+                {currentImageIndex + 1} / {profileData.portfolio_image_urls.length}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

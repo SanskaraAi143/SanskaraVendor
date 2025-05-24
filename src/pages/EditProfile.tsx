@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -128,8 +127,25 @@ const EditProfile: React.FC = () => {
     setSelectedFiles(prev => [...prev, ...files]);
   };
   
-  const handleRemoveExistingImage = (url: string) => {
-    setExistingImages(prev => prev.filter(image => image !== url));
+  const handleRemoveExistingImage = async (url: string) => {
+    try {
+      // Remove the image from Supabase storage
+      const fileName = url.split('/').pop(); // Extract the file name from the URL
+      if (fileName && user?.id) {
+        const success = await deleteFile(url, 'vendors', user.id);
+        if (!success) throw new Error('Failed to delete file');
+      }
+
+      // Update the state to remove the image from the existing images array
+      setExistingImages(prev => prev.filter(image => image !== url));
+    } catch (error) {
+      console.error('Error removing image from storage:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove the image from storage',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
