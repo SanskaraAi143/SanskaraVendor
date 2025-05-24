@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,22 +10,39 @@ import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader } from 'lucide-react';
+import ImageUploader from '@/components/ImageUploader';
+import { uploadMultipleFiles, deleteFile } from '@/utils/uploadHelpers';
+
+// Vendor categories from the schema
+const vendorCategories = [
+  "Venue", "Catering", "Photography", "Videography", "Decor", 
+  "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
+];
 
 const Profile: React.FC = () => {
-  const { vendorProfile, user } = useAuth();
+  const { vendorProfile, user, refreshVendorProfile } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Form state
   const [profile, setProfile] = useState({
-    vendor_name: vendorProfile?.vendor_name || '',
-    vendor_category: vendorProfile?.vendor_category || '',
-    contact_email: vendorProfile?.contact_email || user?.email || '',
+    vendor_name: '',
+    vendor_category: '',
+    contact_email: '',
     phone_number: '',
     website_url: '',
     description: '',
+    address: { city: '', state: '', country: 'India', full_address: '' },
+    pricing_range: { min: '', max: '', currency: 'INR' },
   });
-
+  
+  // Image upload state
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  
   // Load full profile data on component mount if not already loaded
-  React.useEffect(() => {
+  useEffect(() => {
     const loadVendorData = async () => {
       if (!user) return;
       
@@ -47,7 +64,12 @@ const Profile: React.FC = () => {
             phone_number: data.phone_number || '',
             website_url: data.website_url || '',
             description: data.description || '',
+            address: data.address || { city: '', state: '', country: 'India', full_address: '' },
+            pricing_range: data.pricing_range || { min: '', max: '', currency: 'INR' },
           });
+          
+          // Set existing images
+          setExistingImages(data.portfolio_image_urls || []);
         }
       } catch (error) {
         console.error('Error loading vendor data:', error);
@@ -68,9 +90,39 @@ const Profile: React.FC = () => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
+  
+  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setProfile((prev) => ({
+      ...prev,
+      address: {
+        ...prev.address,
+        [name]: value
+      }
+    }));
+  };
+  
+  const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfile((prev) => ({
+      ...prev,
+      pricing_range: {
+        ...prev.pricing_range,
+        [name]: value
+      }
+    }));
+  };
 
   const handleCategoryChange = (value: string) => {
     setProfile((prev) => ({ ...prev, vendor_category: value }));
+  };
+  
+  const handleFileSelect = (files: File[]) => {
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+  
+  const handleRemoveExistingImage = (url: string) => {
+    setExistingImages(prev => prev.filter(image => image !== url));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,6 +131,25 @@ const Profile: React.FC = () => {
 
     try {
       setIsLoading(true);
+      
+      // First upload any new images
+      let uploadedImageUrls: string[] = [];
+      
+      if (selectedFiles.length > 0) {
+        setIsUploading(true);
+        uploadedImageUrls = await uploadMultipleFiles(
+          selectedFiles, 
+          'vendors', 
+          user.id
+        );
+        setIsUploading(false);
+        
+        // Clear selected files after upload
+        setSelectedFiles([]);
+      }
+      
+      // Combine existing and new images
+      const allImages = [...existingImages, ...uploadedImageUrls];
       
       const { error } = await supabase
         .from('vendors')
@@ -89,11 +160,17 @@ const Profile: React.FC = () => {
           phone_number: profile.phone_number,
           website_url: profile.website_url,
           description: profile.description,
+          address: profile.address,
+          pricing_range: profile.pricing_range,
+          portfolio_image_urls: allImages,
           updated_at: new Date().toISOString(),
         })
         .eq('supabase_auth_uid', user.id);
 
       if (error) throw error;
+      
+      // Refresh profile data in context
+      await refreshVendorProfile();
 
       toast({
         title: 'Success',
@@ -149,13 +226,9 @@ const Profile: React.FC = () => {
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Venue">Venue</SelectItem>
-                      <SelectItem value="Catering">Catering</SelectItem>
-                      <SelectItem value="Photography">Photography</SelectItem>
-                      <SelectItem value="Decor">Decor</SelectItem>
-                      <SelectItem value="Clothing">Clothing</SelectItem>
-                      <SelectItem value="Music">Music</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {vendorCategories.map(category => (
+                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -175,7 +248,7 @@ const Profile: React.FC = () => {
                   <Input
                     id="phone_number"
                     name="phone_number"
-                    value={profile.phone_number}
+                    value={profile.phone_number || ''}
                     onChange={handleChange}
                   />
                 </div>
@@ -184,21 +257,100 @@ const Profile: React.FC = () => {
                   <Input
                     id="website_url"
                     name="website_url"
-                    value={profile.website_url}
+                    value={profile.website_url || ''}
                     onChange={handleChange}
                   />
                 </div>
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="description">Business Description</Label>
                 <Textarea
                   id="description"
                   name="description"
-                  value={profile.description}
+                  value={profile.description || ''}
                   onChange={handleChange}
                   rows={5}
                 />
               </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="min">Minimum Price Range</Label>
+                  <Input
+                    id="min"
+                    name="min"
+                    value={profile.pricing_range?.min || ''}
+                    onChange={handlePricingChange}
+                    placeholder="10000"
+                    type="number"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="max">Maximum Price Range</Label>
+                  <Input
+                    id="max"
+                    name="max"
+                    value={profile.pricing_range?.max || ''}
+                    onChange={handlePricingChange}
+                    placeholder="50000"
+                    type="number"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="full_address">Business Address</Label>
+                <Textarea
+                  id="full_address"
+                  name="full_address"
+                  value={profile.address?.full_address || ''}
+                  onChange={handleAddressChange}
+                  placeholder="Full address of your business"
+                  rows={2}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    name="city"
+                    value={profile.address?.city || ''}
+                    onChange={handleAddressChange}
+                    placeholder="City"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    name="state"
+                    value={profile.address?.state || ''}
+                    onChange={handleAddressChange}
+                    placeholder="State"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Portfolio Images</CardTitle>
+              <CardDescription>Upload images to showcase your services</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImageUploader
+                onFileSelect={handleFileSelect}
+                maxFiles={10}
+                existingImages={existingImages}
+                onRemoveExisting={handleRemoveExistingImage}
+                uploading={isUploading}
+              />
             </CardContent>
           </Card>
 

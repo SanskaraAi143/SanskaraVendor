@@ -19,9 +19,17 @@ import { DataCacheProvider } from './hooks/useDataCache';
 import Reviews from './pages/Reviews';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
+import VendorOnboarding from './pages/VendorOnboarding';
 
 function App() {
-  const { user } = useAuth();
+  const { user, vendorProfile } = useAuth();
+  
+  // Check if vendor needs to complete onboarding
+  const needsOnboarding = user && 
+    (!vendorProfile || 
+     !vendorProfile.vendor_name || 
+     !vendorProfile.vendor_category || 
+     !vendorProfile.description);
   
   return (
     <DataCacheProvider>
@@ -32,10 +40,28 @@ function App() {
           element={user ? <Navigate to="/" replace /> : <LoginPage />} 
         />
         
+        {/* Vendor onboarding route */}
+        <Route 
+          path="/onboarding" 
+          element={
+            user ? (
+              needsOnboarding ? 
+                <VendorOnboarding /> : 
+                <Navigate to="/" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        
         {/* Protected routes */}
         <Route path="/" element={
           <ProtectedRoute>
-            <MainLayout />
+            {needsOnboarding ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <MainLayout />
+            )}
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
