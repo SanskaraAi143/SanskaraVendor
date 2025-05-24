@@ -19,8 +19,6 @@ import { DataCacheProvider } from './hooks/useDataCache';
 import Reviews from './pages/Reviews';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
-import StaffLogin from './pages/StaffLogin';
-import StaffPortal from './pages/StaffPortal';
 
 function App() {
   const { user } = useAuth();
@@ -33,7 +31,6 @@ function App() {
           path="/login" 
           element={user ? <Navigate to="/" replace /> : <LoginPage />} 
         />
-        <Route path="/staff-login" element={<StaffLogin />} />
         
         {/* Protected routes */}
         <Route path="/" element={
@@ -55,9 +52,6 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="reviews" element={<Reviews />} />
         </Route>
-        
-        {/* Staff Portal Routes */}
-        <Route path="/staff-portal" element={<StaffPortal />} />
         
         {/* 404 route */}
         <Route path="*" element={<NotFound />} />
