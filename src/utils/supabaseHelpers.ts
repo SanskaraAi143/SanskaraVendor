@@ -1,112 +1,134 @@
+import { supabase } from "@/integrations/supabase/client";
 
-import { supabase } from '@/integrations/supabase/client';
-
-/**
- * Helper functions to interact with tables and stored procedures 
- * that don't yet exist in the TypeScript type definitions
- */
-
-// Type definitions for staff profiles and portfolio items
 export interface StaffProfile {
-  id: string;
+  id?: string;
   staff_id: string;
-  bio: string | null;
-  specialization: string | null;
-  years_experience: number | null;
-  certifications: string[] | null;
-  social_links: {
+  bio?: string;
+  specialization?: string;
+  years_experience?: number;
+  certifications?: string[];
+  social_links?: {
     website?: string;
     instagram?: string;
     facebook?: string;
     twitter?: string;
-  } | null;
-  profile_image_url: string | null;
-  created_at?: string;
-  updated_at?: string;
+  };
+  profile_image_url?: string;
 }
 
+export const staffProfilesTable = {
+  insert: async (profile: StaffProfile) => {
+    return supabase
+      .from('staff_profiles')
+      .insert(profile)
+      .select()
+      .single();
+  },
+  update: async (profile: StaffProfile) => {
+    return supabase
+      .from('staff_profiles')
+      .update(profile)
+      .eq('id', profile.id)
+      .select()
+      .single();
+  },
+  select: async (params: { staff_id: string }) => {
+    return supabase
+      .from('staff_profiles')
+      .select('*')
+      .eq('staff_id', params.staff_id)
+      .single();
+  },
+  delete: async (id: string) => {
+    return supabase
+      .from('staff_profiles')
+      .delete()
+      .eq('id', id);
+  }
+};
+
 export interface PortfolioItem {
-  id: string;
+  item_id?: string;
   staff_id: string;
   title: string;
   description: string;
   category: string;
-  media_type: string;
-  media_url: string;
-  thumbnail_url: string | null;
-  featured: boolean;
-  metadata: any;
-  created_at?: string;
-  updated_at?: string;
+  image_url: string;
+  is_featured: boolean;
 }
 
-// Helper functions for staff profiles
-export const staffProfilesTable = {
-  async select(query: { staff_id: string }) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('get_staff_profile', { p_staff_id: query.staff_id });
-  },
-
-  async insert(data: Partial<StaffProfile>) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('insert_staff_profile', data);
-  },
-
-  async update(data: Partial<StaffProfile>) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('update_staff_profile', data);
-  }
-};
-
-// Helper functions for portfolio items
 export const portfolioItemsTable = {
-  async select(query: { staff_id: string }) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('get_portfolio_items', { p_staff_id: query.staff_id });
+  insert: async (item: PortfolioItem) => {
+    return supabase
+      .from('portfolio_items')
+      .insert(item)
+      .select()
+      .single();
   },
-
-  async insert(data: {
-    p_staff_id: string;
-    p_title: string;
-    p_description: string;
-    p_category: string;
-    p_media_type: string;
-    p_media_url: string;
-    p_thumbnail_url: string | null;
-    p_featured: boolean;
-    p_metadata: any;
-  }) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('add_portfolio_item', data);
+  update: async (item: PortfolioItem) => {
+    return supabase
+      .from('portfolio_items')
+      .update(item)
+      .eq('item_id', item.item_id)
+      .select()
+      .single();
   },
-
-  async deleteItem(id: string) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('delete_portfolio_item', { p_id: id });
+  select: async (staff_id: string) => {
+    return supabase
+      .from('portfolio_items')
+      .select('*')
+      .eq('staff_id', staff_id)
+      .order('created_at', { ascending: false });
   },
-
-  async updateFeatured(id: string, featured: boolean) {
-    // Use type assertion to bypass TypeScript's type checking
-    return await (supabase.rpc as any)('update_portfolio_item_featured', { 
-      p_id: id, 
-      p_featured: featured 
-    });
+  delete: async (item_id: string) => {
+    return supabase
+      .from('portfolio_items')
+      .delete()
+      .eq('item_id', item_id);
   }
 };
 
-// Helper function to create database stored procedures
 export const createStoredProcedures = async () => {
   try {
-    // These are just placeholder functions that will call the actual functions
-    // that will be created in the migration SQL
-    await supabase.functions.invoke('create-stored-procedures', {
-      body: { 
-        action: 'create_procedures'
-      }
+    // Get staff profile
+    await (supabase.rpc as any)('get_staff_profile', {});
+    
+    // Insert staff profile
+    await (supabase.rpc as any)('insert_staff_profile', {});
+    
+    // Update staff profile
+    await (supabase.rpc as any)('update_staff_profile', {});
+    
+    // Portfolio management
+    
+    // Get portfolio items
+    await (supabase.rpc as any)('get_portfolio_items', {
+      staff_id_param: ''
     });
-    return { success: true };
+    
+    // Add portfolio item
+    await (supabase.rpc as any)('add_portfolio_item', {
+      staff_id_param: '',
+      title_param: '',
+      description_param: '',
+      category_param: '',
+      image_url_param: '',
+      is_featured_param: false
+    });
+    
+    // Delete portfolio item
+    await (supabase.rpc as any)('delete_portfolio_item', {
+      item_id_param: ''
+    });
+    
+    // Update portfolio item featured status
+    await (supabase.rpc as any)('update_portfolio_item_featured', {
+      item_id_param: '',
+      is_featured_param: false
+    });
+    
+    console.log('Stored procedures initialized');
   } catch (error) {
-    console.error('Error creating stored procedures:', error);
-    return { success: false, error };
+    console.error('Failed to initialize stored procedures:', error);
   }
 };

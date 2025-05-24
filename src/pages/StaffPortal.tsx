@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -112,7 +111,6 @@ const StaffPortal: React.FC = () => {
             <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           </TabsList>
           
-          {/* Fixed TabsContent by rendering the children directly inside */}
           <TabsContent value="profile" className="py-6">
             <StaffProfileSection staffData={staffData} />
           </TabsContent>
