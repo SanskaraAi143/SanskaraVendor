@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
 import Calendar from './pages/Calendar';
 import Profile from './pages/Profile';
+import EditProfile from './pages/EditProfile';
 import Settings from './pages/Settings';
 import Services from './pages/Services';
 import AddService from './pages/AddService';
@@ -75,6 +76,7 @@ function App() {
           <Route path="payments" element={<Payments />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="profile/edit" element={<EditProfile />} />
           <Route path="settings" element={<Settings />} />
           <Route path="reviews" element={<Reviews />} />
         </Route>

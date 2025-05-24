@@ -1,50 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
-import { toast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { Loader } from 'lucide-react';
-import ImageUploader from '@/components/ImageUploader';
-import { uploadMultipleFiles, deleteFile } from '@/utils/uploadHelpers';
 
-// Vendor categories from the schema
-const vendorCategories = [
-  "Venue", "Catering", "Photography", "Videography", "Decor", 
-  "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
-];
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Edit, MapPin, Phone, Mail, Globe, Building, Tag, CreditCard } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 
 const Profile: React.FC = () => {
-  const { vendorProfile, user, refreshVendorProfile } = useAuth();
-  
+  const { vendorProfile, user } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [profileData, setProfileData] = useState<any>(null);
   
-  // Form state
-  const [profile, setProfile] = useState({
-    vendor_name: '',
-    vendor_category: '',
-    contact_email: '',
-    phone_number: '',
-    website_url: '',
-    description: '',
-    address: { city: '', state: '', country: 'India', full_address: '' } as AddressData,
-    pricing_range: { min: '', max: '', currency: 'INR' } as PricingRangeData,
-  });
-  
-  // Image upload state
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>([]);
-  
-  // Load full profile data on component mount if not already loaded
   useEffect(() => {
+    if (!user) return;
+    
     const loadVendorData = async () => {
-      if (!user) return;
-      
       try {
         setIsLoading(true);
         const { data, error } = await supabase
@@ -56,24 +29,7 @@ const Profile: React.FC = () => {
         if (error) throw error;
         
         if (data) {
-          // Parse JSON fields with type safety
-          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' };
-          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' };
-          const portfolio_images = (data.portfolio_image_urls as string[]) || [];
-          
-          setProfile({
-            vendor_name: data.vendor_name || '',
-            vendor_category: data.vendor_category || '',
-            contact_email: data.contact_email || user.email || '',
-            phone_number: data.phone_number || '',
-            website_url: data.website_url || '',
-            description: data.description || '',
-            address,
-            pricing_range,
-          });
-          
-          // Set existing images
-          setExistingImages(portfolio_images);
+          setProfileData(data);
         }
       } catch (error) {
         console.error('Error loading vendor data:', error);
@@ -89,289 +45,166 @@ const Profile: React.FC = () => {
 
     loadVendorData();
   }, [user, vendorProfile]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setProfile((prev) => ({ ...prev, [name]: value }));
+  
+  const navigateToEditProfile = () => {
+    navigate('/profile/edit');
   };
   
-  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setProfile((prev) => ({
-      ...prev,
-      address: {
-        ...prev.address,
-        [name]: value
-      }
-    }));
-  };
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="h-10 w-10 rounded-full border-4 border-sanskara-red/20 border-t-sanskara-red animate-spin"></div>
+        <p className="ml-3 text-sanskara-maroon">Loading profile data...</p>
+      </div>
+    );
+  }
   
-  const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProfile((prev) => ({
-      ...prev,
-      pricing_range: {
-        ...prev.pricing_range,
-        [name]: value
-      }
-    }));
-  };
+  if (!profileData) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-semibold text-gray-700">Profile Not Found</h2>
+        <p className="mt-2 text-muted-foreground">Your vendor profile information could not be loaded.</p>
+        <Button onClick={navigateToEditProfile} className="mt-4">Create Profile</Button>
+      </div>
+    );
+  }
 
-  const handleCategoryChange = (value: string) => {
-    setProfile((prev) => ({ ...prev, vendor_category: value }));
-  };
+  // Parse JSON fields
+  const address = profileData.address || {};
+  const pricingRange = profileData.pricing_range || {};
   
-  const handleFileSelect = (files: File[]) => {
-    setSelectedFiles(prev => [...prev, ...files]);
-  };
-  
-  const handleRemoveExistingImage = (url: string) => {
-    setExistingImages(prev => prev.filter(image => image !== url));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    try {
-      setIsLoading(true);
-      
-      // First upload any new images
-      let uploadedImageUrls: string[] = [];
-      
-      if (selectedFiles.length > 0) {
-        setIsUploading(true);
-        uploadedImageUrls = await uploadMultipleFiles(
-          selectedFiles, 
-          'vendors', 
-          user.id
-        );
-        setIsUploading(false);
-        
-        // Clear selected files after upload
-        setSelectedFiles([]);
-      }
-      
-      // Combine existing and new images
-      const allImages = [...existingImages, ...uploadedImageUrls];
-      
-      const { error } = await supabase
-        .from('vendors')
-        .update({
-          vendor_name: profile.vendor_name,
-          vendor_category: profile.vendor_category,
-          contact_email: profile.contact_email,
-          phone_number: profile.phone_number,
-          website_url: profile.website_url,
-          description: profile.description,
-          address: profile.address as any,
-          pricing_range: profile.pricing_range as any,
-          portfolio_image_urls: allImages,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('supabase_auth_uid', user.id);
-
-      if (error) throw error;
-      
-      // Refresh profile data in context
-      await refreshVendorProfile();
-
-      toast({
-        title: 'Success',
-        description: 'Your profile has been updated',
-      });
-    } catch (error: any) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'An error occurred while updating your profile',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold gradient-text">Vendor Profile</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your vendor profile information
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold gradient-text">Vendor Profile</h1>
+          <p className="text-muted-foreground mt-1">
+            Your business information that customers will see
+          </p>
+        </div>
+        <Button onClick={navigateToEditProfile} className="flex items-center gap-2">
+          <Edit className="h-4 w-4" /> Edit Profile
+        </Button>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Business Information</CardTitle>
-              <CardDescription>Update your business details shown to customers</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Main Business Information */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5" /> {profileData.vendor_name || 'Business Name'}
+            </CardTitle>
+            <CardDescription>
+              {profileData.vendor_category && <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-1"><Tag className="h-3 w-3" /> {profileData.vendor_category}</span>}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">About</h3>
+              <p className="text-sm">{profileData.description || 'No description available'}</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Contact Information</h3>
                 <div className="space-y-2">
-                  <Label htmlFor="vendor_name">Business Name</Label>
-                  <Input
-                    id="vendor_name"
-                    name="vendor_name"
-                    value={profile.vendor_name}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vendor_category">Business Category</Label>
-                  <Select 
-                    value={profile.vendor_category} 
-                    onValueChange={handleCategoryChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vendorCategories.map(category => (
-                        <SelectItem key={category} value={category}>{category}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact_email">Contact Email</Label>
-                  <Input
-                    id="contact_email"
-                    name="contact_email"
-                    type="email"
-                    value={profile.contact_email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone_number">Phone Number</Label>
-                  <Input
-                    id="phone_number"
-                    name="phone_number"
-                    value={profile.phone_number || ''}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website_url">Website URL</Label>
-                  <Input
-                    id="website_url"
-                    name="website_url"
-                    value={profile.website_url || ''}
-                    onChange={handleChange}
-                  />
+                  {profileData.contact_email && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" /> 
+                      {profileData.contact_email}
+                    </div>
+                  )}
+                  {profileData.phone_number && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-4 w-4 text-muted-foreground" /> 
+                      {profileData.phone_number}
+                    </div>
+                  )}
+                  {profileData.website_url && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Globe className="h-4 w-4 text-muted-foreground" /> 
+                      <a href={profileData.website_url.startsWith('http') ? profileData.website_url : `https://${profileData.website_url}`} 
+                         target="_blank" 
+                         rel="noopener noreferrer"
+                         className="text-primary hover:underline">
+                        {profileData.website_url}
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="description">Business Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={profile.description || ''}
-                  onChange={handleChange}
-                  rows={5}
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="min">Minimum Price Range</Label>
-                  <Input
-                    id="min"
-                    name="min"
-                    value={profile.pricing_range?.min || ''}
-                    onChange={handlePricingChange}
-                    placeholder="10000"
-                    type="number"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="max">Maximum Price Range</Label>
-                  <Input
-                    id="max"
-                    name="max"
-                    value={profile.pricing_range?.max || ''}
-                    onChange={handlePricingChange}
-                    placeholder="50000"
-                    type="number"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="full_address">Business Address</Label>
-                <Textarea
-                  id="full_address"
-                  name="full_address"
-                  value={profile.address?.full_address || ''}
-                  onChange={handleAddressChange}
-                  placeholder="Full address of your business"
-                  rows={2}
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    name="city"
-                    value={profile.address?.city || ''}
-                    onChange={handleAddressChange}
-                    placeholder="City"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    name="state"
-                    value={profile.address?.state || ''}
-                    onChange={handleAddressChange}
-                    placeholder="State"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Portfolio Images</CardTitle>
-              <CardDescription>Upload images to showcase your services</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ImageUploader
-                onFileSelect={handleFileSelect}
-                maxFiles={10}
-                existingImages={existingImages}
-                onRemoveExisting={handleRemoveExistingImage}
-                uploading={isUploading}
-              />
-            </CardContent>
-          </Card>
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Saving
-                </>
-              ) : (
-                'Save Profile'
-              )}
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Business Address</h3>
+                {address.full_address ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" /> 
+                    <span>{address.full_address}</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No address provided</div>
+                )}
+                {(address.city || address.state) && (
+                  <div className="text-sm mt-1 pl-6">
+                    {address.city}{address.city && address.state && ', '}{address.state}
+                    {address.country && `, ${address.country}`}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Pricing</h3>
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                {pricingRange.min || pricingRange.max ? (
+                  <span className="text-sm">
+                    {pricingRange.min && `${pricingRange.currency || 'INR'} ${pricingRange.min}`}
+                    {pricingRange.min && pricingRange.max && ' - '}
+                    {pricingRange.max && `${pricingRange.currency || 'INR'} ${pricingRange.max}`}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">No pricing information provided</span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Portfolio Preview */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Portfolio</CardTitle>
+            <CardDescription>Sample images of your work</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {profileData.portfolio_image_urls && profileData.portfolio_image_urls.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {profileData.portfolio_image_urls.slice(0, 4).map((url: string, index: number) => (
+                  <div key={index} className="relative aspect-square overflow-hidden rounded-md">
+                    <img 
+                      src={url} 
+                      alt={`Portfolio image ${index + 1}`} 
+                      className="object-cover w-full h-full"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center p-4 border border-dashed rounded-md">
+                <p className="text-sm text-muted-foreground">No portfolio images uploaded</p>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex justify-center border-t p-4">
+            <Button variant="outline" onClick={navigateToEditProfile} className="w-full">
+              {profileData.portfolio_image_urls && profileData.portfolio_image_urls.length > 0 
+                ? "Manage Images" 
+                : "Add Images"}
             </Button>
-          </div>
-        </div>
-      </form>
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 };
