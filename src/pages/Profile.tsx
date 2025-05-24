@@ -72,9 +72,9 @@ const Profile: React.FC = () => {
         
         if (data) {
           // Parse JSON fields with type safety
-          const address = data.address as AddressData || { city: '', state: '', country: 'India', full_address: '' };
-          const pricing_range = data.pricing_range as PricingRangeData || { min: '', max: '', currency: 'INR' };
-          const portfolio_images = data.portfolio_image_urls as string[] || [];
+          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' };
+          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' };
+          const portfolio_images = (data.portfolio_image_urls as string[]) || [];
           
           setProfile({
             vendor_name: data.vendor_name || '',
@@ -179,8 +179,8 @@ const Profile: React.FC = () => {
           phone_number: profile.phone_number,
           website_url: profile.website_url,
           description: profile.description,
-          address: profile.address,
-          pricing_range: profile.pricing_range,
+          address: profile.address as any,
+          pricing_range: profile.pricing_range as any,
           portfolio_image_urls: allImages,
           updated_at: new Date().toISOString(),
         })

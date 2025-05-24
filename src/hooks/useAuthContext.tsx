@@ -1,9 +1,22 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
+
+// Define address and pricing range types
+interface AddressData {
+  city: string;
+  state: string;
+  country: string;
+  full_address: string;
+}
+
+interface PricingRangeData {
+  min: string;
+  max: string;
+  currency: string;
+}
 
 type VendorProfile = {
   vendor_id: string;
@@ -14,6 +27,9 @@ type VendorProfile = {
   phone_number?: string;
   website_url?: string;
   description?: string;
+  portfolio_image_urls?: string[];
+  address?: AddressData;
+  pricing_range?: PricingRangeData;
 }
 
 type AuthContextType = {

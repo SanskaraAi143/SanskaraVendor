@@ -50,8 +50,8 @@ const VendorOnboarding: React.FC = () => {
     phone_number: vendorProfile?.phone_number || '',
     website_url: vendorProfile?.website_url || '',
     description: vendorProfile?.description || '',
-    pricing_range: (vendorProfile?.pricing_range as PricingRangeData) || { min: '', max: '', currency: 'INR' },
-    address: (vendorProfile?.address as AddressData) || { city: '', state: '', country: 'India', full_address: '' },
+    pricing_range: (vendorProfile?.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' },
+    address: (vendorProfile?.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' },
   });
   
   // Image upload state
@@ -82,7 +82,7 @@ const VendorOnboarding: React.FC = () => {
         vendorProfile.contact_email &&
         vendorProfile.description;
       
-      if (isProfileComplete && !(vendorProfile.portfolio_image_urls as string[] || []).length) {
+      if (isProfileComplete && !(vendorProfile.portfolio_image_urls || []).length) {
         setCurrentStep(3); // Go straight to image upload step
       } else if (isProfileComplete) {
         navigate('/'); // Profile is already complete
@@ -180,7 +180,14 @@ const VendorOnboarding: React.FC = () => {
         .from('vendors')
         .upsert({
           supabase_auth_uid: user.id,
-          ...vendorData
+          vendor_name: vendorData.vendor_name,
+          vendor_category: vendorData.vendor_category,
+          contact_email: vendorData.contact_email,
+          phone_number: vendorData.phone_number,
+          website_url: vendorData.website_url,
+          description: vendorData.description,
+          address: vendorData.address as any,
+          pricing_range: vendorData.pricing_range as any
         }, {
           onConflict: 'supabase_auth_uid'
         });
