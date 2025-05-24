@@ -112,6 +112,7 @@ const StaffPortal: React.FC = () => {
             <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           </TabsList>
           
+          {/* Fixed TabsContent by rendering the children directly inside */}
           <TabsContent value="profile" className="py-6">
             <StaffProfileSection staffData={staffData} />
           </TabsContent>
