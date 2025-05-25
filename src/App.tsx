@@ -21,6 +21,10 @@ import Reviews from './pages/Reviews';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
 import VendorOnboarding from './pages/VendorOnboarding';
+import StaffLoginPage from './pages/StaffLoginPage';
+import StaffDashboard from './pages/StaffDashboard';
+import StaffPortfolioForm from './components/staff/portfolios/StaffPortfolioForm';
+import StaffProtectedRoute from './components/StaffProtectedRoute'; // Added import for StaffProtectedRoute
 
 function App() {
   const { user, vendorProfile } = useAuth();
@@ -40,6 +44,13 @@ function App() {
           path="/login" 
           element={user ? <Navigate to="/" replace /> : <LoginPage />} 
         />
+        <Route path="/staff/login" element={<StaffLoginPage />} />
+        
+        {/* Protected Staff Routes */}
+        <Route element={<StaffProtectedRoute />}>
+          <Route path="/staff/dashboard" element={<StaffDashboard />} />
+          <Route path="/staff/portfolio" element={<StaffPortfolioForm />} />
+        </Route>
         
         {/* Vendor onboarding route */}
         <Route 
