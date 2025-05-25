@@ -26,6 +26,8 @@ import StaffPortfolioForm from './components/staff/portfolios/StaffPortfolioForm
 import StaffProtectedRoute from './components/StaffProtectedRoute'; // Added import for StaffProtectedRoute
 import StaffOnboarding from './pages/StaffOnboarding'; // Import StaffOnboarding
 import StaffResetPassword from './pages/StaffResetPassword'; // Import StaffResetPassword
+import StaffTasks from './pages/StaffTasks'; // Import StaffTasks
+import StaffBookings from './pages/StaffBookings'; // Import StaffBookings
 
 function App() {
   const { user, vendorProfile } = useAuth();
@@ -53,6 +55,8 @@ function App() {
           <Route path="/staff/portfolio" element={<StaffPortfolioForm />} />
           <Route path="/staff/onboarding" element={<StaffOnboarding />} /> {/* Staff onboarding route */}
           <Route path="/staff/reset-password" element={<StaffResetPassword />} /> {/* Staff reset password route */}
+          <Route path="/staff/tasks" element={<StaffTasks />} /> {/* Staff tasks route */}
+          <Route path="/staff/bookings" element={<StaffBookings />} /> {/* Staff bookings route */}
         </Route>
         
         {/* Vendor onboarding route */}
