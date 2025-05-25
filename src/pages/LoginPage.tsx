@@ -392,6 +392,16 @@ const LoginPage: React.FC = () => {
             )}
           </p>
         </div>
+
+        {/* Add a link to redirect staff to the staff login page */}
+        <div className="text-center mt-4">
+          <p className="text-sm">
+            Are you a staff member?{' '}
+            <a href="/staff/login" className="text-blue-600 hover:underline">
+              Login here
+            </a>
+          </p>
+        </div>
         
         <div className="border-t mt-6 pt-6">
           <p className="text-xs text-center text-muted-foreground">

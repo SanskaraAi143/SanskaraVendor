@@ -39,6 +39,31 @@ const StaffLoginPage: React.FC = () => {
     }
   };
 
+  // Update the resetPasswordForEmail function to redirect to a proper reset page
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email to reset your password.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/staff/reset-password`,
+      });
+      if (resetError) {
+        setError(resetError.message);
+      } else {
+        alert('Password reset email sent. Please check your inbox.');
+      }
+    } catch (catchError: any) {
+      setError(catchError.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-md">
@@ -85,7 +110,16 @@ const StaffLoginPage: React.FC = () => {
           </form>
         </CardContent>
         <CardFooter className="text-sm text-center">
-          {/* Optional: Add links like "Forgot password?" or "Sign up" here if needed later */}
+          <p>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-blue-600 hover:underline"
+              disabled={loading}
+            >
+              Forgot Password?
+            </button>
+          </p>
         </CardFooter>
       </Card>
     </div>

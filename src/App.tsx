@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -25,6 +24,8 @@ import StaffLoginPage from './pages/StaffLoginPage';
 import StaffDashboard from './pages/StaffDashboard';
 import StaffPortfolioForm from './components/staff/portfolios/StaffPortfolioForm';
 import StaffProtectedRoute from './components/StaffProtectedRoute'; // Added import for StaffProtectedRoute
+import StaffOnboarding from './pages/StaffOnboarding'; // Import StaffOnboarding
+import StaffResetPassword from './pages/StaffResetPassword'; // Import StaffResetPassword
 
 function App() {
   const { user, vendorProfile } = useAuth();
@@ -50,6 +51,8 @@ function App() {
         <Route element={<StaffProtectedRoute />}>
           <Route path="/staff/dashboard" element={<StaffDashboard />} />
           <Route path="/staff/portfolio" element={<StaffPortfolioForm />} />
+          <Route path="/staff/onboarding" element={<StaffOnboarding />} /> {/* Staff onboarding route */}
+          <Route path="/staff/reset-password" element={<StaffResetPassword />} /> {/* Staff reset password route */}
         </Route>
         
         {/* Vendor onboarding route */}
