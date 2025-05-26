@@ -453,6 +453,32 @@ CREATE TABLE task_templates (
     tasks JSONB NOT NULL -- [{"title": "...", "description": "...", "default_priority": "...", "offset_days_from_event": -30}, ...]
 );
 
+-- Create staff_portfolios table
+CREATE TABLE staff_portfolios (
+    portfolio_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL REFERENCES vendor_staff(staff_id) ON DELETE CASCADE,
+    vendor_id UUID NOT NULL REFERENCES vendors(vendor_id) ON DELETE CASCADE,
+    portfolio_type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NULL,
+    description TEXT NULL,
+    image_urls TEXT[] NULL,
+    video_urls TEXT[] NULL,
+    generic_attributes JSONB NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes
+CREATE INDEX idx_staff_portfolios_staff_id ON staff_portfolios(staff_id);
+CREATE INDEX idx_staff_portfolios_vendor_id ON staff_portfolios(vendor_id);
+CREATE INDEX idx_staff_portfolios_portfolio_type ON staff_portfolios(portfolio_type);
+
+-- Create trigger for updated_at
+CREATE TRIGGER set_staff_portfolios_updated_at
+BEFORE UPDATE ON staff_portfolios
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
 -- -- can you give sql query to delete all tables of user related one i gave
 -- DROP TABLE IF EXISTS public.users CASCADE;
 -- DROP TABLE IF EXISTS public.vendors CASCADE;

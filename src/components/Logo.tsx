@@ -13,7 +13,7 @@ const Logo: React.FC = () => {
       </div>
       <div className="font-bold text-xl">
         <span className="text-sanskara-red">Sanskara</span>
-        <span className="text-sanskara-gold">Vendors</span>
+        <span className="text-sanskara-gold">Staff</span>
       </div>
     </div>
   );
