@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
@@ -14,8 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar, CalendarIcon, User } from 'lucide-react';
+import { Calendar, CalendarIcon, User, FileText } from 'lucide-react';
 import BookingDetails from '@/components/BookingDetails';
+import BookingNotes from '@/components/bookings/BookingNotes';
 
 interface Booking {
   booking_id: string;
@@ -26,6 +28,7 @@ interface Booking {
   paid_amount: number;
   created_at: string;
   display_name?: string;
+  notes_for_vendor?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -42,6 +45,8 @@ const Bookings: React.FC = () => {
   const { vendorProfile } = useAuth();
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [selectedBookingForNotes, setSelectedBookingForNotes] = useState<Booking | null>(null);
 
   useEffect(() => {
     if (vendorProfile?.vendor_id) {
@@ -139,6 +144,11 @@ const Bookings: React.FC = () => {
   const handleViewDetails = (bookingId: string) => {
     setSelectedBookingId(bookingId);
     setDetailsDialogOpen(true);
+  };
+
+  const handleViewNotes = (booking: Booking) => {
+    setSelectedBookingForNotes(booking);
+    setNotesDialogOpen(true);
   };
 
   return (
@@ -254,13 +264,23 @@ const Bookings: React.FC = () => {
                       ${booking.total_amount?.toFixed(2) || '0.00'} (Paid: ${booking.paid_amount?.toFixed(2) || '0.00'})
                     </p>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    className="text-sanskara-red border-sanskara-red hover:bg-sanskara-red/10"
-                    onClick={() => handleViewDetails(booking.booking_id)}
-                  >
-                    View Details
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="text-sanskara-red border-sanskara-red hover:bg-sanskara-red/10"
+                      onClick={() => handleViewDetails(booking.booking_id)}
+                    >
+                      View Details
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="text-sanskara-blue border-sanskara-blue hover:bg-sanskara-blue/10"
+                      onClick={() => handleViewNotes(booking)}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Notes
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -275,6 +295,24 @@ const Bookings: React.FC = () => {
           onOpenChange={setDetailsDialogOpen}
         />
       )}
+
+      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Booking Notes</DialogTitle>
+          </DialogHeader>
+          {selectedBookingForNotes && (
+            <BookingNotes
+              bookingId={selectedBookingForNotes.booking_id}
+              initialNotes={selectedBookingForNotes.notes_for_vendor || ''}
+              onUpdate={() => {
+                fetchBookings();
+                setNotesDialogOpen(false);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

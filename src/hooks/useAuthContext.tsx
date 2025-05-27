@@ -32,16 +32,29 @@ type VendorProfile = {
   pricing_range?: PricingRangeData;
 }
 
+type StaffProfile = {
+  staff_id: string;
+  vendor_id: string;
+  display_name: string;
+  email: string;
+  phone_number?: string;
+  role: string;
+  is_active: boolean;
+  invitation_status: string;
+}
+
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
   vendorProfile: VendorProfile | null;
+  staffProfile: StaffProfile | null;
   isLoadingProfile: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, metadata?: any, userType?: 'vendor' | 'vendor_staff' | 'customer') => Promise<void>;
   signOut: () => Promise<void>;
   refreshVendorProfile: () => Promise<void>;
+  refreshStaffProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,6 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
+  const [staffProfile, setStaffProfile] = useState<StaffProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const navigate = useNavigate();
 
@@ -66,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('supabase_auth_uid', userId)
         .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching vendor profile:', error);
         return;
       }
@@ -74,7 +88,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (data) {
         console.log("Vendor profile found:", data);
         
-        // Explicitly cast the data to VendorProfile type with proper handling of JSON fields
         const profile: VendorProfile = {
           vendor_id: data.vendor_id,
           vendor_name: data.vendor_name || '',
@@ -92,9 +105,53 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setVendorProfile(profile);
       } else {
         console.log("No vendor profile found for user:", userId);
+        setVendorProfile(null);
       }
     } catch (error) {
       console.error('Error fetching vendor profile:', error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  // Fetch staff profile data
+  const fetchStaffProfile = async (userId: string) => {
+    try {
+      setIsLoadingProfile(true);
+      console.log("Fetching staff profile for user:", userId);
+      
+      const { data, error } = await supabase
+        .from('vendor_staff')
+        .select('*')
+        .eq('supabase_auth_uid', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching staff profile:', error);
+        return;
+      }
+
+      if (data) {
+        console.log("Staff profile found:", data);
+        
+        const profile: StaffProfile = {
+          staff_id: data.staff_id,
+          vendor_id: data.vendor_id,
+          display_name: data.display_name || '',
+          email: data.email || '',
+          phone_number: data.phone_number || undefined,
+          role: data.role || 'staff',
+          is_active: data.is_active || false,
+          invitation_status: data.invitation_status || 'pending'
+        };
+        
+        setStaffProfile(profile);
+      } else {
+        console.log("No staff profile found for user:", userId);
+        setStaffProfile(null);
+      }
+    } catch (error) {
+      console.error('Error fetching staff profile:', error);
     } finally {
       setIsLoadingProfile(false);
     }
@@ -107,6 +164,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Function to manually refresh staff profile data
+  const refreshStaffProfile = async () => {
+    if (user?.id) {
+      await fetchStaffProfile(user.id);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -115,16 +179,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
-        // Don't fetch profile inside the auth listener to avoid deadlock issues
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          // Use setTimeout to safely handle profile fetching outside the auth callback
           setTimeout(() => {
             if (currentSession?.user) {
+              // Try to fetch both vendor and staff profiles
               fetchVendorProfile(currentSession.user.id);
+              fetchStaffProfile(currentSession.user.id);
             }
           }, 0);
         } else if (event === 'SIGNED_OUT') {
           setVendorProfile(null);
+          setStaffProfile(null);
         }
         
         setIsLoading(false);
@@ -139,6 +204,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (currentSession?.user) {
         fetchVendorProfile(currentSession.user.id);
+        fetchStaffProfile(currentSession.user.id);
       }
       
       setIsLoading(false);
@@ -159,7 +225,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
 
-      // Check user type
       const { data: userProfile, error: profileError } = await supabase
         .from('users')
         .select('user_type')
@@ -216,7 +281,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       setIsLoading(true);
 
-      // Add user_type to metadata
       const userMetadata = {
         ...metadata,
         user_type: userType,
@@ -236,7 +300,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
 
-      // Update the user_type in the users table
       if (data.user) {
         const { error: updateError } = await supabase
           .from('users')
@@ -268,7 +331,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       setIsLoading(true);
 
-      // Check if a session exists
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session) {
         toast({
@@ -280,7 +342,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      // Proceed with logout
       await supabase.auth.signOut();
       navigate('/login');
       toast({
@@ -304,11 +365,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       session, 
       isLoading, 
       vendorProfile, 
+      staffProfile,
       isLoadingProfile,
       signIn, 
       signUp: (email, password, metadata, userType) => signUp(email, password, metadata, userType),
-      signOut, // Add signOut function
-      refreshVendorProfile
+      signOut,
+      refreshVendorProfile,
+      refreshStaffProfile
     }}>
       {children}
     </AuthContext.Provider>

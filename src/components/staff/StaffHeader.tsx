@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import {
@@ -13,7 +14,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/hooks/useAuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-// Corresponds to the new navItems in StaffDashboardLayout
 const pageTitles: { [key: string]: string } = {
   '/staff/dashboard': 'Dashboard',
   '/staff/bookings': 'Bookings',
@@ -26,21 +26,19 @@ const pageTitles: { [key: string]: string } = {
 };
 
 const StaffHeader: React.FC = () => {
-  const [notificationCount, setNotificationCount] = useState(0); // Example, will be dynamic
-  const { staffProfile, user, signOut } = useAuth(); // Assuming staffProfile exists like vendorProfile
+  const [notificationCount, setNotificationCount] = useState(0);
+  const { staffProfile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const getPageTitle = () => {
-    // Find a matching path segment
     const currentPath = Object.keys(pageTitles).find(path => location.pathname.startsWith(path));
     return currentPath ? pageTitles[currentPath] : 'Staff Dashboard';
   };
   
-  // Get initials for avatar fallback
   const getInitials = () => {
-    if (staffProfile?.displayName) { // Assuming staffProfile has a displayName
-      return staffProfile.displayName
+    if (staffProfile?.display_name) {
+      return staffProfile.display_name
         .split(' ')
         .map(word => word[0])
         .join('')
@@ -50,7 +48,7 @@ const StaffHeader: React.FC = () => {
     if (user?.email) {
       return user.email.substring(0, 2).toUpperCase();
     }
-    return "S"; // Staff
+    return "S";
   };
 
   const handleProfileClick = () => {
@@ -59,7 +57,7 @@ const StaffHeader: React.FC = () => {
 
   const handleSettingsClick = () => {
     navigate('/staff/settings');
-  }
+  };
   
   return (
     <header className="h-16 border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
@@ -75,7 +73,7 @@ const StaffHeader: React.FC = () => {
               className="h-5 w-5 text-sanskara-maroon hover:text-sanskara-red cursor-pointer transition-colors" 
               onClick={() => {
                 setNotificationCount(0);
-                navigate('/staff/notifications'); // Navigate to notifications page
+                navigate('/staff/notifications');
               }} 
             />
             {notificationCount > 0 && (
@@ -88,11 +86,11 @@ const StaffHeader: React.FC = () => {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
               <Avatar className="h-8 w-8 border border-sanskara-gold/50">
-                <AvatarImage src={staffProfile?.avatarUrl || ''} /> {/* Assuming avatarUrl in staffProfile */}
+                <AvatarImage src="" />
                 <AvatarFallback className="bg-sanskara-amber text-sanskara-maroon">{getInitials()}</AvatarFallback>
               </Avatar>
               <span className="font-medium text-sm hidden md:block">
-                {staffProfile?.displayName || user?.email || 'Staff Member'}
+                {staffProfile?.display_name || user?.email || 'Staff Member'}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground hidden md:block" />
             </DropdownMenuTrigger>
@@ -103,7 +101,7 @@ const StaffHeader: React.FC = () => {
                   <User className="h-4 w-4 text-sanskara-maroon" />
                 </div>
                 <div className="flex flex-col space-y-0.5">
-                  <p className="text-sm font-medium">{staffProfile?.displayName || 'Staff Member'}</p>
+                  <p className="text-sm font-medium">{staffProfile?.display_name || 'Staff Member'}</p>
                   <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
                 </div>
               </div>
@@ -126,7 +124,7 @@ const StaffHeader: React.FC = () => {
                 className="text-red-500 cursor-pointer flex items-center gap-2" 
                 onClick={async () => {
                   await signOut();
-                  navigate('/staff/login', { replace: true }); // Explicit navigation to staff login
+                  navigate('/staff/login', { replace: true });
                 }}
               >
                 <LogOut className="h-4 w-4" />
