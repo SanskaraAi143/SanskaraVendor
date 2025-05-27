@@ -479,6 +479,48 @@ BEFORE UPDATE ON staff_portfolios
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
 
+-- Staff-Service Assignment Table (Many-to-Many: staff can be assigned to multiple services, and services can have multiple staff)
+CREATE TABLE vendor_service_staff (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    vendor_id UUID NOT NULL REFERENCES vendors(vendor_id) ON DELETE CASCADE,
+    service_id UUID NOT NULL REFERENCES vendor_services(service_id) ON DELETE CASCADE,
+    staff_id UUID NOT NULL REFERENCES vendor_staff(staff_id) ON DELETE CASCADE,
+    assigned_role VARCHAR(50), -- e.g., 'lead', 'assistant', etc.
+    is_active BOOLEAN DEFAULT true,
+    assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (service_id, staff_id)
+);
+CREATE INDEX idx_vendor_service_staff_service_id ON vendor_service_staff(service_id);
+CREATE INDEX idx_vendor_service_staff_staff_id ON vendor_service_staff(staff_id);
+CREATE INDEX idx_vendor_service_staff_vendor_id ON vendor_service_staff(vendor_id);
+
+CREATE TRIGGER set_vendor_service_staff_updated_at
+BEFORE UPDATE ON vendor_service_staff
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+-- Vendor Staff Availability Table (tracks individual staff availability, not just vendor-wide)
+CREATE TABLE vendor_staff_availability (
+    staff_availability_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL REFERENCES vendor_staff(staff_id) ON DELETE CASCADE,
+    vendor_id UUID NOT NULL REFERENCES vendors(vendor_id) ON DELETE CASCADE,
+    available_date DATE NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'available', -- 'available', 'booked_tentative', 'booked_confirmed', 'unavailable_custom'
+    notes TEXT,
+    UNIQUE (staff_id, available_date),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_vendor_staff_availability_staff_id ON vendor_staff_availability(staff_id);
+CREATE INDEX idx_vendor_staff_availability_vendor_id ON vendor_staff_availability(vendor_id);
+CREATE INDEX idx_vendor_staff_availability_date ON vendor_staff_availability(available_date);
+
+CREATE TRIGGER set_vendor_staff_availability_updated_at
+BEFORE UPDATE ON vendor_staff_availability
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
 -- -- can you give sql query to delete all tables of user related one i gave
 -- DROP TABLE IF EXISTS public.users CASCADE;
 -- DROP TABLE IF EXISTS public.vendors CASCADE;

@@ -15,13 +15,10 @@ interface Booking {
   total_amount: number | null;
   notes_for_vendor: string | null;
   created_at: string; // Added for context
-  users: { // Assuming 'users' table is related
+  users: {
     display_name: string | null;
     email: string | null;
-    phone_number: string | null;
   };
-  // Potential to add booking_services if detailed view per booking is needed later
-  // booking_services: Array<{ vendor_services: { service_name: string } }>;
 }
 
 const StaffBookings: React.FC = () => {
@@ -39,51 +36,64 @@ const StaffBookings: React.FC = () => {
       return;
     }
 
-    const fetchStaffVendorAndBookings = async () => {
+    const fetchStaffBookings = async () => {
       setLoading(true);
       setError(null);
       try {
+        // 1. Get staff_id for current user
         const { data: staffData, error: staffError } = await supabase
           .from('vendor_staff')
-          .select('vendor_id')
+          .select('staff_id')
           .eq('supabase_auth_uid', user.id)
           .single();
 
         if (staffError) throw staffError;
-        if (!staffData || !staffData.vendor_id) {
-          setError('Staff profile not found or not associated with a vendor.');
+        if (!staffData || !staffData.staff_id) {
+          setError('Staff profile not found.');
           setLoading(false);
           return;
         }
-        
-        // Fetch bookings for this vendor, including related user details
-        // Added notes_for_vendor and created_at
+
+        // 2. Get all vendor_tasks assigned to this staff
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('vendor_tasks')
+          .select('booking_id')
+          .eq('assigned_staff_id', staffData.staff_id);
+
+        if (tasksError) throw tasksError;
+        const bookingIds = Array.from(new Set((tasksData || []).map(t => t.booking_id).filter(Boolean)));
+        if (bookingIds.length === 0) {
+          setBookings([]);
+          setLoading(false);
+          return;
+        }
+
+        // 3. Fetch bookings for these booking_ids, including user details
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
           .select(`
-            booking_id, 
-            event_date, 
-            booking_status, 
-            total_amount, 
+            booking_id,
+            event_date,
+            booking_status,
+            total_amount,
             notes_for_vendor,
             created_at,
-            users ( display_name, email, phone_number )
+            users ( display_name, email )
           `)
-          .eq('vendor_id', staffData.vendor_id)
+          .in('booking_id', bookingIds)
           .order('event_date', { ascending: false });
 
         if (bookingsError) throw bookingsError;
-        setBookings(bookingsData as Booking[] || []); // Cast to Booking[]
-
+        setBookings(bookingsData as Booking[] || []);
       } catch (fetchError: any) {
-        console.error('Error fetching vendor bookings:', fetchError);
+        console.error('Error fetching staff bookings:', fetchError);
         setError(fetchError.message || 'Failed to load bookings.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStaffVendorAndBookings();
+    fetchStaffBookings();
   }, [user, authLoading, navigate]);
 
   const renderContent = () => {
@@ -108,9 +118,9 @@ const StaffBookings: React.FC = () => {
     return (
       <Card className="w-full max-w-6xl mx-auto"> {/* Increased max-width for more details */}
         <CardHeader>
-          <h1 className="text-2xl font-semibold text-gray-700">Vendor Bookings</h1>
+          <h1 className="text-2xl font-semibold text-gray-700">My Bookings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            List of all bookings associated with your vendor.
+            List of bookings for which you have assigned tasks.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -135,7 +145,7 @@ const StaffBookings: React.FC = () => {
                     <tr key={booking.booking_id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{booking.users?.display_name || 'N/A'}</div>
-                        <div className="text-xs text-gray-500">{booking.users?.email || booking.users?.phone_number}</div>
+                        <div className="text-xs text-gray-500">{booking.users?.email}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{new Date(booking.event_date).toLocaleDateString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -166,7 +176,7 @@ const StaffBookings: React.FC = () => {
               </table>
             </div>
           ) : (
-            <p className="text-gray-700 text-center py-10">No bookings found for your vendor.</p>
+            <p className="text-gray-700 text-center py-10">No bookings found for your tasks.</p>
           )}
         </CardContent>
       </Card>

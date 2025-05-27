@@ -36,7 +36,7 @@ const navItems = [
   { name: 'Vendor Services', path: '/staff/services', icon: <CheckCircle className="h-5 w-5 flex-shrink-0" /> },
   { name: 'Notifications', path: '/staff/notifications', icon: <BellRing className="h-5 w-5 flex-shrink-0" /> },
   { name: 'Profile', path: '/staff/profile', icon: <User className="h-5 w-5 flex-shrink-0" /> },
-  { name: 'Settings', path: '/staff/profile', icon: <Settings className="h-5 w-5 flex-shrink-0" /> }, // Changed path to /staff/profile
+  { name: 'Settings', path: '/staff/settings', icon: <Settings className="h-5 w-5 flex-shrink-0" /> },
 ];
 
 const StaffSidebar: React.FC = () => {

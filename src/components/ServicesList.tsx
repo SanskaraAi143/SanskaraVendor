@@ -88,7 +88,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
         <CardTitle className="flex items-center justify-between">
           <span>{showAll ? 'All Vendor Services' : 'Your Services'}</span>
           {!showAll && (
-            <Link to="/staff/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
+            <Link to="/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
               View All <ArrowUpRight className="ml-1 h-4 w-4" />
             </Link>
           )}
@@ -98,7 +98,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
       <CardContent>
         {isLoading ? (
           <div className="space-y-4">
-            {[1, 2, showAll ? 3 : 2].map((i) => ( // Show more skeletons if showAll is true
+            {Array.from({ length: showAll ? 3 : 2 }).map((_, i) => (
               <div key={i} className="flex justify-between items-center p-3 border rounded-md animate-pulse">
                 <div>
                   <div className="h-4 w-36 bg-gray-200 rounded mb-2"></div>
