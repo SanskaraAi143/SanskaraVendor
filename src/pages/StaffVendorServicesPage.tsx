@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Loader2, Settings, CheckCircle2, XCircle, Star } from 'lucide-react';
+import { Loader2, Settings, CheckCircle2, Star } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Badge } from '@/components/ui/badge';
@@ -48,8 +47,30 @@ const StaffVendorServicesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch all vendor services
+      // Fetch services assigned to the staff from vendor_service_staff table
       const { data: servicesData, error: servicesError } = await supabase
+        .from('vendor_service_staff')
+        .select(`
+          vendor_services (
+            service_id,
+            service_name,
+            description,
+            base_price,
+            service_category,
+            is_active,
+            is_in_house
+          )
+        `)
+        .eq('staff_id', staffProfile.staff_id)
+        .eq('vendor_id', staffProfile.vendor_id);
+
+      if (servicesError) throw servicesError;
+
+      const assignedServices = servicesData?.map(item => item.vendor_services) as VendorService[] || [];
+      setServices(assignedServices);
+
+      // Fetch all vendor services for the "All Services" view
+      const { data: allServicesDataResponse, error: allServicesError } = await supabase
         .from('vendor_services')
         .select(`
           service_id,
@@ -58,21 +79,18 @@ const StaffVendorServicesPage: React.FC = () => {
           base_price,
           service_category,
           is_active,
-          responsible_staff_id,
-          is_in_house
+          is_in_house,
+          responsible_staff_id
         `)
         .eq('vendor_id', staffProfile.vendor_id);
 
-      if (servicesError) throw servicesError;
+      if (allServicesError) throw allServicesError;
 
-      const allServicesData = servicesData as VendorService[] || [];
+      const allServicesData = allServicesDataResponse?.map(service => ({
+        ...service,
+        responsible_staff_id: service.responsible_staff_id as string | null,
+      })) as VendorService[] || [];
       setAllServices(allServicesData);
-
-      // Filter services where this staff is the responsible staff
-      const assignedServices = allServicesData.filter(service => 
-        service.responsible_staff_id === staffProfile.staff_id
-      );
-      setServices(assignedServices);
 
     } catch (err: any) {
       console.error('Error fetching vendor services:', err);
@@ -130,7 +148,7 @@ const StaffVendorServicesPage: React.FC = () => {
             </div>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {showAssigned 
+            {showAssigned
               ? "Services you are responsible for"
               : "All services offered by your vendor"
             }
@@ -139,15 +157,13 @@ const StaffVendorServicesPage: React.FC = () => {
         <CardContent>
           {servicesToShow.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {servicesToShow.map(service => {
+              {servicesToShow.map((service: VendorService) => {
                 const isAssigned = service.responsible_staff_id === staffProfile?.staff_id;
-                
+
                 return (
-                  <Card 
-                    key={service.service_id} 
-                    className={`transition-all hover:shadow-md ${
-                      isAssigned ? 'border-sanskara-blue/30 bg-blue-50/30' : ''
-                    }`}
+                  <Card
+                    key={service.service_id}
+                    className={`transition-all hover:shadow-md ${isAssigned ? 'border-sanskara-blue/30 bg-blue-50/30' : ''}`}
                   >
                     <CardContent className="p-6">
                       <div className="space-y-4">
@@ -195,15 +211,10 @@ const StaffVendorServicesPage: React.FC = () => {
 
                         {/* Assignment Status */}
                         <div className="border-t pt-4">
-                          {isAssigned ? (
+                          {isAssigned && (
                             <div className="flex items-center gap-2 text-green-600">
                               <CheckCircle2 className="h-4 w-4" />
                               <span className="text-sm font-medium">You are responsible for this service</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-gray-500">
-                              <XCircle className="h-4 w-4" />
-                              <span className="text-sm">Not assigned to this service</span>
                             </div>
                           )}
                         </div>
@@ -220,8 +231,8 @@ const StaffVendorServicesPage: React.FC = () => {
                 {showAssigned ? "No services assigned to you yet." : "No services found."}
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                {showAssigned 
-                  ? "Contact your vendor to get assigned as responsible for services." 
+                {showAssigned
+                  ? "Contact your vendor to get assigned as responsible for services."
                   : "Your vendor hasn't added any services yet."
                 }
               </p>
