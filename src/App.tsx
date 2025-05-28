@@ -1,3 +1,4 @@
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -22,16 +23,16 @@ import Notifications from './pages/Notifications';
 import VendorOnboarding from './pages/VendorOnboarding';
 import StaffLoginPage from './pages/StaffLoginPage';
 import StaffDashboard from './pages/StaffDashboard';
-import StaffProtectedRoute from './components/StaffProtectedRoute'; // Added import for StaffProtectedRoute
-import StaffOnboarding from './pages/StaffOnboarding'; // Import StaffOnboarding
-import StaffResetPassword from './pages/StaffResetPassword'; // Import StaffResetPassword
-import StaffTasks from './pages/StaffTasks'; // Import StaffTasks
-import StaffBookings from './pages/StaffBookings'; // Import StaffBookings
-import StaffAvailabilityPage from './pages/StaffAvailabilityPage'; // Import StaffAvailabilityPage
-import StaffVendorServicesPage from './pages/StaffVendorServicesPage'; // Import StaffVendorServicesPage
-import StaffNotifications from './pages/StaffNotifications'; // Import StaffNotifications
-import StaffProfile from './pages/StaffProfile'; // Import StaffProfile
-import StaffSettings from './pages/StaffSettings'; // Import StaffSettings
+import StaffProtectedRoute from './components/StaffProtectedRoute';
+import StaffOnboarding from './pages/StaffOnboarding';
+import StaffResetPassword from './pages/StaffResetPassword';
+import StaffTasks from './pages/StaffTasks';
+import StaffBookings from './pages/StaffBookings';
+import StaffAvailabilityPage from './pages/StaffAvailabilityPage';
+import StaffVendorServicesPage from './pages/StaffVendorServicesPage';
+import StaffNotifications from './pages/StaffNotifications';
+import StaffProfile from './pages/StaffProfile';
+import StaffSettings from './pages/StaffSettings';
 
 function App() {
   const { user, vendorProfile } = useAuth();
@@ -56,15 +57,15 @@ function App() {
         {/* Protected Staff Routes */}
         <Route element={<StaffProtectedRoute />}>
           <Route path="/staff/dashboard" element={<StaffDashboard />} />
-          <Route path="/staff/onboarding" element={<StaffOnboarding />} /> {/* Staff onboarding route */}
-          <Route path="/staff/reset-password" element={<StaffResetPassword />} /> {/* Staff reset password route */}
-          <Route path="/staff/tasks" element={<StaffTasks />} /> {/* Staff tasks route */}
-          <Route path="/staff/bookings" element={<StaffBookings />} /> {/* Staff bookings route */}
-          <Route path="/staff/availability" element={<StaffAvailabilityPage />} /> {/* Staff availability route */}
-          <Route path="/staff/services" element={<StaffVendorServicesPage />} /> {/* Staff services route */}
-          <Route path="/staff/notifications" element={<StaffNotifications />} /> {/* Staff notifications route */}
-          <Route path="/staff/profile" element={<StaffProfile />} /> {/* Staff profile route */}
-          <Route path="/staff/settings" element={<StaffSettings />} /> {/* Staff settings route */}
+          <Route path="/staff/onboarding" element={<StaffOnboarding />} />
+          <Route path="/staff/reset-password" element={<StaffResetPassword />} />
+          <Route path="/staff/tasks" element={<StaffTasks />} />
+          <Route path="/staff/bookings" element={<StaffBookings />} />
+          <Route path="/staff/availability" element={<StaffAvailabilityPage />} />
+          <Route path="/staff/services" element={<StaffVendorServicesPage />} />
+          <Route path="/staff/notifications" element={<StaffNotifications />} />
+          <Route path="/staff/profile" element={<StaffProfile />} />
+          <Route path="/staff/settings" element={<StaffSettings />} />
         </Route>
         
         {/* Vendor onboarding route */}

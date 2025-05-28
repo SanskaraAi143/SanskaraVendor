@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../integrations/supabase/client';
@@ -5,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
+import { toast } from '@/components/ui/use-toast';
 
 const StaffLoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,8 +28,49 @@ const StaffLoginPage: React.FC = () => {
 
       if (signInError) {
         setError(signInError.message);
-      } else if (data.user) {
-        // Potentially store session/user data here if needed globally
+        return;
+      }
+
+      if (data.user) {
+        // Check if user is a vendor (not staff)
+        const { data: vendorData, error: vendorError } = await supabase
+          .from('vendors')
+          .select('vendor_id')
+          .eq('supabase_auth_uid', data.user.id)
+          .single();
+
+        if (!vendorError && vendorData) {
+          // User is a vendor, redirect them to vendor portal
+          await supabase.auth.signOut();
+          toast({
+            title: "Wrong Portal",
+            description: "You're a vendor. Please use the main vendor portal to log in.",
+            variant: "destructive",
+          });
+          setError("Vendors should use the main portal. Please visit the vendor login page.");
+          return;
+        }
+
+        // Check if user is staff
+        const { data: staffData, error: staffError } = await supabase
+          .from('vendor_staff')
+          .select('staff_id, is_active')
+          .eq('supabase_auth_uid', data.user.id)
+          .single();
+
+        if (staffError || !staffData) {
+          await supabase.auth.signOut();
+          setError('Staff profile not found. Please contact your vendor to add you as staff.');
+          return;
+        }
+
+        if (!staffData.is_active) {
+          await supabase.auth.signOut();
+          setError('Your staff account is inactive. Please contact your vendor.');
+          return;
+        }
+
+        // Staff login successful
         navigate('/staff/dashboard');
       } else {
         setError('An unexpected error occurred. Please try again.');
@@ -39,7 +82,6 @@ const StaffLoginPage: React.FC = () => {
     }
   };
 
-  // Update the resetPasswordForEmail function to redirect to a proper reset page
   const handleForgotPassword = async () => {
     if (!email) {
       setError('Please enter your email to reset your password.');
@@ -55,7 +97,10 @@ const StaffLoginPage: React.FC = () => {
       if (resetError) {
         setError(resetError.message);
       } else {
-        alert('Password reset email sent. Please check your inbox.');
+        toast({
+          title: "Password Reset Email Sent",
+          description: "Please check your inbox for password reset instructions.",
+        });
       }
     } catch (catchError: any) {
       setError(catchError.message || 'An unexpected error occurred.');
@@ -109,16 +154,20 @@ const StaffLoginPage: React.FC = () => {
             </div>
           </form>
         </CardContent>
-        <CardFooter className="text-sm text-center">
+        <CardFooter className="flex flex-col space-y-2 text-sm text-center">
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            className="text-blue-600 hover:underline"
+            disabled={loading}
+          >
+            Forgot Password?
+          </button>
           <p>
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              className="text-blue-600 hover:underline"
-              disabled={loading}
-            >
-              Forgot Password?
-            </button>
+            Are you a vendor?{' '}
+            <a href="/login" className="text-blue-600 hover:underline">
+              Login here
+            </a>
           </p>
         </CardFooter>
       </Card>

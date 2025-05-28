@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
@@ -37,7 +38,7 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
           return;
         }
         
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const today = new Date().toISOString().split('T')[0];
 
         const { count, error: bookingsError } = await supabase
           .from('bookings')
@@ -60,6 +61,10 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
     fetchBookingCount();
   }, [user, authLoading, navigate]);
 
+  const handleClick = () => {
+    navigate('/staff/bookings');
+  };
+
   let content = <p>Summary of upcoming bookings for your vendor.</p>;
   let displayValue: string | number = "-";
 
@@ -80,18 +85,20 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
   }
 
   return (
-    <DashboardCard
-      title="Upcoming Bookings"
-      icon={<BookOpen className="h-5 w-5" />}
-      color="sanskara-blue"
-      value={displayValue}
-      footerLink={{
-        text: 'View all bookings',
-        href: '/staff/bookings',
-      }}
-    >
-      {content}
-    </DashboardCard>
+    <div onClick={handleClick} className="cursor-pointer">
+      <DashboardCard
+        title="Upcoming Bookings"
+        icon={<BookOpen className="h-5 w-5" />}
+        color="sanskara-blue"
+        value={displayValue}
+        footerLink={{
+          text: 'View all bookings',
+          href: '/staff/bookings',
+        }}
+      >
+        {content}
+      </DashboardCard>
+    </div>
   );
 };
 

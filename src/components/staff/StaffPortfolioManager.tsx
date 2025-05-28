@@ -28,6 +28,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [vendorId, setVendorId] = useState<string | null>(null);
   const [newPortfolio, setNewPortfolio] = useState({
     title: '',
     description: '',
@@ -36,10 +37,38 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
   });
 
   useEffect(() => {
-    loadPortfolios();
+    loadStaffInfo();
   }, [staffId]);
 
+  useEffect(() => {
+    if (vendorId) {
+      loadPortfolios();
+    }
+  }, [vendorId]);
+
+  const loadStaffInfo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vendor_staff')
+        .select('vendor_id')
+        .eq('staff_id', staffId)
+        .single();
+
+      if (error) throw error;
+      setVendorId(data.vendor_id);
+    } catch (error) {
+      console.error('Error loading staff info:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load staff information',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const loadPortfolios = async () => {
+    if (!vendorId) return;
+
     try {
       const { data, error } = await supabase
         .from('staff_portfolios')
@@ -99,6 +128,15 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
       return;
     }
 
+    if (!vendorId) {
+      toast({
+        title: 'Error',
+        description: 'Vendor information not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setUploading(true);
     try {
       let imageUrls: string[] = [];
@@ -111,6 +149,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
         .from('staff_portfolios')
         .insert({
           staff_id: staffId,
+          vendor_id: vendorId,
           title: newPortfolio.title,
           description: newPortfolio.description,
           portfolio_type: newPortfolio.portfolio_type,
@@ -287,7 +326,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
               <Card key={portfolio.portfolio_id} className="overflow-hidden">
                 <CardContent className="p-4">
                   <div className="space-y-3">
-                    {portfolio.image_urls.length > 0 && (
+                    {portfolio.image_urls && portfolio.image_urls.length > 0 && (
                       <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
                         <img
                           src={portfolio.image_urls[0]}

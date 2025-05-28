@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,10 +111,10 @@ const LoginPage: React.FC = () => {
         </div>
         
         <h1 className="text-2xl font-bold text-center gradient-text mb-2">
-          Vendor Portal
+          AI-Powered Vendor Portal
         </h1>
         <p className="text-center text-muted-foreground mb-6">
-          Access your dashboard to manage bookings and services
+          Access your intelligent dashboard to manage bookings and services
         </p>
         
         <Tabs defaultValue="login" value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'signup')} className="mb-4">
@@ -412,7 +413,7 @@ const LoginPage: React.FC = () => {
       
       <div className="absolute bottom-4 text-center w-full">
         <p className="text-sm text-sanskara-maroon/70">
-          © 2025 SanskaraVendors. All rights reserved.
+          © 2025 Sanskara AI. All rights reserved.
         </p>
       </div>
     </div>

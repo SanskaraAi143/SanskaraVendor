@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
@@ -13,11 +14,10 @@ const StaffTasksWidget: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (authLoading) return; // Wait for auth state to be determined
+    if (authLoading) return;
 
     if (!user) {
       setIsLoading(false);
-      // setError("User not authenticated. Please login."); // Or redirect, but widget shouldn't redirect
       console.warn("StaffTasksWidget: User not authenticated.");
       return;
     }
@@ -26,7 +26,6 @@ const StaffTasksWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // 1. Fetch staff_id from vendor_staff
         const { data: staffProfile, error: staffProfileError } = await supabase
           .from('vendor_staff')
           .select('staff_id')
@@ -39,12 +38,11 @@ const StaffTasksWidget: React.FC = () => {
           return;
         }
 
-        // 2. Query vendor_tasks for count of non-completed tasks
         const { count, error: tasksError } = await supabase
           .from('vendor_tasks')
           .select('*', { count: 'exact', head: true })
           .eq('assigned_staff_id', staffProfile.staff_id)
-          .not('status', 'eq', 'Completed'); // Assuming 'Completed' is the status for completed tasks
+          .not('status', 'eq', 'Completed');
 
         if (tasksError) throw tasksError;
         
@@ -60,6 +58,10 @@ const StaffTasksWidget: React.FC = () => {
 
     fetchTaskCount();
   }, [user, authLoading, navigate]);
+
+  const handleClick = () => {
+    navigate('/staff/tasks');
+  };
 
   let content = <p>Summary of your assigned tasks and their statuses.</p>;
   let displayValue: string | number = "-";
@@ -80,20 +82,21 @@ const StaffTasksWidget: React.FC = () => {
     content = <p>{taskCount > 0 ? `You have ${taskCount} pending task(s).` : 'No pending tasks.'}</p>;
   }
 
-
   return (
-    <DashboardCard
-      title="My Tasks"
-      icon={<ListTodo className="h-5 w-5" />}
-      color="sanskara-amber"
-      value={displayValue}
-      footerLink={{
-        text: 'Manage tasks',
-        href: '/staff/tasks',
-      }}
-    >
-      {content}
-    </DashboardCard>
+    <div onClick={handleClick} className="cursor-pointer">
+      <DashboardCard
+        title="My Tasks"
+        icon={<ListTodo className="h-5 w-5" />}
+        color="sanskara-amber"
+        value={displayValue}
+        footerLink={{
+          text: 'Manage tasks',
+          href: '/staff/tasks',
+        }}
+      >
+        {content}
+      </DashboardCard>
+    </div>
   );
 };
 

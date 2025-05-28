@@ -1,8 +1,13 @@
-# Welcome to your Lovable project
+
+# Welcome to Sanskara AI
 
 ## Project info
 
 **URL**: https://lovable.dev/projects/0a4432d5-9a7d-4cfe-811a-36709cedae8d
+
+## About Sanskara AI
+
+Sanskara AI is an intelligent vendor portal designed specifically for Hindu wedding services. Our AI-powered platform helps wedding vendors manage their business operations, bookings, and services with advanced automation and insights.
 
 ## How can I edit this code?
 
@@ -59,12 +64,13 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- AI-powered features for vendor management
 
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/0a4432d5-9a7d-4cfe-811a-36709cedae8d) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## Can I connect a custom domain to my Sanskara AI project?
 
 Yes, you can!
 

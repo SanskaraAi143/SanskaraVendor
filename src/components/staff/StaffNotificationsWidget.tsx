@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
@@ -58,6 +59,10 @@ const StaffNotificationsWidget: React.FC = () => {
     fetchNotificationCount();
   }, [user, authLoading, navigate]);
 
+  const handleClick = () => {
+    navigate('/staff/notifications');
+  };
+
   let content = <p>Recent important alerts and updates relevant to your role.</p>;
   let displayValue: string | number = "-";
 
@@ -78,18 +83,20 @@ const StaffNotificationsWidget: React.FC = () => {
   }
 
   return (
-    <DashboardCard
-      title="Notifications"
-      icon={<BellRing className="h-5 w-5" />}
-      color="sanskara-red"
-      value={displayValue}
-      footerLink={{
-        text: 'View all notifications',
-        href: '/staff/notifications',
-      }}
-    >
-      {content}
-    </DashboardCard>
+    <div onClick={handleClick} className="cursor-pointer">
+      <DashboardCard
+        title="Notifications"
+        icon={<BellRing className="h-5 w-5" />}
+        color="sanskara-red"
+        value={displayValue}
+        footerLink={{
+          text: 'View all notifications',
+          href: '/staff/notifications',
+        }}
+      >
+        {content}
+      </DashboardCard>
+    </div>
   );
 };
 

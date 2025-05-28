@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
@@ -27,7 +28,7 @@ const StaffAvailabilityWidget: React.FC = () => {
       try {
         const { data: staffProfile, error: staffProfileError } = await supabase
           .from('vendor_staff')
-          .select('vendor_id') // Staff members manage vendor's availability
+          .select('vendor_id')
           .eq('supabase_auth_uid', user.id)
           .single();
 
@@ -45,7 +46,7 @@ const StaffAvailabilityWidget: React.FC = () => {
           .from('vendor_availability')
           .select('*', { count: 'exact', head: true })
           .eq('vendor_id', staffProfile.vendor_id)
-          .eq('status', 'available') // Assuming 'available' is the status for available slots
+          .eq('status', 'available')
           .gte('available_date', today.toISOString().split('T')[0])
           .lte('available_date', nextWeek.toISOString().split('T')[0]);
 
@@ -63,6 +64,10 @@ const StaffAvailabilityWidget: React.FC = () => {
 
     fetchAvailabilityCount();
   }, [user, authLoading, navigate]);
+
+  const handleClick = () => {
+    navigate('/staff/availability');
+  };
 
   let content = <p>Summary of your vendor's availability in the upcoming week.</p>;
   let displayValue: string | number = "-";
@@ -83,20 +88,21 @@ const StaffAvailabilityWidget: React.FC = () => {
     content = <p>{availabilityCount > 0 ? `Vendor has ${availabilityCount} available slot(s) next week.` : 'No available slots next week.'}</p>;
   }
 
-
   return (
-    <DashboardCard
-      title="Vendor Availability" // Changed title to reflect vendor availability
-      icon={<CalendarDays className="h-5 w-5" />}
-      color="sanskara-green"
-      value={displayValue}
-      footerLink={{
-        text: 'Manage availability', // Updated link text
-        href: '/staff/availability',
-      }}
-    >
-      {content}
-    </DashboardCard>
+    <div onClick={handleClick} className="cursor-pointer">
+      <DashboardCard
+        title="Vendor Availability"
+        icon={<CalendarDays className="h-5 w-5" />}
+        color="sanskara-green"
+        value={displayValue}
+        footerLink={{
+          text: 'Manage availability',
+          href: '/staff/availability',
+        }}
+      >
+        {content}
+      </DashboardCard>
+    </div>
   );
 };
 

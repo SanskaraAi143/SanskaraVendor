@@ -532,57 +532,59 @@ export type Database = {
       }
       staff_portfolios: {
         Row: {
-          portfolio_id: string
-          staff_id: string
-          vendor_id: string
-          portfolio_type: string
-          title: string | null
-          description: string | null
-          image_urls: string[] | null
-          video_urls: string[] | null
-          generic_attributes: Record<string, any> | null
           created_at: string | null
+          description: string | null
+          generic_attributes: Json | null
+          image_urls: string[] | null
+          portfolio_id: string
+          portfolio_type: string
+          staff_id: string
+          title: string | null
           updated_at: string | null
+          vendor_id: string
+          video_urls: string[] | null
         }
         Insert: {
-          portfolio_id?: string
-          staff_id: string
-          vendor_id: string
-          portfolio_type: string
-          title?: string | null
-          description?: string | null
-          image_urls?: string[] | null
-          video_urls?: string[] | null
-          generic_attributes?: Record<string, any> | null
           created_at?: string | null
+          description?: string | null
+          generic_attributes?: Json | null
+          image_urls?: string[] | null
+          portfolio_id?: string
+          portfolio_type: string
+          staff_id: string
+          title?: string | null
           updated_at?: string | null
+          vendor_id: string
+          video_urls?: string[] | null
         }
         Update: {
-          portfolio_id?: string
-          staff_id?: string
-          vendor_id?: string
-          portfolio_type?: string
-          title?: string | null
-          description?: string | null
-          image_urls?: string[] | null
-          video_urls?: string[] | null
-          generic_attributes?: Record<string, any> | null
           created_at?: string | null
+          description?: string | null
+          generic_attributes?: Json | null
+          image_urls?: string[] | null
+          portfolio_id?: string
+          portfolio_type?: string
+          staff_id?: string
+          title?: string | null
           updated_at?: string | null
+          vendor_id?: string
+          video_urls?: string[] | null
         }
         Relationships: [
           {
             foreignKeyName: "staff_portfolios_staff_id_fkey"
             columns: ["staff_id"]
+            isOneToOne: false
             referencedRelation: "vendor_staff"
             referencedColumns: ["staff_id"]
           },
           {
             foreignKeyName: "staff_portfolios_vendor_id_fkey"
             columns: ["vendor_id"]
+            isOneToOne: false
             referencedRelation: "vendors"
             referencedColumns: ["vendor_id"]
-          }
+          },
         ]
       }
       tasks: {
@@ -745,10 +747,10 @@ export type Database = {
           supabase_auth_uid: string
           updated_at: string | null
           user_id: string
+          user_type: string
           wedding_date: string | null
           wedding_location: string | null
           wedding_tradition: string | null
-          user_type: string // Add user_type column
         }
         Insert: {
           created_at?: string | null
@@ -758,10 +760,10 @@ export type Database = {
           supabase_auth_uid: string
           updated_at?: string | null
           user_id?: string
+          user_type?: string
           wedding_date?: string | null
           wedding_location?: string | null
           wedding_tradition?: string | null
-          user_type?: string // Add user_type column
         }
         Update: {
           created_at?: string | null
@@ -771,10 +773,10 @@ export type Database = {
           supabase_auth_uid?: string
           updated_at?: string | null
           user_id?: string
+          user_type?: string
           wedding_date?: string | null
           wedding_location?: string | null
           wedding_tradition?: string | null
-          user_type?: string // Add user_type column
         }
         Relationships: []
       }
@@ -816,11 +818,66 @@ export type Database = {
           },
         ]
       }
+      vendor_service_staff: {
+        Row: {
+          assigned_at: string | null
+          assigned_role: string | null
+          id: string
+          is_active: boolean | null
+          service_id: string
+          staff_id: string
+          updated_at: string | null
+          vendor_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_role?: string | null
+          id?: string
+          is_active?: boolean | null
+          service_id: string
+          staff_id: string
+          updated_at?: string | null
+          vendor_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_role?: string | null
+          id?: string
+          is_active?: boolean | null
+          service_id?: string
+          staff_id?: string
+          updated_at?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_service_staff_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_services"
+            referencedColumns: ["service_id"]
+          },
+          {
+            foreignKeyName: "vendor_service_staff_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_staff"
+            referencedColumns: ["staff_id"]
+          },
+          {
+            foreignKeyName: "vendor_service_staff_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["vendor_id"]
+          },
+        ]
+      }
       vendor_services: {
         Row: {
           base_price: number | null
           created_at: string | null
-          customizability_details: string | null
+          customizability_details: Json | null
           description: string | null
           is_active: boolean | null
           is_in_house: boolean | null
@@ -839,7 +896,7 @@ export type Database = {
         Insert: {
           base_price?: number | null
           created_at?: string | null
-          customizability_details?: string | null
+          customizability_details?: Json | null
           description?: string | null
           is_active?: boolean | null
           is_in_house?: boolean | null
@@ -858,7 +915,7 @@ export type Database = {
         Update: {
           base_price?: number | null
           created_at?: string | null
-          customizability_details?: string | null
+          customizability_details?: Json | null
           description?: string | null
           is_active?: boolean | null
           is_in_house?: boolean | null
@@ -937,6 +994,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "vendor_staff_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["vendor_id"]
+          },
+        ]
+      }
+      vendor_staff_availability: {
+        Row: {
+          available_date: string
+          created_at: string | null
+          notes: string | null
+          staff_availability_id: string
+          staff_id: string
+          status: string
+          updated_at: string | null
+          vendor_id: string
+        }
+        Insert: {
+          available_date: string
+          created_at?: string | null
+          notes?: string | null
+          staff_availability_id?: string
+          staff_id: string
+          status?: string
+          updated_at?: string | null
+          vendor_id: string
+        }
+        Update: {
+          available_date?: string
+          created_at?: string | null
+          notes?: string | null
+          staff_availability_id?: string
+          staff_id?: string
+          status?: string
+          updated_at?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_staff_availability_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_staff"
+            referencedColumns: ["staff_id"]
+          },
+          {
+            foreignKeyName: "vendor_staff_availability_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
@@ -1072,6 +1177,7 @@ export type Database = {
           contact_email: string | null
           created_at: string | null
           description: string | null
+          details: Json | null
           is_active: boolean | null
           is_verified: boolean | null
           phone_number: string | null
@@ -1091,6 +1197,7 @@ export type Database = {
           contact_email?: string | null
           created_at?: string | null
           description?: string | null
+          details?: Json | null
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
@@ -1110,6 +1217,7 @@ export type Database = {
           contact_email?: string | null
           created_at?: string | null
           description?: string | null
+          details?: Json | null
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
@@ -1125,109 +1233,6 @@ export type Database = {
         }
         Relationships: []
       }
-      vendor_service_staff: {
-        Row: {
-          id: string;
-          vendor_id: string;
-          service_id: string;
-          staff_id: string;
-          assigned_role: string | null;
-          is_active: boolean;
-          assigned_at: string | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          vendor_id: string;
-          service_id: string;
-          staff_id: string;
-          assigned_role?: string | null;
-          is_active?: boolean;
-          assigned_at?: string | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          id?: string;
-          vendor_id?: string;
-          service_id?: string;
-          staff_id?: string;
-          assigned_role?: string | null;
-          is_active?: boolean;
-          assigned_at?: string | null;
-          updated_at?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "vendor_service_staff_vendor_id_fkey",
-            columns: ["vendor_id"],
-            isOneToOne: false,
-            referencedRelation: "vendors",
-            referencedColumns: ["vendor_id"]
-          },
-          {
-            foreignKeyName: "vendor_service_staff_service_id_fkey",
-            columns: ["service_id"],
-            isOneToOne: false,
-            referencedRelation: "vendor_services",
-            referencedColumns: ["service_id"]
-          },
-          {
-            foreignKeyName: "vendor_service_staff_staff_id_fkey",
-            columns: ["staff_id"],
-            isOneToOne: false,
-            referencedRelation: "vendor_staff",
-            referencedColumns: ["staff_id"]
-          }
-        ];
-      };
-      vendor_staff_availability: {
-        Row: {
-          staff_availability_id: string;
-          staff_id: string;
-          vendor_id: string;
-          available_date: string;
-          status: string;
-          notes: string | null;
-          created_at: string | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          staff_availability_id?: string;
-          staff_id: string;
-          vendor_id: string;
-          available_date: string;
-          status?: string;
-          notes?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          staff_availability_id?: string;
-          staff_id?: string;
-          vendor_id?: string;
-          available_date?: string;
-          status?: string;
-          notes?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "vendor_staff_availability_staff_id_fkey",
-            columns: ["staff_id"],
-            isOneToOne: false,
-            referencedRelation: "vendor_staff",
-            referencedColumns: ["staff_id"]
-          },
-          {
-            foreignKeyName: "vendor_staff_availability_vendor_id_fkey",
-            columns: ["vendor_id"],
-            isOneToOne: false,
-            referencedRelation: "vendors",
-            referencedColumns: ["vendor_id"]
-          }
-        ];
-      };
     }
     Views: {
       [_ in never]: never
@@ -1286,7 +1291,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {

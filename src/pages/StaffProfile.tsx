@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuthContext';
 
 interface StaffProfile {
   staff_id: string;
+  vendor_id: string;
   display_name: string;
   email: string;
   phone_number?: string;
@@ -23,6 +24,16 @@ interface StaffProfile {
   emergency_contact?: string;
   emergency_phone?: string;
   joining_date?: string;
+}
+
+interface StaffProfileData {
+  bio?: string;
+  skills?: string[];
+  experience_years?: number;
+  address?: string;
+  date_of_birth?: string;
+  emergency_contact?: string;
+  emergency_phone?: string;
 }
 
 const StaffProfile: React.FC = () => {
@@ -48,14 +59,48 @@ const StaffProfile: React.FC = () => {
     if (!staffProfile?.staff_id) return;
 
     try {
-      const { data, error } = await supabase
+      // Get basic staff data
+      const { data: staffData, error: staffError } = await supabase
         .from('vendor_staff')
         .select('*')
         .eq('staff_id', staffProfile.staff_id)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (staffError) throw staffError;
+
+      // Get additional profile data from staff_portfolios generic_attributes
+      const { data: profileData, error: profileError } = await supabase
+        .from('staff_portfolios')
+        .select('generic_attributes')
+        .eq('staff_id', staffProfile.staff_id)
+        .eq('portfolio_type', 'profile_data')
+        .maybeSingle();
+
+      // Parse additional profile data
+      let additionalData: StaffProfileData = {};
+      if (profileData?.generic_attributes) {
+        additionalData = profileData.generic_attributes as StaffProfileData;
+      }
+      
+      // Combine basic staff data with additional profile data
+      const profileData_combined: StaffProfile = {
+        staff_id: staffData.staff_id,
+        vendor_id: staffData.vendor_id,
+        display_name: staffData.display_name,
+        email: staffData.email,
+        phone_number: staffData.phone_number,
+        role: staffData.role,
+        bio: additionalData.bio,
+        skills: additionalData.skills,
+        experience_years: additionalData.experience_years,
+        address: additionalData.address,
+        date_of_birth: additionalData.date_of_birth,
+        emergency_contact: additionalData.emergency_contact,
+        emergency_phone: additionalData.emergency_phone,
+        joining_date: staffData.created_at
+      };
+      
+      setProfile(profileData_combined);
     } catch (err: any) {
       console.error('Error loading profile:', err);
     } finally {

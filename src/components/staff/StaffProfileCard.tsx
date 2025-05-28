@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +25,7 @@ interface StaffProfile {
   emergency_contact?: string;
   emergency_phone?: string;
   joining_date?: string;
+  vendor_id: string;
 }
 
 interface StaffProfileCardProps {
@@ -37,6 +37,7 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string>('');
   const [editData, setEditData] = useState({
     display_name: profile.display_name || '',
     phone_number: profile.phone_number || '',
@@ -48,6 +49,26 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
     emergency_contact: profile.emergency_contact || '',
     emergency_phone: profile.emergency_phone || ''
   });
+
+  React.useEffect(() => {
+    loadProfileImage();
+  }, [profile.staff_id]);
+
+  const loadProfileImage = async () => {
+    try {
+      const { data } = supabase.storage
+        .from('vendor-staff')
+        .getPublicUrl(`${profile.staff_id}/profile.jpg`);
+      
+      // Check if the image exists by trying to fetch it
+      const response = await fetch(data.publicUrl, { method: 'HEAD' });
+      if (response.ok) {
+        setProfileImageUrl(data.publicUrl);
+      }
+    } catch (error) {
+      console.log('No profile image found');
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -69,12 +90,7 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
         .from('vendor-staff')
         .getPublicUrl(fileName);
 
-      const { error: updateError } = await supabase
-        .from('vendor_staff')
-        .update({ profile_image_url: publicUrl })
-        .eq('staff_id', profile.staff_id);
-
-      if (updateError) throw updateError;
+      setProfileImageUrl(publicUrl);
 
       toast({
         title: 'Success',
@@ -101,22 +117,61 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
         ? editData.skills.split(',').map(s => s.trim()).filter(s => s)
         : [];
 
-      const { error } = await supabase
+      // Update basic staff data in vendor_staff table
+      const { error: staffError } = await supabase
         .from('vendor_staff')
         .update({
           display_name: editData.display_name,
-          phone_number: editData.phone_number,
-          bio: editData.bio,
-          skills: skillsArray,
-          experience_years: editData.experience_years || null,
-          address: editData.address,
-          date_of_birth: editData.date_of_birth || null,
-          emergency_contact: editData.emergency_contact,
-          emergency_phone: editData.emergency_phone
+          phone_number: editData.phone_number || null
         })
         .eq('staff_id', profile.staff_id);
 
-      if (error) throw error;
+      if (staffError) throw staffError;
+
+      // Prepare additional profile data
+      const additionalData = {
+        bio: editData.bio || null,
+        skills: skillsArray.length > 0 ? skillsArray : null,
+        experience_years: editData.experience_years || null,
+        address: editData.address || null,
+        date_of_birth: editData.date_of_birth || null,
+        emergency_contact: editData.emergency_contact || null,
+        emergency_phone: editData.emergency_phone || null
+      };
+
+      // Check if profile data entry exists
+      const { data: existingData } = await supabase
+        .from('staff_portfolios')
+        .select('portfolio_id')
+        .eq('staff_id', profile.staff_id)
+        .eq('portfolio_type', 'profile_data')
+        .maybeSingle();
+
+      if (existingData) {
+        // Update existing profile data
+        const { error: updateError } = await supabase
+          .from('staff_portfolios')
+          .update({
+            generic_attributes: additionalData
+          })
+          .eq('portfolio_id', existingData.portfolio_id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Create new profile data entry
+        const { error: insertError } = await supabase
+          .from('staff_portfolios')
+          .insert({
+            staff_id: profile.staff_id,
+            vendor_id: profile.vendor_id,
+            portfolio_type: 'profile_data',
+            title: 'Profile Data',
+            description: 'Additional profile information',
+            generic_attributes: additionalData
+          });
+
+        if (insertError) throw insertError;
+      }
 
       toast({
         title: 'Success',
@@ -159,7 +214,7 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
           <div className="flex items-center space-x-4">
             <div className="relative">
               <Avatar className="w-16 h-16">
-                <AvatarImage src={profile.profile_image_url} alt={profile.display_name} />
+                <AvatarImage src={profileImageUrl} alt={profile.display_name} />
                 <AvatarFallback className="bg-sanskara-blue/10 text-sanskara-blue text-lg">
                   {profile.display_name.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </AvatarFallback>
