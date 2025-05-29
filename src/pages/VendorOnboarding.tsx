@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -167,11 +166,12 @@ interface VenueFormData {
 }
 
 const VendorOnboarding: React.FC = () => {
-  const { user, vendorProfile, refreshVendorProfile } = useAuth();
+  const { user, vendorProfile, isLoading, isLoadingProfile, refreshVendorProfile } = useAuth();
+  const loading = isLoading || isLoadingProfile;
   const navigate = useNavigate();
   
   const [currentStep, setCurrentStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingState, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // File upload state
@@ -276,18 +276,6 @@ const VendorOnboarding: React.FC = () => {
     preferredLeadMode: '',
     venueRules: ''
   });
-
-  // Redirect if already onboarded
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    
-    if (vendorProfile && vendorProfile.vendor_name && vendorProfile.vendor_category) {
-      navigate('/');
-    }
-  }, [user, vendorProfile, navigate]);
 
   const steps = [
     { id: 1, name: 'Basic Information', icon: '📋' },
@@ -2005,41 +1993,70 @@ const VendorOnboarding: React.FC = () => {
           <CardContent className="p-6">
             {renderStepContent()}
           </CardContent>
-          
-          <div className="flex justify-between p-6 border-t">
-            {currentStep > 1 ? (
+
+          {/* Navigation Buttons */}
+          <div className="flex flex-col gap-2 mb-4">
+            <div className="flex justify-between gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handlePrevious}
-                disabled={isLoading || isSubmitting}
+                disabled={currentStep === 1 || isSubmitting}
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
                 Previous
               </Button>
-            ) : (
-              <div />
-            )}
-            
+              <Button
+                type="button"
+                variant="default"
+                onClick={handleNext}
+                disabled={isSubmitting}
+              >
+                {currentStep < steps.length ? 'Next' : isSubmitting ? 'Submitting...' : 'Finish'}
+              </Button>
+            </div>
             <Button
               type="button"
-              onClick={handleNext}
-              disabled={isLoading || isSubmitting}
-              className="bg-sanskara-red hover:bg-sanskara-maroon"
+              variant="outline"
+              onClick={async () => {
+                if (!user) return;
+                const metadata = user.user_metadata || {};
+                const vendor_name = metadata.vendor_name || metadata.vendorName || user.email?.split('@')[0] || 'Vendor';
+                const vendor_category = metadata.vendor_category || metadata.vendorCategory || 'Other';
+                const contact_email = user.email;
+                const phone_number = metadata.phone_number || metadata.phone || '';
+                // Insert vendor row with minimal/default values
+                const { data: vendor, error } = await supabase.from('vendors').insert([
+                  {
+                    vendor_name,
+                    vendor_category,
+                    contact_email,
+                    phone_number,
+                    supabase_auth_uid: user.id,
+                    is_verified: false,
+                    is_active: true
+                  }
+                ]).select().single();
+                if (error) {
+                  toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                  return;
+                }
+                // Also create vendor_staff entry for this user as owner
+                await supabase.from('vendor_staff').insert({
+                  vendor_id: vendor.vendor_id,
+                  supabase_auth_uid: user.id,
+                  email: contact_email,
+                  phone_number,
+                  display_name: metadata.display_name || user.email?.split('@')[0] || 'Owner',
+                  role: 'owner'
+                });
+                localStorage.setItem('onboardingSkipped', 'true');
+                await refreshVendorProfile();
+                navigate('/');
+              }}
+              className="w-full"
+              disabled={isSubmitting}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : currentStep === steps.length ? (
-                'Complete Onboarding'
-              ) : (
-                <>
-                  Next Step
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
+              Skip Onboarding & Go to Dashboard
             </Button>
           </div>
         </Card>

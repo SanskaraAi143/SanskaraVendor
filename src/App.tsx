@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -35,15 +34,15 @@ import StaffProfile from './pages/StaffProfile';
 import StaffSettings from './pages/StaffSettings';
 
 function App() {
-  const { user, vendorProfile } = useAuth();
-  
-  // Check if vendor needs to complete onboarding
-  const needsOnboarding = user && 
-    (!vendorProfile || 
-     !vendorProfile.vendor_name || 
-     !vendorProfile.vendor_category || 
-     !vendorProfile.description);
-  
+  const { user, vendorProfile, isLoading, isLoadingProfile } = useAuth();
+  const loading = isLoading || isLoadingProfile;
+
+  // Onboarding logic: Only require onboarding if vendorProfile is null and onboarding has not been skipped
+  const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+  const needsOnboarding = !loading && user && !vendorProfile && !onboardingSkipped;
+  console.log('load,vendorProfile, needsOnboarding:', loading, vendorProfile, needsOnboarding); 
+  if (loading) return null;
+
   return (
     <DataCacheProvider>
       <Routes>
@@ -53,7 +52,6 @@ function App() {
           element={user ? <Navigate to="/" replace /> : <LoginPage />} 
         />
         <Route path="/staff/login" element={<StaffLoginPage />} />
-        
         {/* Protected Staff Routes */}
         <Route element={<StaffProtectedRoute />}>
           <Route path="/staff/dashboard" element={<StaffDashboard />} />
@@ -67,7 +65,6 @@ function App() {
           <Route path="/staff/profile" element={<StaffProfile />} />
           <Route path="/staff/settings" element={<StaffSettings />} />
         </Route>
-        
         {/* Vendor onboarding route */}
         <Route 
           path="/onboarding" 
@@ -81,7 +78,6 @@ function App() {
             )
           } 
         />
-        
         {/* Protected routes */}
         <Route path="/" element={
           <ProtectedRoute>
@@ -107,7 +103,6 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="reviews" element={<Reviews />} />
         </Route>
-        
         {/* 404 route */}
         <Route path="*" element={<NotFound />} />
       </Routes>
