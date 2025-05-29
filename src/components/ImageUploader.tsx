@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FileInput } from '@/components/ui/file-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge'; // Added this line
 import { X, Upload, Tags } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
@@ -133,10 +134,14 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       );
       setTagInputErrors(prev => ({ ...prev, [idToUpdate]: null }));
       // Update parent with new (empty) tags state
-      const updatedFilesForParent = selectedFiles.map(sf => 
-        sf.id === idToUpdate ? { file: sf.file, tags: [] } : { file: sf.file, tags: sf.tags }
-      );
-      memoizedOnFileSelect(updatedFilesForParent);
+      // Need to find the specific file in selectedFiles to get its file object for the callback
+      const filesForParentCallback = selectedFiles.map(sf => {
+        if (sf.id === idToUpdate) {
+          return { file: sf.file, tags: [] };
+        }
+        return { file: sf.file, tags: sf.tags };
+      });
+      memoizedOnFileSelect(filesForParentCallback);
       return;
     }
 
@@ -174,6 +179,11 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         memoizedOnFileSelect(updatedFiles.map(({ file, tags }) => ({ file, tags })));
         return updatedFiles;
       });
+    } else {
+      // If there's an error, we still need to inform the parent about the last valid state of tags for this file.
+      // The 'tags' array in 'fileToUpdate' (from selectedFiles state) still holds the last valid tags.
+      // So, when onFileSelect is called via other means (e.g. removing another file), it will reflect the last valid state.
+      // No explicit call to memoizedOnFileSelect here if there's an error, as the internal 'tags' state for this item hasn't changed.
     }
   };
 
@@ -196,7 +206,33 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         </div>
       </div>
 
-      {existingImages.length > 0 && ( /* Existing images display unchanged */ )}
+      {existingImages.length > 0 && ( /* Existing images display unchanged */ 
+         <div>
+          <h4 className="text-md font-semibold mb-3">Existing Files</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {existingImages.map((url, index) => (
+              <Card key={`existing-${index}`} className="relative group overflow-hidden rounded-lg shadow-sm">
+                <img
+                  src={url}
+                  alt={`Existing ${index + 1}`}
+                  className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                {onRemoveExisting && (
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute top-1.5 right-1.5 h-7 w-7 p-0 opacity-70 group-hover:opacity-100 transition-opacity"
+                    onClick={() => onRemoveExisting(url)}
+                    aria-label="Remove existing image"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {selectedFiles.length > 0 && (
         <div>
@@ -230,7 +266,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                     value={item.currentTagInput} // Bind to currentTagInput for live editing
                     onChange={(e) => handleTagInputChange(item.id, e.target.value)}
                     onBlur={() => validateAndCommitTags(item.id)} // Validate on blur
-                    onKeyDown={(e) => { if (e.key === 'Enter') validateAndCommitTags(item.id);}} // Validate on Enter
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validateAndCommitTags(item.id);}}} // Validate on Enter, prevent form submission
                     className={`h-9 text-xs ${tagInputErrors[item.id] ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                     disabled={uploading}
                     aria-describedby={tagInputErrors[item.id] ? `tags-error-${item.id}` : undefined}
@@ -246,14 +282,24 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                       ))}
                     </div>
                   )}
-                </div>
+                </div> {/* This closes "space-y-1.5" */}
               </Card>
             ))}
-          </div>
-        </div>
+          </div> {/* This closes "grid" */}
+        </div> {/* This closes the div wrapping the selected files section */}
       )}
 
-      {uploading && ( /* Uploading indicator unchanged */ )}
+      {uploading && ( 
+        <div className="text-center py-4">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-700"></div>
+          <p className="mt-2 text-sm text-gray-600">Uploading files...</p>
+        </div>
+      )}
+       {/* 
+        Consider adding an explicit "Upload All" or "Confirm Selection" button here 
+        if onFileSelect should only be called once with the final set of files and tags,
+        instead of on every modification. Current implementation calls onFileSelect on each change.
+      */}
     </div>
   );
 };
