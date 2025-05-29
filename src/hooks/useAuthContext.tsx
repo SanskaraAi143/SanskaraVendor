@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
@@ -18,7 +19,17 @@ export interface PricingRangeData {
   currency: string;
 }
 
-type VendorProfile = {
+export interface VendorDetailsData {
+  amenities?: string[];
+  services?: string[];
+  capacity?: number;
+  style?: string;
+  specializations?: string[];
+  policies?: string[];
+  ritual_offerings?: string[];
+}
+
+export type VendorProfile = {
   vendor_id: string;
   vendor_name: string;
   vendor_category: string;
@@ -30,6 +41,7 @@ type VendorProfile = {
   portfolio_image_urls?: string[];
   address?: AddressData;
   pricing_range?: PricingRangeData;
+  details?: VendorDetailsData;
 }
 
 type StaffProfile = {
@@ -60,6 +72,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  // ... keep existing code (state declarations and other functions)
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,7 +112,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: data.description || undefined,
           portfolio_image_urls: data.portfolio_image_urls as string[] || [],
           address: data.address as unknown as AddressData || undefined,
-          pricing_range: data.pricing_range as unknown as PricingRangeData || undefined
+          pricing_range: data.pricing_range as unknown as PricingRangeData || undefined,
+          details: data.details as unknown as VendorDetailsData || undefined
         };
         
         setVendorProfile(profile);
@@ -114,7 +128,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Fetch staff profile data
+  // ... keep existing code (fetchStaffProfile and other functions)
   const fetchStaffProfile = async (userId: string) => {
     try {
       setIsLoadingProfile(true);
@@ -213,6 +227,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ... keep existing code (signIn, signUp, signOut functions)
   const signIn = async (email: string, password: string) => {
     try {
       setIsLoading(true);

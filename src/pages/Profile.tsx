@@ -293,7 +293,8 @@ const VendorProfile: React.FC = () => {
 
     try {
       setIsSaving(true);
-      
+      // Deep clone details to ensure all nested changes are included
+      const details = JSON.parse(JSON.stringify(editedData.details || {}));
       const updatePayload = {
         vendor_name: editedData.vendor_name,
         vendor_category: editedData.vendor_category,
@@ -302,22 +303,18 @@ const VendorProfile: React.FC = () => {
         website_url: editedData.website_url,
         description: editedData.description,
         address: editedData.address as any || {},
-        details: editedData.details as any || {},
+        details: details,
         pricing_range: editedData.pricing_range as any || {},
         portfolio_image_urls: editedData.portfolio_image_urls || [],
         updated_at: new Date().toISOString()
       };
-      
       const { error } = await supabase
         .from('vendors')
-        .update(updatePayload) 
+        .update(updatePayload)
         .eq('vendor_id', venueData.vendor_id);
-
       if (error) throw error;
-
-      await refreshVendorProfile(); 
+      await refreshVendorProfile();
       setIsEditing(false);
-      
       toast({
         title: "Success",
         description: "Profile updated successfully",
