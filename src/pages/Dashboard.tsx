@@ -12,71 +12,151 @@ import { toast } from '@/components/ui/use-toast';
 import { useQuery } from '@tanstack/react-query';
 
 interface FetchedDashboardStats {
-  totalBookings: number;
-  thisMonthEvents: number;
-  avgRating: number;
-  ytdRevenue: number;
+  totalBookingsCount: number;
+  thisMonthEventsCount: number;
+  allTimeRatings: { rating: number }[];
+  ytdRevenueSum: number;
+  previousPeriodBookingsCount: number;
+  previousPeriodRatings: { rating: number }[];
+  previousYTDRevenueSum: number;
 }
 
-interface DashboardStats extends FetchedDashboardStats {
-  bookingTrend: number;
+interface DashboardStats {
+  totalBookings: number; // Renamed from totalBookingsCount for UI consistency
+  thisMonthEvents: number; // Renamed from thisMonthEventsCount
+  currentAvgRating: number;
+  previousPeriodAvgRating: number;
+  ytdRevenue: number; // Renamed from ytdRevenueSum
+  
+  // Trends will be calculated later, but historical data is now available
+  // For now, keeping the mocked trend fields as per instruction
+  bookingTrend: number; 
   ratingTrend: number;
   revenueTrend: number;
+  
+  // Raw historical data for actual trend calculation later
+  previousPeriodBookingsCount: number;
+  previousYTDRevenue: number; // Renamed from previousYTDRevenueSum
 }
+
 
 const fetchDashboardDataQuery = async (vendorId: string): Promise<FetchedDashboardStats> => {
   if (!vendorId) throw new Error("Vendor ID is required");
 
-  // Fetch total bookings
-  const { data: bookingsData, error: bookingsError } = await supabase
-    .from('bookings')
-    .select('booking_id')
-    .eq('vendor_id', vendorId);
-  if (bookingsError) throw bookingsError;
-
-  // Fetch this month's events
   const currentDate = new Date();
+
+  // 1. Current Total Bookings (Count)
+  const { count: totalBookingsCount, error: totalBookingsError } = await supabase
+    .from('bookings')
+    .select('booking_id', { count: 'exact', head: true })
+    .eq('vendor_id', vendorId);
+  if (totalBookingsError) throw totalBookingsError;
+
+  // 2. Current This Month's Events (Count)
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-  const { data: thisMonthEventsData, error: eventsError } = await supabase
+  const { count: thisMonthEventsCount, error: thisMonthEventsError } = await supabase
     .from('bookings')
-    .select('booking_id')
+    .select('booking_id', { count: 'exact', head: true })
     .eq('vendor_id', vendorId)
     .gte('event_date', firstDayOfMonth.toISOString())
     .lte('event_date', lastDayOfMonth.toISOString());
-  if (eventsError) throw eventsError;
+  if (thisMonthEventsError) throw thisMonthEventsError;
 
-  // Fetch average rating
-  const { data: reviewsData, error: reviewsError } = await supabase
+  // 3. Current All-Time Ratings (Array of ratings)
+  const { data: allTimeRatings, error: allTimeRatingsError } = await supabase
     .from('reviews')
     .select('rating')
     .eq('vendor_id', vendorId);
-  if (reviewsError) throw reviewsError;
-  const avgRating = reviewsData && reviewsData.length > 0
-    ? parseFloat((reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewsData.length).toFixed(1))
-    : 0;
+  if (allTimeRatingsError) throw allTimeRatingsError;
 
-  // Fetch YTD revenue
-  const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-  const { data: paymentsData, error: paymentsError } = await supabase
-    .from('payments')
-    .select('amount, paid_at') // Ensure paid_at is selected if needed for filtering by vendor_id in payments table
-    // .eq('vendor_id', vendorId) // This line assumes payments are directly linked to vendor_id; adjust if relation is indirect
-    .eq('payment_status', 'completed')
-    .gte('paid_at', startOfYear.toISOString());
-  if (paymentsError) throw paymentsError;
+  // 4. Current YTD Revenue (Sum)
+  const startOfCurrentYear = new Date(currentDate.getFullYear(), 0, 1);
+  // Fetch booking_ids for the vendor in the current YTD period
+  const { data: currentYearVendorBookings, error: currentYVBError } = await supabase
+    .from('bookings')
+    .select('booking_id')
+    .eq('vendor_id', vendorId)
+    .gte('event_date', startOfCurrentYear.toISOString())
+    .lte('event_date', currentDate.toISOString());
+  if (currentYVBError) throw currentYVBError;
+
+  let ytdRevenueSum = 0;
+  if (currentYearVendorBookings && currentYearVendorBookings.length > 0) {
+    const bookingIds = currentYearVendorBookings.map(b => b.booking_id);
+    const { data: ytdPayments, error: ytdPaymentsError } = await supabase
+      .from('payments')
+      .select('amount')
+      .in('booking_id', bookingIds)
+      .eq('payment_status', 'completed');
+    if (ytdPaymentsError) throw ytdPaymentsError;
+    ytdRevenueSum = ytdPayments ? ytdPayments.reduce((sum, p) => sum + p.amount, 0) : 0;
+  }
   
-  // Assuming payments are filtered by vendor via bookings or services if not directly on payments table
-  // For this example, let's assume paymentsData is already correctly filtered for the vendor
-  const ytdRevenue = paymentsData && paymentsData.length > 0
-    ? paymentsData.reduce((sum, payment) => sum + payment.amount, 0)
-    : 0;
+  // --- Historical Data for Trends ---
+
+  // 5. Previous Period Bookings (Count)
+  const endDatePrevBookings = new Date(currentDate);
+  endDatePrevBookings.setDate(currentDate.getDate() - 30);
+  const startDatePrevBookings = new Date(currentDate);
+  startDatePrevBookings.setDate(currentDate.getDate() - 60);
+  
+  const { count: previousPeriodBookingsCount, error: prevBookingsError } = await supabase
+    .from('bookings')
+    .select('booking_id', { count: 'exact', head: true })
+    .eq('vendor_id', vendorId)
+    .gte('event_date', startDatePrevBookings.toISOString())
+    .lte('event_date', endDatePrevBookings.toISOString());
+  if (prevBookingsError) throw prevBookingsError;
+
+  // 6. Previous Period Ratings (Array of ratings)
+  const endDatePrevRatings = new Date(currentDate);
+  endDatePrevRatings.setDate(currentDate.getDate() - 30);
+  const startDatePrevRatings = new Date(currentDate);
+  startDatePrevRatings.setDate(currentDate.getDate() - 60);
+
+  const { data: previousPeriodRatings, error: prevRatingsError } = await supabase
+    .from('reviews')
+    .select('rating')
+    .eq('vendor_id', vendorId)
+    .gte('created_at', startDatePrevRatings.toISOString())
+    .lte('created_at', endDatePrevRatings.toISOString());
+  if (prevRatingsError) throw prevRatingsError;
+
+  // 7. Previous YTD Revenue (Sum)
+  const prevYear = currentDate.getFullYear() - 1;
+  const startDatePrevYTD = new Date(prevYear, 0, 1); // Jan 1st of last year
+  const endDatePrevYTD = new Date(prevYear, currentDate.getMonth(), currentDate.getDate()); // Current month/day of last year
+
+  // Fetch booking_ids for the vendor in the previous YTD period
+   const { data: prevYearVendorBookings, error: prevYVBError } = await supabase
+    .from('bookings')
+    .select('booking_id')
+    .eq('vendor_id', vendorId)
+    .gte('event_date', startDatePrevYTD.toISOString())
+    .lte('event_date', endDatePrevYTD.toISOString());
+  if (prevYVBError) throw prevYVBError;
+
+  let previousYTDRevenueSum = 0;
+  if (prevYearVendorBookings && prevYearVendorBookings.length > 0) {
+    const prevBookingIds = prevYearVendorBookings.map(b => b.booking_id);
+    const { data: prevYtdPayments, error: prevYtdPaymentsError } = await supabase
+      .from('payments')
+      .select('amount')
+      .in('booking_id', prevBookingIds)
+      .eq('payment_status', 'completed');
+    if (prevYtdPaymentsError) throw prevYtdPaymentsError;
+    previousYTDRevenueSum = prevYtdPayments ? prevYtdPayments.reduce((sum, p) => sum + p.amount, 0) : 0;
+  }
 
   return {
-    totalBookings: bookingsData?.length || 0,
-    thisMonthEvents: thisMonthEventsData?.length || 0,
-    avgRating: avgRating,
-    ytdRevenue: ytdRevenue,
+    totalBookingsCount: totalBookingsCount || 0,
+    thisMonthEventsCount: thisMonthEventsCount || 0,
+    allTimeRatings: allTimeRatings || [],
+    ytdRevenueSum: ytdRevenueSum,
+    previousPeriodBookingsCount: previousPeriodBookingsCount || 0,
+    previousPeriodRatings: previousPeriodRatings || [],
+    previousYTDRevenueSum: previousYTDRevenueSum,
   };
 };
 
@@ -110,11 +190,51 @@ const Dashboard: React.FC = () => {
   // Calculate trends and combine with fetched stats
   const stats: DashboardStats | null = React.useMemo(() => {
     if (!statsData) return null;
+
+    const calculateAverage = (ratings: { rating: number }[] | undefined) => {
+      if (!ratings || ratings.length === 0) return 0;
+      const sum = ratings.reduce((acc, review) => acc + review.rating, 0);
+      return parseFloat((sum / ratings.length).toFixed(1));
+    };
+
+    const currentAvgRating = calculateAverage(statsData.allTimeRatings);
+    const previousPeriodAvgRating = calculateAverage(statsData.previousPeriodRatings);
+
+    // Booking Trend Calculation
+    let bookingTrend = 0;
+    if (statsData.previousPeriodBookingsCount > 0) {
+      bookingTrend = ((statsData.totalBookingsCount - statsData.previousPeriodBookingsCount) / statsData.previousPeriodBookingsCount) * 100;
+    } else if (statsData.totalBookingsCount > 0) {
+      bookingTrend = 100; // Growth from zero
+    }
+    // If both totalBookingsCount and previousPeriodBookingsCount are 0, trend remains 0.
+
+    // Rating Trend Calculation
+    const ratingTrend = currentAvgRating - previousPeriodAvgRating;
+
+    // Revenue Trend Calculation
+    let revenueTrend = 0;
+    if (statsData.previousYTDRevenueSum > 0) {
+      revenueTrend = ((statsData.ytdRevenueSum - statsData.previousYTDRevenueSum) / statsData.previousYTDRevenueSum) * 100;
+    } else if (statsData.ytdRevenueSum > 0) {
+      revenueTrend = 100; // Growth from zero
+    }
+    // If both ytdRevenueSum and previousYTDRevenueSum are 0, trend remains 0.
+
     return {
-      ...statsData,
-      bookingTrend: statsData.totalBookings > 0 ? 12 : 0, // Mocked trend
-      ratingTrend: statsData.avgRating > 0 ? 0.3 : 0, // Mocked trend
-      revenueTrend: statsData.ytdRevenue > 0 ? 18 : 0, // Mocked trend
+      totalBookings: statsData.totalBookingsCount,
+      thisMonthEvents: statsData.thisMonthEventsCount,
+      currentAvgRating: currentAvgRating,
+      previousPeriodAvgRating: previousPeriodAvgRating,
+      ytdRevenue: statsData.ytdRevenueSum,
+      
+      bookingTrend: parseFloat(bookingTrend.toFixed(1)),
+      ratingTrend: parseFloat(ratingTrend.toFixed(1)),
+      revenueTrend: parseFloat(revenueTrend.toFixed(1)),
+
+      // Pass through raw historical data if needed elsewhere, though trends are now calculated
+      previousPeriodBookingsCount: statsData.previousPeriodBookingsCount,
+      previousYTDRevenue: statsData.previousYTDRevenueSum,
     };
   }, [statsData]);
   
@@ -190,7 +310,11 @@ const Dashboard: React.FC = () => {
           title="Total Bookings"
           value={stats.totalBookings.toString()}
           icon={<BookOpen className="h-5 w-5" />}
-          trend={stats.totalBookings > 0 ? { value: stats.bookingTrend, isPositive: true } : undefined}
+          trend={
+            typeof stats.bookingTrend === 'number' && !isNaN(stats.bookingTrend)
+              ? { value: stats.bookingTrend, isPositive: stats.bookingTrend > 0 }
+              : undefined
+          }
           color="sanskara-red"
         />
         <DashboardCard 
@@ -201,16 +325,24 @@ const Dashboard: React.FC = () => {
         />
         <DashboardCard 
           title="Average Rating"
-          value={stats.avgRating > 0 ? stats.avgRating.toString() : "N/A"}
+          value={stats.currentAvgRating > 0 ? stats.currentAvgRating.toString() : "N/A"}
           icon={<Star className="h-5 w-5" />}
-          trend={stats.avgRating > 0 ? { value: stats.ratingTrend, isPositive: true } : undefined}
+          trend={
+            typeof stats.ratingTrend === 'number' && !isNaN(stats.ratingTrend)
+              ? { value: stats.ratingTrend, isPositive: stats.ratingTrend > 0 }
+              : undefined
+          }
           color="sanskara-amber"
         />
         <DashboardCard 
           title="Revenue (YTD)"
           value={formatRevenue(stats.ytdRevenue)}
           icon={<DollarSign className="h-5 w-5" />}
-          trend={stats.ytdRevenue > 0 ? { value: stats.revenueTrend, isPositive: true } : undefined}
+          trend={
+            typeof stats.revenueTrend === 'number' && !isNaN(stats.revenueTrend)
+              ? { value: stats.revenueTrend, isPositive: stats.revenueTrend > 0 }
+              : undefined
+          }
           color="sanskara-green"
         />
       </div>
