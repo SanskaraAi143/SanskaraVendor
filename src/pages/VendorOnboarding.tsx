@@ -11,7 +11,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { FileInput } from '@/components/ui/file-input';
+// import { FileInput } from '@/components/ui/file-input'; // Original import
+import ImageUploader, { SelectedFileWithTags } from '@/components/ImageUploader'; // Updated import
 import { Loader2, Plus, Minus, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface HallDetails {
@@ -175,9 +176,9 @@ const VendorOnboarding: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // File upload state
-  const [venuePhotos, setVenuePhotos] = useState<File[]>([]);
-  const [sampleMenus, setSampleMenus] = useState<File[]>([]);
-  const [pastEventPhotos, setPastEventPhotos] = useState<File[]>([]);
+  const [venuePhotos, setVenuePhotos] = useState<SelectedFileWithTags[]>([]); // Updated type
+  const [sampleMenus, setSampleMenus] = useState<File[]>([]); // Keep as File[] for now
+  const [pastEventPhotos, setPastEventPhotos] = useState<File[]>([]); // Keep as File[] for now
   
   const [formData, setFormData] = useState<VenueFormData>({
     // Basic Information
@@ -352,7 +353,26 @@ const VendorOnboarding: React.FC = () => {
       setIsSubmitting(true);
 
       // Upload files
-      const venuePhotoUrls = venuePhotos.length > 0 ? await uploadFiles(venuePhotos, 'venue-photos') : [];
+      const venuePhotoFiles = venuePhotos.map(vp => vp.file);
+      const venuePhotoUrls = venuePhotoFiles.length > 0 ? await uploadFiles(venuePhotoFiles, 'venue-photos') : [];
+      
+      // Map URLs back to tags and construct JSONB for portfolio_image_urls
+      const portfolioImageUrlsJson: Record<string, string[]> = {};
+      if (venuePhotoUrls.length > 0) {
+        venuePhotos.forEach((photoEntry, index) => {
+          const url = venuePhotoUrls[index];
+          const activeTags = photoEntry.tags.length > 0 ? photoEntry.tags : ['untagged'];
+          for (const tag of activeTags) {
+            if (!portfolioImageUrlsJson[tag]) {
+              portfolioImageUrlsJson[tag] = [];
+            }
+            if (!portfolioImageUrlsJson[tag].includes(url)) { // Avoid duplicate URLs for the same tag
+                portfolioImageUrlsJson[tag].push(url);
+            }
+          }
+        });
+      }
+
       const sampleMenuUrls = sampleMenus.length > 0 ? await uploadFiles(sampleMenus, 'sample-menus') : [];
       const pastEventPhotoUrls = pastEventPhotos.length > 0 ? await uploadFiles(pastEventPhotos, 'past-events') : [];
 
@@ -382,7 +402,7 @@ const VendorOnboarding: React.FC = () => {
           currency: 'INR'
         },
         description: formData.uniqueFeatures,
-        portfolio_image_urls: venuePhotoUrls,
+        portfolio_image_urls: Object.keys(portfolioImageUrlsJson).length > 0 ? portfolioImageUrlsJson : null, // Updated
         details: {
           establishmentYear: formData.yearsInOperation,
           contactPerson: formData.contactPersonName,
@@ -494,12 +514,12 @@ const VendorOnboarding: React.FC = () => {
           parseInt(hall.seatingCapacity.theatre) || 0,
           parseInt(hall.seatingCapacity.roundTable) || 0,
           parseInt(hall.seatingCapacity.floating) || 0
-        ),
+        ) || null, // Ensure null if all are 0
         max_capacity: Math.max(
           parseInt(hall.seatingCapacity.theatre) || 0,
           parseInt(hall.seatingCapacity.roundTable) || 0,
           parseInt(hall.seatingCapacity.floating) || 0
-        ),
+        ) || null, // Ensure null if all are 0
         customizability_details: JSON.stringify({
           type: hall.type,
           area: hall.area,
@@ -569,7 +589,7 @@ const VendorOnboarding: React.FC = () => {
 
   const handlePrevious = () => {
     if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
+      setCurrentStep(prev => prev + 1);
     }
   };
 
@@ -658,14 +678,18 @@ const VendorOnboarding: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                <Label>Upload High-Quality Photos & Videos of Venue *</Label>
-                <FileInput
-                  multiple
+                <Label>Upload High-Quality Photos & Videos of Venue (with Tags)*</Label>
+                <ImageUploader
+                  onFileSelect={setVenuePhotos} // Directly use setVenuePhotos
                   accept="image/*,video/*"
-                  onFileChange={(files) => setVenuePhotos(Array.from(files || []))}
+                  title="Select Venue Photos & Videos"
+                  maxFiles={20} // Example max files
                 />
+                {/* Displaying selected files with tags can be complex here, 
+                    ImageUploader component handles its own preview. 
+                    We just need to know the count if desired. */}
                 {venuePhotos.length > 0 && (
-                  <p className="text-sm text-gray-600">{venuePhotos.length} files selected</p>
+                  <p className="text-sm text-gray-600 mt-2">{venuePhotos.length} files selected for venue portfolio.</p>
                 )}
               </div>
             </div>
@@ -1269,10 +1293,12 @@ const VendorOnboarding: React.FC = () => {
                       
                       <div className="space-y-2">
                         <Label>Upload Sample Menus (PDF/Images)</Label>
-                        <FileInput
-                          multiple
-                          accept=".pdf,image/*"
-                          onFileChange={(files) => setSampleMenus(Array.from(files || []))}
+                        <Input 
+                            type="file" 
+                            multiple 
+                            accept=".pdf,image/*" 
+                            onChange={(e) => setSampleMenus(Array.from(e.target.files || []))}
+                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-sanskara-redlight file:text-sanskara-red hover:file:bg-sanskara-red/20"
                         />
                         {sampleMenus.length > 0 && (
                           <p className="text-sm text-gray-600">{sampleMenus.length} files selected</p>
@@ -1871,10 +1897,12 @@ const VendorOnboarding: React.FC = () => {
                   
                   <div className="space-y-2">
                     <Label>Upload Photos of Past Events with Themes/Setup Styles</Label>
-                    <FileInput
-                      multiple
-                      accept="image/*"
-                      onFileChange={(files) => setPastEventPhotos(Array.from(files || []))}
+                    <Input 
+                        type="file" 
+                        multiple 
+                        accept="image/*" 
+                        onChange={(e) => setPastEventPhotos(Array.from(e.target.files || []))}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-sanskara-redlight file:text-sanskara-red hover:file:bg-sanskara-red/20"
                     />
                     {pastEventPhotos.length > 0 && (
                       <p className="text-sm text-gray-600">{pastEventPhotos.length} files selected</p>
@@ -1937,9 +1965,26 @@ const VendorOnboarding: React.FC = () => {
     }
   };
 
-  if (!user) {
-    return null;
+  if (!user && !loading) { // Redirect if not logged in and not loading
+     useEffect(() => {
+      navigate('/auth/login?returnTo=/vendor-onboarding');
+    }, [navigate]);
+    return <div className="text-center p-8">Redirecting to login...</div>;
   }
+  
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-sanskara-red" /></div>;
+  }
+
+  // Redirect if already onboarded (and not currently submitting this form)
+  if (vendorProfile && vendorProfile.vendor_id && !isSubmitting) {
+    useEffect(() => {
+        toast({ title: "Already Onboarded", description: "You have already completed the onboarding."});
+        navigate('/');
+    }, [navigate]);
+    return null; 
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-muted flex flex-col items-center justify-center p-4">
@@ -1995,7 +2040,7 @@ const VendorOnboarding: React.FC = () => {
           </CardContent>
 
           {/* Navigation Buttons */}
-          <div className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-col gap-2 mb-4 p-6 pt-0">
             <div className="flex justify-between gap-2">
               <Button
                 type="button"
@@ -2003,15 +2048,22 @@ const VendorOnboarding: React.FC = () => {
                 onClick={handlePrevious}
                 disabled={currentStep === 1 || isSubmitting}
               >
-                Previous
+                <ArrowLeft className="h-4 w-4 mr-2" /> Previous
               </Button>
               <Button
                 type="button"
                 variant="default"
                 onClick={handleNext}
                 disabled={isSubmitting}
+                className="bg-sanskara-red hover:bg-sanskara-red/90"
               >
-                {currentStep < steps.length ? 'Next' : isSubmitting ? 'Submitting...' : 'Finish'}
+                {currentStep < steps.length ? (
+                  <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
+                ) : isSubmitting ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</>
+                ) : (
+                  'Finish & Submit'
+                )}
               </Button>
             </div>
             <Button

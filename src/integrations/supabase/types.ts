@@ -535,7 +535,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           generic_attributes: Json | null
-          image_urls: string[] | null
+          image_urls: Record<string, string[]> | null
           portfolio_id: string
           portfolio_type: string
           staff_id: string
@@ -548,7 +548,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           generic_attributes?: Json | null
-          image_urls?: string[] | null
+          image_urls?: Record<string, string[]> | null
           portfolio_id?: string
           portfolio_type: string
           staff_id: string
@@ -561,7 +561,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           generic_attributes?: Json | null
-          image_urls?: string[] | null
+          image_urls?: Record<string, string[]> | null
           portfolio_id?: string
           portfolio_type?: string
           staff_id?: string
@@ -1181,7 +1181,7 @@ export type Database = {
           is_active: boolean | null
           is_verified: boolean | null
           phone_number: string | null
-          portfolio_image_urls: string[] | null
+          portfolio_image_urls: Record<string, string[]> | null
           pricing_range: Json | null
           rating: number | null
           supabase_auth_uid: string | null
@@ -1201,7 +1201,7 @@ export type Database = {
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Record<string, string[]> | null
           pricing_range?: Json | null
           rating?: number | null
           supabase_auth_uid?: string | null
@@ -1221,7 +1221,7 @@ export type Database = {
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Record<string, string[]> | null
           pricing_range?: Json | null
           rating?: number | null
           supabase_auth_uid?: string | null
