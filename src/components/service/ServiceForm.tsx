@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react'; // Removed useState
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 const serviceSchema = z.object({
   service_name: z.string().min(2, 'Service name is required'),
@@ -33,6 +34,41 @@ interface ServiceFormProps {
   initialData?: Partial<ServiceFormValues>;
 }
 
+interface SaveServiceParams {
+  serviceDetails: ServiceFormValues;
+  vendorId: string;
+  existingServiceId?: string;
+}
+
+const saveServiceMutationFn = async ({ serviceDetails, vendorId, existingServiceId }: SaveServiceParams) => {
+  const dataToSave = {
+    ...serviceDetails,
+    vendor_id: vendorId,
+  };
+
+  let result;
+  if (existingServiceId) {
+    // Update existing service
+    result = await supabase
+      .from('vendor_services')
+      .update(dataToSave)
+      .eq('service_id', existingServiceId)
+      .select() // Important to select to get the updated data or confirm success
+      .single(); // Assuming you expect one record to be updated
+  } else {
+    // Insert new service
+    result = await supabase
+      .from('vendor_services')
+      .insert(dataToSave)
+      .select() // Important to select to get the inserted data
+      .single(); // Assuming you expect one record to be inserted
+  }
+  
+  const { error, data } = result;
+  if (error) throw error;
+  return data; // Return the created/updated service data
+};
+
 const serviceCategories = [
   "Venue", "Decor", "Catering", "Photography", "Videography", 
   "Makeup", "Clothing", "Music", "Transportation", "Other"
@@ -43,7 +79,7 @@ const priceUnits = [
 ];
 
 const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initialData }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
   const { vendorProfile } = useAuth();
   const navigate = useNavigate();
 
@@ -63,67 +99,49 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
     defaultValues
   });
 
-  const onSubmit = async (data: ServiceFormValues) => {
+  const saveServiceMutation = useMutation(
+    saveServiceMutationFn,
+    {
+      onSuccess: (_data, variables) => { // _data is the returned service from mutationFn
+        toast({
+          title: "Success",
+          description: variables.existingServiceId ? "Service updated successfully" : "Service added successfully",
+        });
+        // Invalidate queries to refetch services list on the main services page
+        queryClient.invalidateQueries(['services', vendorProfile?.vendor_id]);
+        
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          navigate('/services');
+        }
+      },
+      onError: (error: Error) => {
+        console.error("Error saving service:", error); // Keep console error for debugging
+        toast({
+          title: "Error",
+          description: error.message || "Failed to save service",
+          variant: "destructive",
+        });
+      },
+    }
+  );
+
+  const onSubmit = (formData: ServiceFormValues) => {
     if (!vendorProfile?.vendor_id) {
       toast({
         title: "Error",
-        description: "Vendor profile not found",
+        description: "Vendor profile not found. Cannot save service.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const serviceData = {
-        ...data,
-        vendor_id: vendorProfile.vendor_id,
-        // Ensure all required fields have values
-        service_name: data.service_name,
-        service_category: data.service_category,
-      };
-      
-      let result;
-      if (serviceId) {
-        // Update existing service
-        result = await supabase
-          .from('vendor_services')
-          .update(serviceData)
-          .eq('service_id', serviceId);
-      } else {
-        // Insert new service
-        result = await supabase
-          .from('vendor_services')
-          .insert(serviceData);
-      }
-      
-      const { error } = result;
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Success",
-        description: serviceId ? "Service updated successfully" : "Service added successfully",
-      });
-      
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        navigate('/services');
-      }
-
-    } catch (error: any) {
-      console.error("Error saving service:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save service",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    saveServiceMutation.mutate({
+      serviceDetails: formData,
+      vendorId: vendorProfile.vendor_id,
+      existingServiceId: serviceId 
+    });
   };
 
   return (
@@ -292,13 +310,13 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
           </Button>
           <Button 
             type="submit"
-            disabled={isSubmitting}
+            disabled={saveServiceMutation.isLoading}
             className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
           >
-            {isSubmitting ? (
+            {saveServiceMutation.isLoading ? (
               <>
                 <Loader className="mr-2 h-4 w-4 animate-spin" />
-                {serviceId ? "Updating" : "Creating"}
+                {serviceId ? "Updating..." : "Creating..."}
               </>
             ) : (
               serviceId ? "Update Service" : "Add Service"

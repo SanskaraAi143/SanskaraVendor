@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // Keep useEffect for error handling
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import ServiceStaffAssignment from '@/components/vendor/ServiceStaffAssignment';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -29,75 +30,81 @@ interface ServiceType {
   base_price: number;
   price_unit: string;
   is_negotiable: boolean;
+  // Ensure other fields used in the component are here, e.g., is_active if needed directly
 }
 
+const getVendorServices = async (vendorId: string): Promise<ServiceType[]> => {
+  if (!vendorId) throw new Error("Vendor ID is required to fetch services.");
+  const { data, error } = await supabase
+    .from('vendor_services')
+    .select('*')
+    .eq('vendor_id', vendorId)
+    .eq('is_active', true); // Assuming you still only want active services
+  if (error) throw error;
+  return data || [];
+};
+
+const deleteVendorServiceMutationFn = async (serviceId: string) => {
+  if (!serviceId) throw new Error("Service ID is required for deletion.");
+  const { error } = await supabase
+    .from('vendor_services')
+    .update({ is_active: false }) // Soft delete
+    .eq('service_id', serviceId);
+  if (error) throw error;
+  return serviceId; 
+};
+
 const Services: React.FC = () => {
-  const [services, setServices] = useState<ServiceType[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   const [selectedServiceForStaff, setSelectedServiceForStaff] = useState<string | null>(null);
   const { vendorProfile } = useAuth();
   const navigate = useNavigate();
-  
-  const fetchServices = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('vendor_services')
-        .select('*')
-        .eq('vendor_id', vendorProfile.vendor_id)
-        .eq('is_active', true);
-        
-      if (error) throw error;
-      
-      console.log("Fetched services:", data);
-      setServices(data || []);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      toast({
-        title: "Error",
-        description: "Could not load your services",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+
+  const { 
+    data: services, 
+    isLoading, 
+    isError, 
+    error 
+  } = useQuery<ServiceType[], Error>(
+    ['services', vendorProfile?.vendor_id],
+    () => getVendorServices(vendorProfile!.vendor_id!),
+    {
+      enabled: !!vendorProfile?.vendor_id,
     }
-  };
-  
+  );
+
   useEffect(() => {
-    fetchServices();
-  }, [vendorProfile]);
-  
-  const handleDeleteService = async () => {
-    if (!serviceToDelete) return;
-    
-    try {
-      // Instead of actually deleting, we set is_active to false
-      const { error } = await supabase
-        .from('vendor_services')
-        .update({ is_active: false })
-        .eq('service_id', serviceToDelete);
-        
-      if (error) throw error;
-      
-      setServices(services.filter(service => service.service_id !== serviceToDelete));
+    if (isError && error) {
       toast({
-        title: "Service deleted",
-        description: "The service has been successfully removed",
+        title: 'Error',
+        description: error.message || 'Could not load your services',
+        variant: 'destructive',
       });
-    } catch (error) {
-      console.error('Error deleting service:', error);
-      toast({
-        title: "Error",
-        description: "Could not delete the service",
-        variant: "destructive",
-      });
-    } finally {
-      setServiceToDelete(null);
     }
-  };
+  }, [isError, error]);
+
+  const deleteServiceMutation = useMutation(
+    deleteVendorServiceMutationFn,
+    {
+      onSuccess: () => {
+        toast({
+          title: "Service deleted",
+          description: "The service has been successfully removed",
+        });
+        queryClient.invalidateQueries(['services', vendorProfile?.vendor_id]);
+        setServiceToDelete(null); // Close the dialog
+      },
+      onError: (err: Error) => {
+        toast({
+          title: "Error",
+          description: err.message || "Could not delete the service",
+          variant: "destructive",
+        });
+        setServiceToDelete(null); // Close the dialog
+      },
+    }
+  );
   
   const formatPrice = (price: number, unit: string | null) => {
     if (!price) return "N/A";
@@ -122,12 +129,28 @@ const Services: React.FC = () => {
         </Button>
       </div>
       
-      {isLoading ? (
+      {isLoading && !isError ? ( // Show loading indicator only if loading and no error
         <div className="flex justify-center items-center py-20">
           <div className="h-10 w-10 rounded-full border-4 border-sanskara-red/20 border-t-sanskara-red animate-spin"></div>
           <p className="ml-3 text-sanskara-maroon">Loading services...</p>
         </div>
-      ) : services.length === 0 ? (
+      ) : isError ? ( // Show error message if there's an error
+        <Card className="border-dashed border-2 border-red-300">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+            <h3 className="text-xl font-medium mb-2 text-red-600">Failed to Load Services</h3>
+            <p className="text-muted-foreground text-center mb-6 max-w-md">
+              {error?.message || "An unexpected error occurred. Please try again later."}
+            </p>
+            <Button 
+              variant="outline"
+              onClick={() => queryClient.refetchQueries(['services', vendorProfile?.vendor_id])}
+            >
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : services && services.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="rounded-full bg-sanskara-amber/20 p-3 mb-4">
@@ -149,7 +172,7 @@ const Services: React.FC = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {services.map((service) => (
+          {services && services.map((service) => ( // Added services && to ensure services is defined
             <Card key={service.service_id} className="overflow-hidden">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
@@ -209,9 +232,14 @@ const Services: React.FC = () => {
                         <AlertDialogCancel onClick={() => setServiceToDelete(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-red-500 hover:bg-red-600"
-                          onClick={handleDeleteService}
+                          onClick={() => {
+                            if (serviceToDelete) {
+                              deleteServiceMutation.mutate(serviceToDelete);
+                            }
+                          }}
+                          disabled={deleteServiceMutation.isLoading}
                         >
-                          Delete
+                          {deleteServiceMutation.isLoading ? 'Deleting...' : 'Delete'}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -247,6 +275,12 @@ const Services: React.FC = () => {
               </CardFooter>
             </Card>
           ))}
+        </div>
+      )}
+      {/* Fallback for when services is undefined and not loading (e.g. vendorProfile not loaded yet) */}
+      {!isLoading && !isError && !services && (
+         <div className="flex justify-center items-center py-20">
+          <p className="text-muted-foreground">Waiting for vendor information...</p>
         </div>
       )}
     </div>
