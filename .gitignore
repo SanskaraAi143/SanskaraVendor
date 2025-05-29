@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 tmp
+
+# Playwright output directories
+test-results/
+playwright-report/
