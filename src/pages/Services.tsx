@@ -1,13 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Edit, Trash2, Eye, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { PlusCircle, Edit, Trash2, Users, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import ServiceStaffAssignment from '@/components/vendor/ServiceStaffAssignment';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,7 @@ const Services: React.FC = () => {
   const [services, setServices] = useState<ServiceType[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
+  const [selectedServiceForStaff, setSelectedServiceForStaff] = useState<string | null>(null);
   const { vendorProfile } = useAuth();
   const navigate = useNavigate();
   
@@ -171,48 +173,77 @@ const Services: React.FC = () => {
                   </Badge>
                 )}
               </CardContent>
-              <CardFooter className="border-t pt-4 flex justify-between">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 mr-2"
-                  onClick={() => navigate(`/services/edit/${service.service_id}`)}
-                >
-                  <Edit className="h-4 w-4 mr-1" /> Edit
-                </Button>
+              <CardFooter className="border-t pt-4 flex flex-col gap-2">
+                <div className="flex w-full gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => navigate(`/services/edit/${service.service_id}`)}
+                  >
+                    <Edit className="h-4 w-4 mr-1" /> Edit
+                  </Button>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => setServiceToDelete(service.service_id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" /> Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center">
+                          <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                          Delete Service
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this service? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setServiceToDelete(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-red-500 hover:bg-red-600"
+                          onClick={handleDeleteService}
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
                 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                <Dialog 
+                  open={selectedServiceForStaff === service.service_id} 
+                  onOpenChange={(open) => setSelectedServiceForStaff(open ? service.service_id : null)}
+                >
+                  <DialogTrigger asChild>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
-                      onClick={() => setServiceToDelete(service.service_id)}
+                      className="w-full"
+                      onClick={() => setSelectedServiceForStaff(service.service_id)}
                     >
-                      <Trash2 className="h-4 w-4 mr-1" /> Delete
+                      <Users className="h-4 w-4 mr-1" /> Assign Staff
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="flex items-center">
-                        <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
-                        Delete Service
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete this service? This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel onClick={() => setServiceToDelete(null)}>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        className="bg-red-500 hover:bg-red-600"
-                        onClick={handleDeleteService}
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Assign Staff to {service.service_name}</DialogTitle>
+                    </DialogHeader>
+                    {selectedServiceForStaff === service.service_id && vendorProfile?.vendor_id && (
+                      <ServiceStaffAssignment 
+                        serviceId={service.service_id} 
+                        vendorId={vendorProfile.vendor_id}
+                      />
+                    )}
+                  </DialogContent>
+                </Dialog>
               </CardFooter>
             </Card>
           ))}

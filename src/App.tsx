@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -21,17 +20,29 @@ import Reviews from './pages/Reviews';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
 import VendorOnboarding from './pages/VendorOnboarding';
+import StaffLoginPage from './pages/StaffLoginPage';
+import StaffDashboard from './pages/StaffDashboard';
+import StaffProtectedRoute from './components/StaffProtectedRoute';
+import StaffOnboarding from './pages/StaffOnboarding';
+import StaffResetPassword from './pages/StaffResetPassword';
+import StaffTasks from './pages/StaffTasks';
+import StaffBookings from './pages/StaffBookings';
+import StaffAvailabilityPage from './pages/StaffAvailabilityPage';
+import StaffVendorServicesPage from './pages/StaffVendorServicesPage';
+import StaffNotifications from './pages/StaffNotifications';
+import StaffProfile from './pages/StaffProfile';
+import StaffSettings from './pages/StaffSettings';
 
 function App() {
-  const { user, vendorProfile } = useAuth();
-  
-  // Check if vendor needs to complete onboarding
-  const needsOnboarding = user && 
-    (!vendorProfile || 
-     !vendorProfile.vendor_name || 
-     !vendorProfile.vendor_category || 
-     !vendorProfile.description);
-  
+  const { user, vendorProfile, isLoading, isLoadingProfile } = useAuth();
+  const loading = isLoading || isLoadingProfile;
+
+  // Onboarding logic: Only require onboarding if vendorProfile is null and onboarding has not been skipped
+  const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+  const needsOnboarding = !loading && user && !vendorProfile && !onboardingSkipped;
+  console.log('load,vendorProfile, needsOnboarding:', loading, vendorProfile, needsOnboarding); 
+  if (loading) return null;
+
   return (
     <DataCacheProvider>
       <Routes>
@@ -40,7 +51,20 @@ function App() {
           path="/login" 
           element={user ? <Navigate to="/" replace /> : <LoginPage />} 
         />
-        
+        <Route path="/staff/login" element={<StaffLoginPage />} />
+        {/* Protected Staff Routes */}
+        <Route element={<StaffProtectedRoute />}>
+          <Route path="/staff/dashboard" element={<StaffDashboard />} />
+          <Route path="/staff/onboarding" element={<StaffOnboarding />} />
+          <Route path="/staff/reset-password" element={<StaffResetPassword />} />
+          <Route path="/staff/tasks" element={<StaffTasks />} />
+          <Route path="/staff/bookings" element={<StaffBookings />} />
+          <Route path="/staff/availability" element={<StaffAvailabilityPage />} />
+          <Route path="/staff/services" element={<StaffVendorServicesPage />} />
+          <Route path="/staff/notifications" element={<StaffNotifications />} />
+          <Route path="/staff/profile" element={<StaffProfile />} />
+          <Route path="/staff/settings" element={<StaffSettings />} />
+        </Route>
         {/* Vendor onboarding route */}
         <Route 
           path="/onboarding" 
@@ -54,7 +78,6 @@ function App() {
             )
           } 
         />
-        
         {/* Protected routes */}
         <Route path="/" element={
           <ProtectedRoute>
@@ -80,7 +103,6 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="reviews" element={<Reviews />} />
         </Route>
-        
         {/* 404 route */}
         <Route path="*" element={<NotFound />} />
       </Routes>

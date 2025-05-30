@@ -41,7 +41,7 @@ const VendorHeader: React.FC = () => {
       <div className="flex items-center justify-between h-full px-4">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="text-sanskara-maroon hover:text-sanskara-red transition-colors" />
-          <span className="text-xl font-semibold hidden sm:block gradient-text">Vendor Dashboard</span>
+          <span className="text-xl font-semibold hidden sm:block gradient-text">Sanskara AI Dashboard</span>
         </div>
         
         <div className="flex items-center gap-4">
