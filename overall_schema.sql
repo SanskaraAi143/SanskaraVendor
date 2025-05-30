@@ -545,5 +545,3 @@ EXECUTE FUNCTION trigger_set_timestamp();
 -- DROP TABLE IF EXISTS public.notifications CASCADE;
 -- DROP TABLE IF EXISTS public.task_templates CASCADE;
 
-ALTER TABLE users
-ADD COLUMN user_type VARCHAR(50) NOT NULL DEFAULT 'customer';

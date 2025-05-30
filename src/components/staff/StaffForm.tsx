@@ -57,15 +57,12 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
     const { data, error } = await supabase
       .from('users')
       .select('supabase_auth_uid')
-      .eq('email', email)
-      .single();
+      .eq('email', email);
 
-    if (error && error.message === 'No rows found') {
-      return null; // User does not exist
-    } else if (error) {
+    if (error) {
       throw new Error('Error checking for existing user: ' + error.message);
     }
-    return data?.supabase_auth_uid || null; // Return user's auth_uid if found
+    return data && data.length > 0 ? data[0].supabase_auth_uid : null; // Return user's auth_uid if found
   };
 
   const createStaffFromExistingUser = async (existingUserId: string) => {
@@ -198,10 +195,8 @@ const StaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
         .from('vendor_staff')
         .select('staff_id')
         .eq('vendor_id', vendorProfile.vendor_id)
-        .eq('email', formData.email)
-        .single();
-
-      if (!existingStaffError && existingStaff) {
+        .eq('email', formData.email);
+      if (!existingStaffError && existingStaff && existingStaff.length > 0) {
         toast({
           title: 'Staff Already Exists',
           description: 'This email is already registered as staff for your vendor.',
