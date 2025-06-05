@@ -535,40 +535,40 @@ export type Database = {
           created_at: string | null
           description: string | null
           generic_attributes: Json | null
-          image_urls: string[] | null
+          image_urls: Json | null
           portfolio_id: string
           portfolio_type: string
           staff_id: string
           title: string | null
           updated_at: string | null
           vendor_id: string
-          video_urls: string[] | null
+          video_urls: Json | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
           generic_attributes?: Json | null
-          image_urls?: string[] | null
+          image_urls?: Json | null
           portfolio_id?: string
           portfolio_type: string
           staff_id: string
           title?: string | null
           updated_at?: string | null
           vendor_id: string
-          video_urls?: string[] | null
+          video_urls?: Json | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
           generic_attributes?: Json | null
-          image_urls?: string[] | null
+          image_urls?: Json | null
           portfolio_id?: string
           portfolio_type?: string
           staff_id?: string
           title?: string | null
           updated_at?: string | null
           vendor_id?: string
-          video_urls?: string[] | null
+          video_urls?: Json | null
         }
         Relationships: [
           {
@@ -884,7 +884,7 @@ export type Database = {
           is_negotiable: boolean | null
           max_capacity: number | null
           min_capacity: number | null
-          portfolio_image_urls: string[] | null
+          portfolio_image_urls: Json | null
           price_unit: string | null
           responsible_staff_id: string | null
           service_category: string
@@ -903,7 +903,7 @@ export type Database = {
           is_negotiable?: boolean | null
           max_capacity?: number | null
           min_capacity?: number | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Json | null
           price_unit?: string | null
           responsible_staff_id?: string | null
           service_category: string
@@ -922,7 +922,7 @@ export type Database = {
           is_negotiable?: boolean | null
           max_capacity?: number | null
           min_capacity?: number | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Json | null
           price_unit?: string | null
           responsible_staff_id?: string | null
           service_category?: string
@@ -1181,7 +1181,7 @@ export type Database = {
           is_active: boolean | null
           is_verified: boolean | null
           phone_number: string | null
-          portfolio_image_urls: string[] | null
+          portfolio_image_urls: Json | null
           pricing_range: Json | null
           rating: number | null
           supabase_auth_uid: string | null
@@ -1201,7 +1201,7 @@ export type Database = {
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Json | null
           pricing_range?: Json | null
           rating?: number | null
           supabase_auth_uid?: string | null
@@ -1221,7 +1221,7 @@ export type Database = {
           is_active?: boolean | null
           is_verified?: boolean | null
           phone_number?: string | null
-          portfolio_image_urls?: string[] | null
+          portfolio_image_urls?: Json | null
           pricing_range?: Json | null
           rating?: number | null
           supabase_auth_uid?: string | null

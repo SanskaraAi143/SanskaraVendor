@@ -1,14 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { PlusCircle, Edit, Trash2, Users, AlertCircle } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Users, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import ServiceStaffAssignment from '@/components/vendor/ServiceStaffAssignment';
+import ServiceImageManager from '@/components/service/ServiceImageManager';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +38,7 @@ const Services: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   const [selectedServiceForStaff, setSelectedServiceForStaff] = useState<string | null>(null);
+  const [selectedServiceForImages, setSelectedServiceForImages] = useState<ServiceType | null>(null);
   const { vendorProfile } = useAuth();
   const navigate = useNavigate();
   
@@ -74,7 +77,6 @@ const Services: React.FC = () => {
     if (!serviceToDelete) return;
     
     try {
-      // Instead of actually deleting, we set is_active to false
       const { error } = await supabase
         .from('vendor_services')
         .update({ is_active: false })
@@ -218,32 +220,63 @@ const Services: React.FC = () => {
                   </AlertDialog>
                 </div>
                 
-                <Dialog 
-                  open={selectedServiceForStaff === service.service_id} 
-                  onOpenChange={(open) => setSelectedServiceForStaff(open ? service.service_id : null)}
-                >
-                  <DialogTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                      onClick={() => setSelectedServiceForStaff(service.service_id)}
-                    >
-                      <Users className="h-4 w-4 mr-1" /> Assign Staff
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Assign Staff to {service.service_name}</DialogTitle>
-                    </DialogHeader>
-                    {selectedServiceForStaff === service.service_id && vendorProfile?.vendor_id && (
-                      <ServiceStaffAssignment 
-                        serviceId={service.service_id} 
-                        vendorId={vendorProfile.vendor_id}
-                      />
-                    )}
-                  </DialogContent>
-                </Dialog>
+                <div className="flex w-full gap-2">
+                  <Dialog 
+                    open={selectedServiceForStaff === service.service_id} 
+                    onOpenChange={(open) => setSelectedServiceForStaff(open ? service.service_id : null)}
+                  >
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => setSelectedServiceForStaff(service.service_id)}
+                      >
+                        <Users className="h-4 w-4 mr-1" /> Assign Staff
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Assign Staff to {service.service_name}</DialogTitle>
+                      </DialogHeader>
+                      {selectedServiceForStaff === service.service_id && vendorProfile?.vendor_id && (
+                        <ServiceStaffAssignment 
+                          serviceId={service.service_id} 
+                          vendorId={vendorProfile.vendor_id}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+
+                  <Dialog 
+                    open={selectedServiceForImages?.service_id === service.service_id} 
+                    onOpenChange={(open) => setSelectedServiceForImages(open ? service : null)}
+                  >
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                      >
+                        <ImageIcon className="h-4 w-4 mr-1" /> Portfolio
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>{service.service_name} - Portfolio</DialogTitle>
+                      </DialogHeader>
+                      {selectedServiceForImages?.service_id === service.service_id && vendorProfile?.vendor_id && (
+                        <ServiceImageManager
+                          serviceId={service.service_id}
+                          serviceName={service.service_name}
+                          serviceCategory={service.service_category}
+                          vendorId={vendorProfile.vendor_id}
+                          canEdit={true}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardFooter>
             </Card>
           ))}

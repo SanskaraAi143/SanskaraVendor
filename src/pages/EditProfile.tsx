@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader } from 'lucide-react';
-import ImageUploader from '@/components/ImageUploader';
-import { uploadMultipleFiles, deleteFile } from '@/utils/uploadHelpers';
+import { Loader, Upload } from 'lucide-react';
+import TaggedImageUploadModal from '@/components/modals/TaggedImageUploadModal';
+import TaggedImageViewer from '@/components/TaggedImageViewer';
+import { TaggedImages, convertToTaggedImages, convertForDatabase, addImagesToTag, removeImageFromTag, deleteImageFromStorage } from '@/utils/taggedUploadHelpers';
+import { useNavigate } from 'react-router-dom';
 
-// Vendor categories from the schema
 const vendorCategories = [
   "Venue", "Catering", "Photography", "Videography", "Decor", 
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
@@ -24,7 +25,6 @@ const EditProfile: React.FC = () => {
   const navigate = useNavigate();
   
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   
   // Form state
   const [profile, setProfile] = useState({
@@ -38,11 +38,9 @@ const EditProfile: React.FC = () => {
     pricing_range: { min: '', max: '', currency: 'INR' } as PricingRangeData,
   });
   
-  // Image upload state
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>([]);
+  // Tagged images state
+  const [taggedImages, setTaggedImages] = useState<TaggedImages | null>(null);
   
-  // Load full profile data on component mount if not already loaded
   useEffect(() => {
     const loadVendorData = async () => {
       if (!user) return;
@@ -58,10 +56,9 @@ const EditProfile: React.FC = () => {
         if (error) throw error;
         
         if (data) {
-          // Parse JSON fields with type safety
           const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' };
           const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' };
-          const portfolio_images = (data.portfolio_image_urls as string[]) || [];
+          const portfolio_images = convertToTaggedImages(data.portfolio_image_urls);
           
           setProfile({
             vendor_name: data.vendor_name || '',
@@ -74,8 +71,7 @@ const EditProfile: React.FC = () => {
             pricing_range,
           });
           
-          // Set existing images
-          setExistingImages(portfolio_images);
+          setTaggedImages(portfolio_images);
         }
       } catch (error) {
         console.error('Error loading vendor data:', error);
@@ -122,27 +118,27 @@ const EditProfile: React.FC = () => {
   const handleCategoryChange = (value: string) => {
     setProfile((prev) => ({ ...prev, vendor_category: value }));
   };
-  
-  const handleFileSelect = (files: File[]) => {
-    setSelectedFiles(prev => [...prev, ...files]);
-  };
-  
-  const handleRemoveExistingImage = async (url: string) => {
-    try {
-      // Remove the image from Supabase storage
-      const fileName = url.split('/').pop(); // Extract the file name from the URL
-      if (fileName && user?.id) {
-        const success = await deleteFile(url, 'vendors', user.id);
-        if (!success) throw new Error('Failed to delete file');
-      }
 
-      // Update the state to remove the image from the existing images array
-      setExistingImages(prev => prev.filter(image => image !== url));
+  const handleImageUpload = (tag: string, urls: string[]) => {
+    const updatedImages = addImagesToTag(taggedImages, tag, urls);
+    setTaggedImages(updatedImages);
+  };
+
+  const handleImageRemove = async (tag: string, url: string) => {
+    try {
+      await deleteImageFromStorage('vendors', url);
+      const updatedImages = removeImageFromTag(taggedImages || {}, tag, url);
+      setTaggedImages(Object.keys(updatedImages).length > 0 ? updatedImages : null);
+      
+      toast({
+        title: 'Success',
+        description: 'Image removed successfully',
+      });
     } catch (error) {
-      console.error('Error removing image from storage:', error);
+      console.error('Error removing image:', error);
       toast({
         title: 'Error',
-        description: 'Failed to remove the image from storage',
+        description: 'Failed to remove image',
         variant: 'destructive',
       });
     }
@@ -155,25 +151,6 @@ const EditProfile: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // First upload any new images
-      let uploadedImageUrls: string[] = [];
-      
-      if (selectedFiles.length > 0) {
-        setIsUploading(true);
-        uploadedImageUrls = await uploadMultipleFiles(
-          selectedFiles, 
-          'vendors', 
-          user.id
-        );
-        setIsUploading(false);
-        
-        // Clear selected files after upload
-        setSelectedFiles([]);
-      }
-      
-      // Combine existing and new images
-      const allImages = [...existingImages, ...uploadedImageUrls];
-      
       const { error } = await supabase
         .from('vendors')
         .update({
@@ -185,14 +162,13 @@ const EditProfile: React.FC = () => {
           description: profile.description,
           address: profile.address as any,
           pricing_range: profile.pricing_range as any,
-          portfolio_image_urls: allImages,
+          portfolio_image_urls: convertForDatabase(taggedImages) as any,
           updated_at: new Date().toISOString(),
         })
         .eq('supabase_auth_uid', user.id);
 
       if (error) throw error;
       
-      // Refresh profile data in context
       await refreshVendorProfile();
 
       toast({
@@ -200,7 +176,6 @@ const EditProfile: React.FC = () => {
         description: 'Your profile has been updated',
       });
       
-      // Navigate back to profile view
       navigate('/profile');
       
     } catch (error: any) {
@@ -371,15 +346,34 @@ const EditProfile: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Portfolio Images</CardTitle>
-              <CardDescription>Upload images to showcase your services</CardDescription>
+              <CardDescription>Upload and organize images by category to showcase your services</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ImageUploader
-                onFileSelect={handleFileSelect}
-                maxFiles={10}
-                existingImages={existingImages}
-                onRemoveExisting={handleRemoveExistingImage}
-                uploading={isUploading}
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  Organize your portfolio images by categories to help customers find what they're looking for.
+                </p>
+                <TaggedImageUploadModal
+                  trigger={
+                    <Button>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Images
+                    </Button>
+                  }
+                  onUploadComplete={handleImageUpload}
+                  bucket="vendors"
+                  folder={user?.id}
+                  category={profile.vendor_category}
+                  existingTags={taggedImages ? Object.keys(taggedImages) : []}
+                  title="Upload Portfolio Images"
+                />
+              </div>
+              
+              <TaggedImageViewer
+                taggedImages={taggedImages}
+                onRemoveImage={handleImageRemove}
+                title="Portfolio Images"
+                showRemoveButton={true}
               />
             </CardContent>
           </Card>

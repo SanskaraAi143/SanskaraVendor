@@ -89,6 +89,7 @@ function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="bookings" element={<Bookings />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="services" element={<Services />} />

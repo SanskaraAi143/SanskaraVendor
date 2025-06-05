@@ -9,6 +9,8 @@ import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Label } from '../../ui/label';
 import { Loader2, AlertTriangle, PlusCircle, Edit, Trash2 } from 'lucide-react';
+import StaffPortfolioFileUpload from './StaffPortfolioFileUpload';
+import { TaggedImages } from '../../../utils/taggedUploadHelpers';
 
 interface StaffInfo {
   staff_id: string;
@@ -16,24 +18,56 @@ interface StaffInfo {
   role: string;
 }
 
-// Fix PortfolioItem type to match Supabase schema
 interface PortfolioItem {
   portfolio_id: string;
   portfolio_type: string;
   title: string | null;
   description: string | null;
-  image_urls: string[] | null;
-  video_urls: string[] | null;
+  image_urls: TaggedImages | null;
+  video_urls: TaggedImages | null;
   generic_attributes?: Record<string, any> | null;
 }
 
 const initialFormData: Partial<PortfolioItem> = {
   title: '',
   description: '',
-  image_urls: [],
-  video_urls: [],
+  image_urls: {},
+  video_urls: {},
   generic_attributes: {},
   portfolio_type: '',
+};
+
+// Helper function to convert old string[] format to new TaggedImages format
+const convertToTaggedImages = (data: any): TaggedImages | null => {
+  if (!data) return null;
+  
+  // If it's already an object (new format), return as is
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    return data as TaggedImages;
+  }
+  
+  // If it's an array (old format), convert to tagged format
+  if (Array.isArray(data) && data.length > 0) {
+    return { general: data };
+  }
+  
+  return null;
+};
+
+// Helper function to convert TaggedImages back to format expected by database
+const convertForDatabase = (taggedImages: TaggedImages | null): any => {
+  if (!taggedImages) return null;
+  
+  // For now, we'll convert back to string[] format until migration is applied
+  // This ensures compatibility with current schema
+  const allUrls: string[] = [];
+  Object.values(taggedImages).forEach(urls => {
+    if (Array.isArray(urls)) {
+      allUrls.push(...urls);
+    }
+  });
+  
+  return allUrls.length > 0 ? allUrls : null;
 };
 
 const StaffPortfolioForm: React.FC = () => {
@@ -84,14 +118,13 @@ const StaffPortfolioForm: React.FC = () => {
 
           if (portfolioError) throw portfolioError;
           
-          // Transform the data to ensure proper typing
           const transformedData: PortfolioItem[] = (portfolioData || []).map(item => ({
             portfolio_id: item.portfolio_id,
             portfolio_type: item.portfolio_type,
             title: item.title,
             description: item.description,
-            image_urls: item.image_urls,
-            video_urls: item.video_urls,
+            image_urls: convertToTaggedImages(item.image_urls),
+            video_urls: convertToTaggedImages(item.video_urls),
             generic_attributes: item.generic_attributes as Record<string, any> | null
           }));
           
@@ -123,6 +156,14 @@ const StaffPortfolioForm: React.FC = () => {
     }));
   };
 
+  const handleImagesUploaded = (updatedTaggedImages: TaggedImages) => {
+    setFormData(prev => ({ ...prev, image_urls: updatedTaggedImages }));
+  };
+
+  const handleVideosUploaded = (updatedTaggedImages: TaggedImages) => {
+    setFormData(prev => ({ ...prev, video_urls: updatedTaggedImages }));
+  };
+
   const resetForm = (role?: string) => {
     const defaultType = role ? getPortfolioTypeFromRole(role) : 'general';
     setFormData({ ...initialFormData, portfolio_type: defaultType });
@@ -148,8 +189,8 @@ const StaffPortfolioForm: React.FC = () => {
       portfolio_id: item.portfolio_id,
       title: item.title || '',
       description: item.description || '',
-      image_urls: item.image_urls || [],
-      video_urls: item.video_urls || [],
+      image_urls: item.image_urls || {},
+      video_urls: item.video_urls || {},
       portfolio_type: item.portfolio_type,
       generic_attributes: item.generic_attributes || {},
     });
@@ -174,6 +215,9 @@ const StaffPortfolioForm: React.FC = () => {
       staff_id: staffInfo.staff_id,
       vendor_id: staffInfo.vendor_id,
       portfolio_type: formData.portfolio_type || 'general',
+      // Convert tagged images back to format expected by current database schema
+      image_urls: convertForDatabase(formData.image_urls),
+      video_urls: convertForDatabase(formData.video_urls),
     };
 
     try {
@@ -190,6 +234,7 @@ const StaffPortfolioForm: React.FC = () => {
         if (updateError) throw updateError;
       }
 
+      // Refresh the portfolio items
       if (staffInfo.staff_id) {
         const { data: portfolioData, error: portfolioError } = await supabase
           .from('staff_portfolios')
@@ -203,8 +248,8 @@ const StaffPortfolioForm: React.FC = () => {
           portfolio_type: item.portfolio_type,
           title: item.title,
           description: item.description,
-          image_urls: item.image_urls,
-          video_urls: item.video_urls,
+          image_urls: convertToTaggedImages(item.image_urls),
+          video_urls: convertToTaggedImages(item.video_urls),
           generic_attributes: item.generic_attributes as Record<string, any> | null
         }));
         
@@ -219,188 +264,224 @@ const StaffPortfolioForm: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading portfolio information...</p>
+      </div>
+    );
+  }
+
+  if (error && !staffInfo) {
+    return (
+      <Alert variant="destructive" className="m-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!staffInfo) {
+    return (
+      <Alert className="m-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Information Missing</AlertTitle>
+        <AlertDescription>
+          Staff information could not be loaded. Please ensure you are logged in and have a staff profile.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
-    <div>
-      {loading ? (
-        <div className="flex items-center justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="ml-2">Loading portfolio information...</p>
-        </div>
-      ) : error ? (
-        <Alert variant="destructive" className="m-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : !staffInfo ? (
-        <Alert className="m-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Information Missing</AlertTitle>
-          <AlertDescription>
-            Staff information could not be loaded. Please ensure you are logged in and have a staff profile.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Card className="m-4">
-          <CardHeader>
-            <CardTitle>Portfolio Management</CardTitle>
-            <CardDescription>
-              Manage your professional portfolio items
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!isFormVisible && (
-              <div className="mb-6">
-                <Button onClick={handleAddNewItem} className="mb-4">
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  Add Portfolio Item
-                </Button>
-              </div>
-            )}
+    <Card className="m-4">
+      <CardHeader>
+        <CardTitle>Portfolio Management</CardTitle>
+        <CardDescription>
+          Manage your professional portfolio items with tagged images and videos
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!isFormVisible && (
+          <div className="mb-6">
+            <Button onClick={handleAddNewItem} className="mb-4">
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Add Portfolio Item
+            </Button>
+          </div>
+        )}
 
-            {isFormVisible && staffInfo && (
-              <Card className="mb-6 shadow-md">
-                <CardHeader>
-                  <CardTitle>{formMode === 'add' ? 'Add New Portfolio Item' : 'Edit Portfolio Item'}</CardTitle>
-                  <CardDescription>
-                    Fill in the details for your portfolio item. Portfolio Type: <strong>{formData.portfolio_type}</strong>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit}>
-                    <div className="space-y-4">
+        {isFormVisible && staffInfo && (
+          <Card className="mb-6 shadow-md">
+            <CardHeader>
+              <CardTitle>{formMode === 'add' ? 'Add New Portfolio Item' : 'Edit Portfolio Item'}</CardTitle>
+              <CardDescription>
+                Fill in the details for your portfolio item. Portfolio Type: <strong>{formData.portfolio_type}</strong>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-6">
+                  <div>
+                    <Label htmlFor="title">Title</Label>
+                    <Input 
+                      id="title" 
+                      name="title" 
+                      value={formData.title || ''} 
+                      onChange={handleInputChange} 
+                      placeholder="e.g., Summer Wedding Collection, Signature Dish" 
+                      disabled={formLoading}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea 
+                      id="description" 
+                      name="description" 
+                      value={formData.description || ''} 
+                      onChange={handleInputChange} 
+                      placeholder="Describe your work or service..." 
+                      disabled={formLoading}
+                    />
+                  </div>
+
+                  {formData.portfolio_type === 'caterer' && (
+                    <>
                       <div>
-                        <Label htmlFor="title">Title</Label>
-                        <Input 
-                          id="title" 
-                          name="title" 
-                          value={formData.title || ''} 
-                          onChange={handleInputChange} 
-                          placeholder="e.g., Summer Wedding Collection, Signature Dish" 
+                        <Label htmlFor="food_options">Food Options (JSON or structured text)</Label>
+                        <Textarea
+                          id="food_options"
+                          name="food_options"
+                          value={formData.generic_attributes?.food_options || ''}
+                          onChange={(e) => handleGenericAttributeChange('food_options', e.target.value)}
+                          placeholder='e.g., {"menus": [{"name": "Italian Feast", "items": ["Pasta", "Salad"]}]}'
                           disabled={formLoading}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea 
-                          id="description" 
-                          name="description" 
-                          value={formData.description || ''} 
-                          onChange={handleInputChange} 
-                          placeholder="Describe your work or service..." 
+                        <Label htmlFor="pricing_details">Pricing Details</Label>
+                        <Textarea
+                          id="pricing_details"
+                          name="pricing_details"
+                          value={formData.generic_attributes?.pricing_details || ''}
+                          onChange={(e) => handleGenericAttributeChange('pricing_details', e.target.value)}
+                          placeholder="e.g., Packages start at $50 per person."
                           disabled={formLoading}
                         />
                       </div>
-
-                      {formData.portfolio_type === 'caterer' && (
-                        <>
-                          <div>
-                            <Label htmlFor="food_options">Food Options (JSON or structured text)</Label>
-                            <Textarea
-                              id="food_options"
-                              name="food_options"
-                              value={formData.generic_attributes?.food_options || ''}
-                              onChange={(e) => handleGenericAttributeChange('food_options', e.target.value)}
-                              placeholder='e.g., {"menus": [{"name": "Italian Feast", "items": ["Pasta", "Salad"]}]}'
-                              disabled={formLoading}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="pricing_details">Pricing Details</Label>
-                            <Textarea
-                              id="pricing_details"
-                              name="pricing_details"
-                              value={formData.generic_attributes?.pricing_details || ''}
-                              onChange={(e) => handleGenericAttributeChange('pricing_details', e.target.value)}
-                              placeholder="e.g., Packages start at $50 per person."
-                              disabled={formLoading}
-                            />
-                          </div>
-                        </>
-                      )}
-                      {formData.portfolio_type === 'photographer' && (
-                        <div>
-                          <Label htmlFor="service_type">Service Type</Label>
-                          <Input
-                            id="service_type"
-                            name="service_type"
-                            value={formData.generic_attributes?.service_type || ''}
-                            onChange={(e) => handleGenericAttributeChange('service_type', e.target.value)}
-                            placeholder="e.g., Wedding, Portrait, Event"
-                            disabled={formLoading}
-                          />
-                        </div>
-                      )}
-                      
-                      <div className="p-4 border rounded-md bg-gray-50">
-                         <Label>Image URLs (File Uploader Placeholder)</Label>
-                         <p className="text-sm text-gray-500">Current: {formData?.image_urls?.join(', ') || 'None'}</p>
-                      </div>
-
-                      <div className="p-4 border rounded-md bg-gray-50">
-                         <Label>Video URLs (File Uploader Placeholder)</Label>
-                         <p className="text-sm text-gray-500">Current: {formData?.video_urls?.join(', ') || 'None'}</p>
-                      </div>
-                      
-                      {error && (
-                        <Alert variant="destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>Error</AlertTitle>
-                          <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      )}
-
-                      <div className="flex justify-end space-x-2">
-                        <Button type="button" variant="outline" onClick={handleCancel} disabled={formLoading}>
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={formLoading}>
-                          {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {formMode === 'add' ? 'Add Item' : 'Save Changes'}
-                        </Button>
-                      </div>
+                    </>
+                  )}
+                  {formData.portfolio_type === 'photographer' && (
+                    <div>
+                      <Label htmlFor="service_type">Service Type</Label>
+                      <Input
+                        id="service_type"
+                        name="service_type"
+                        value={formData.generic_attributes?.service_type || ''}
+                        onChange={(e) => handleGenericAttributeChange('service_type', e.target.value)}
+                        placeholder="e.g., Wedding, Portrait, Event"
+                        disabled={formLoading}
+                      />
                     </div>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
+                  )}
+                  
+                  {/* Tagged Image Upload */}
+                  <div>
+                    <StaffPortfolioFileUpload
+                      vendorId={staffInfo.vendor_id}
+                      staffId={staffInfo.staff_id}
+                      portfolioType={formData.portfolio_type || 'general'}
+                      currentTaggedImages={formData.image_urls || null}
+                      onFilesUploaded={handleImagesUploaded}
+                      onFileRemoved={handleImagesUploaded}
+                      fileType="image"
+                      maxFiles={15}
+                      bucketName="staff-portfolios"
+                    />
+                  </div>
 
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-3">Current Portfolio Items</h3>
-              {portfolioItems.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {portfolioItems.map((item) => (
-                      <TableRow key={item.portfolio_id}>
-                        <TableCell>{item.portfolio_type}</TableCell>
-                        <TableCell>{item.title || 'N/A'}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditItem(item)} className="mr-1" disabled={formLoading}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" disabled={formLoading}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p>No portfolio items found. Start by adding a new item.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+                  {/* Tagged Video Upload */}
+                  <div>
+                    <StaffPortfolioFileUpload
+                      vendorId={staffInfo.vendor_id}
+                      staffId={staffInfo.staff_id}
+                      portfolioType={formData.portfolio_type || 'general'}
+                      currentTaggedImages={formData.video_urls || null}
+                      onFilesUploaded={handleVideosUploaded}
+                      onFileRemoved={handleVideosUploaded}
+                      fileType="video"
+                      maxFiles={5}
+                      bucketName="staff-portfolios"
+                    />
+                  </div>
+                  
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={handleCancel} disabled={formLoading}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={formLoading}>
+                      {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {formMode === 'add' ? 'Add Item' : 'Save Changes'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold mb-3">Current Portfolio Items</h3>
+          {portfolioItems.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Images</TableHead>
+                  <TableHead>Videos</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {portfolioItems.map((item) => (
+                  <TableRow key={item.portfolio_id}>
+                    <TableCell>{item.portfolio_type}</TableCell>
+                    <TableCell>{item.title || 'N/A'}</TableCell>
+                    <TableCell>
+                      {item.image_urls ? Object.keys(item.image_urls).length : 0} tags
+                    </TableCell>
+                    <TableCell>
+                      {item.video_urls ? Object.keys(item.video_urls).length : 0} tags
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleEditItem(item)} className="mr-1" disabled={formLoading}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={formLoading}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p>No portfolio items found. Start by adding a new item.</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

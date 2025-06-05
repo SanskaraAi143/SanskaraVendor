@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
@@ -38,17 +37,17 @@ const StaffVendorServicesPage: React.FC = () => {
     }
 
     if (staffProfile?.staff_id && staffProfile?.vendor_id) {
-      fetchServices();
+      fetchAllServices();
+      fetchAssignedServices();
     }
   }, [user, authLoading, navigate, staffProfile]);
 
-  const fetchServices = async () => {
-    if (!staffProfile?.vendor_id || !staffProfile?.staff_id) return;
-
+  // Fetch all vendor services for the vendor
+  const fetchAllServices = async () => {
+    if (!staffProfile?.vendor_id) return;
     setLoading(true);
     setError(null);
     try {
-      // Fetch all vendor services
       const { data: servicesData, error: servicesError } = await supabase
         .from('vendor_services')
         .select(`
@@ -62,21 +61,45 @@ const StaffVendorServicesPage: React.FC = () => {
           is_in_house
         `)
         .eq('vendor_id', staffProfile.vendor_id);
-
       if (servicesError) throw servicesError;
-
-      const allServicesData = servicesData as VendorService[] || [];
-      setAllServices(allServicesData);
-
-      // Filter services where this staff is the responsible staff
-      const assignedServices = allServicesData.filter(service => 
-        service.responsible_staff_id === staffProfile.staff_id
-      );
-      setServices(assignedServices);
-
+      setAllServices((servicesData as VendorService[]) || []);
     } catch (err: any) {
-      console.error('Error fetching vendor services:', err);
-      setError(err.message || 'Failed to load services.');
+      setError(err.message || 'Failed to load all services.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch services assigned to this staff via vendor_service_staff
+  const fetchAssignedServices = async () => {
+    if (!staffProfile?.staff_id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: assignments, error: assignmentError } = await supabase
+        .from('vendor_service_staff')
+        .select(`
+          service_id,
+          vendor_services (
+            service_id,
+            service_name,
+            description,
+            base_price,
+            service_category,
+            is_active,
+            responsible_staff_id,
+            is_in_house
+          )
+        `)
+        .eq('staff_id', staffProfile.staff_id);
+      if (assignmentError) throw assignmentError;
+      // Flatten and filter out nulls
+      const assigned = (assignments || [])
+        .map(a => a.vendor_services)
+        .filter(Boolean);
+      setServices(assigned);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load assigned services.');
     } finally {
       setLoading(false);
     }
@@ -140,8 +163,10 @@ const StaffVendorServicesPage: React.FC = () => {
           {servicesToShow.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {servicesToShow.map(service => {
-                const isAssigned = service.responsible_staff_id === staffProfile?.staff_id;
-                
+                // In 'My Services' mode, all services in the list are assigned to the staff (via vendor_service_staff)
+                // So isAssigned should always be true in this mode
+                const isAssigned = showAssigned ? true : (service.responsible_staff_id === staffProfile?.staff_id);
+
                 return (
                   <Card 
                     key={service.service_id} 
