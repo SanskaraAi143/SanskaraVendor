@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { supabase } from '../integrations/supabase/client';
@@ -52,6 +51,11 @@ const StaffProtectedRoute: React.FC = () => {
     checkStaffStatus();
   }, [user, authLoading, isLoadingProfile, staffProfile]);
 
+  // Determine if onboarding is needed for staff
+  const needsStaffOnboarding = isStaff && staffProfile && (
+    !staffProfile.display_name || !staffProfile.role || staffProfile.invitation_status === 'pending'
+  );
+
   if (authLoading || isLoadingProfile || isCheckingStaffStatus) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -63,6 +67,10 @@ const StaffProtectedRoute: React.FC = () => {
 
   if (!isStaff) {
     return <Navigate to="/staff/login" replace />;
+  }
+
+  if (needsStaffOnboarding) {
+    return <Navigate to="/staff/onboarding" replace />;
   }
 
   return <Outlet />;
