@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +36,7 @@ interface TaggedImageUploaderProps {
   onImagesChange: (taggedImages: TaggedImages | null) => void;
   bucket: string;
   folder?: string;
+  folderPath?: string; // new prop for explicit folder path
   category?: string;
   disabled?: boolean;
   maxFilesPerTag?: number;
@@ -48,6 +48,7 @@ const TaggedImageUploader: React.FC<TaggedImageUploaderProps> = ({
   onImagesChange,
   bucket,
   folder,
+  folderPath, // new prop
   category = 'general',
   disabled = false,
   maxFilesPerTag = 10,
@@ -113,7 +114,11 @@ const TaggedImageUploader: React.FC<TaggedImageUploaderProps> = ({
 
     setIsUploading(true);
     try {
-      const uploadOptions: UploadOptions = { bucket, folder, tag };
+      const uploadOptions: UploadOptions = { 
+        bucket, 
+        folder: folderPath || folder, // use folderPath if provided
+        tag 
+      };
       const result: UploadResult = await uploadTaggedFiles(files, uploadOptions);
       
       if (!result.success) {
@@ -140,7 +145,7 @@ const TaggedImageUploader: React.FC<TaggedImageUploaderProps> = ({
     } finally {
       setIsUploading(false);
     }
-  }, [taggedImages, onImagesChange, bucket, folder, maxFilesPerTag, maxTotalFiles]);
+  }, [taggedImages, onImagesChange, bucket, folder, folderPath, maxFilesPerTag, maxTotalFiles]);
 
   const handleRemoveImage = useCallback(async (tag: string, url: string) => {
     try {

@@ -324,10 +324,11 @@ const VendorOnboarding: React.FC = () => {
   };
 
   const uploadFiles = async (files: File[], folder: string): Promise<string[]> => {
+    const vendorFolder = user?.id || 'unknown-vendor';
     const uploadPromises = files.map(async (file) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${folder}/${fileName}`;
+      const filePath = `${vendorFolder}/${folder}/${fileName}`;
 
       const { data, error } = await supabase.storage
         .from('vendors')
@@ -1854,7 +1855,6 @@ const VendorOnboarding: React.FC = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>Flexibility Level (1 to 5) - 1: Very rigid, 5: Very flexible</Label>
                     <Select value={formData.flexibilityLevel} onValueChange={(value) => setFormData(prev => ({ ...prev, flexibilityLevel: value }))}>
                       <SelectTrigger>
                         <SelectValue />

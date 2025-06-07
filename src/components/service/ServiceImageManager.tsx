@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,7 +99,7 @@ const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
 
   const handleImageRemove = async (tag: string, url: string) => {
     try {
-      await deleteImageFromStorage('vendor-services', url);
+      await deleteImageFromStorage('vendors', url);
       
       const updatedImages = removeImageFromTag(taggedImages || {}, tag, url);
       
@@ -160,8 +159,8 @@ const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
                 </Button>
               }
               onUploadComplete={handleImageUpload}
-              bucket="vendor-services"
-              folder={`${vendorId}/${serviceId}`}
+              bucket="vendors"
+              folder={`${vendorId}/services/${serviceId}`}
               category={serviceCategory}
               existingTags={availableTags}
               title={`Upload Images for ${serviceName}`}

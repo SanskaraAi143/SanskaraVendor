@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,10 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader, Upload } from 'lucide-react';
-import TaggedImageUploadModal from '@/components/modals/TaggedImageUploadModal';
-import TaggedImageViewer from '@/components/TaggedImageViewer';
-import { TaggedImages, convertToTaggedImages, convertForDatabase, addImagesToTag, removeImageFromTag, deleteImageFromStorage } from '@/utils/taggedUploadHelpers';
+import { Loader, ImageIcon } from 'lucide-react';
+import TaggedImageUploader from '@/components/TaggedImageUploader';
+import { TaggedImages, convertToTaggedImages, convertForDatabase } from '@/utils/taggedUploadHelpers';
 import { useNavigate } from 'react-router-dom';
 
 const vendorCategories = [
@@ -117,31 +115,6 @@ const EditProfile: React.FC = () => {
 
   const handleCategoryChange = (value: string) => {
     setProfile((prev) => ({ ...prev, vendor_category: value }));
-  };
-
-  const handleImageUpload = (tag: string, urls: string[]) => {
-    const updatedImages = addImagesToTag(taggedImages, tag, urls);
-    setTaggedImages(updatedImages);
-  };
-
-  const handleImageRemove = async (tag: string, url: string) => {
-    try {
-      await deleteImageFromStorage('vendors', url);
-      const updatedImages = removeImageFromTag(taggedImages || {}, tag, url);
-      setTaggedImages(Object.keys(updatedImages).length > 0 ? updatedImages : null);
-      
-      toast({
-        title: 'Success',
-        description: 'Image removed successfully',
-      });
-    } catch (error) {
-      console.error('Error removing image:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to remove image',
-        variant: 'destructive',
-      });
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -345,35 +318,21 @@ const EditProfile: React.FC = () => {
           
           <Card>
             <CardHeader>
-              <CardTitle>Portfolio Images</CardTitle>
-              <CardDescription>Upload and organize images by category to showcase your services</CardDescription>
+              <CardTitle className="flex items-center">
+                <ImageIcon className="h-5 w-5 mr-2" />
+                Portfolio Images
+              </CardTitle>
+              <CardDescription>Upload and organize your portfolio images by categories</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  Organize your portfolio images by categories to help customers find what they're looking for.
-                </p>
-                <TaggedImageUploadModal
-                  trigger={
-                    <Button>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Images
-                    </Button>
-                  }
-                  onUploadComplete={handleImageUpload}
-                  bucket="vendors"
-                  folder={user?.id}
-                  category={profile.vendor_category}
-                  existingTags={taggedImages ? Object.keys(taggedImages) : []}
-                  title="Upload Portfolio Images"
-                />
-              </div>
-              
-              <TaggedImageViewer
+            <CardContent>
+              <TaggedImageUploader
                 taggedImages={taggedImages}
-                onRemoveImage={handleImageRemove}
-                title="Portfolio Images"
-                showRemoveButton={true}
+                onImagesChange={setTaggedImages}
+                bucket="vendors"
+                folder={user?.id}
+                category={profile.vendor_category || 'general'}
+                maxFilesPerTag={15}
+                maxTotalFiles={50}
               />
             </CardContent>
           </Card>

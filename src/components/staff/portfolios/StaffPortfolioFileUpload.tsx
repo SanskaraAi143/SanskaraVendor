@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../../integrations/supabase/client';
 import { Button } from '../../ui/button';
@@ -30,7 +29,7 @@ const StaffPortfolioFileUpload: React.FC<StaffPortfolioFileUploadProps> = ({
   fileType = 'image',
   maxFiles = 20,
   maxFileSizeMb = 5,
-  bucketName = 'staff-portfolios',
+  bucketName = 'vendor-staff',
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -65,13 +64,17 @@ const StaffPortfolioFileUpload: React.FC<StaffPortfolioFileUploadProps> = ({
       </Label>
       
       <TaggedImageUploader
-        taggedImages={currentTaggedImages}
-        onImagesChange={handleImagesChange}
-        bucket={bucketName}
-        folder={`${vendorId}/${staffId}/${portfolioType}`}
-        category={portfolioType}
-        maxFilesPerTag={maxFiles}
-        maxTotalFiles={maxFiles * 2}
+        vendorId={vendorId}
+        staffId={staffId}
+        portfolioType={portfolioType}
+        currentTaggedImages={currentTaggedImages}
+        onFilesUploaded={onFilesUploaded}
+        onFileRemoved={onFileRemoved}
+        fileType={fileType}
+        maxFiles={maxFiles}
+        maxFileSizeMb={maxFileSizeMb}
+        bucketName={bucketName}
+        folderPath={`${vendorId}/${staffId}/portfolio/${portfolioType}`}
       />
 
       {uploadError && (

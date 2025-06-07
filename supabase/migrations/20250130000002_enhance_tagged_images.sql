@@ -17,70 +17,70 @@ ADD COLUMN image_urls JSONB,
 DROP COLUMN IF EXISTS video_urls,
 ADD COLUMN video_urls JSONB;
 
--- Add validation function for tag names
-CREATE OR REPLACE FUNCTION validate_tag_name(tag_name TEXT)
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN tag_name IS NOT NULL 
-    AND length(trim(tag_name)) > 0 
-    AND length(trim(tag_name)) <= 50 
-    AND tag_name ~ '^[a-zA-Z0-9\s_-]+$';
-END;
-$$ LANGUAGE plpgsql;
+-- -- Add validation function for tag names
+-- CREATE OR REPLACE FUNCTION validate_tag_name(tag_name TEXT)
+-- RETURNS BOOLEAN AS $$
+-- BEGIN
+--   RETURN tag_name IS NOT NULL 
+--     AND length(trim(tag_name)) > 0 
+--     AND length(trim(tag_name)) <= 50 
+--     AND tag_name ~ '^[a-zA-Z0-9\s_-]+$';
+-- END;
+-- $$ LANGUAGE plpgsql;
 
--- Add function to validate tagged images structure
-CREATE OR REPLACE FUNCTION validate_tagged_images(tagged_images JSONB)
-RETURNS BOOLEAN AS $$
-DECLARE
-  tag_name TEXT;
-  tag_value JSONB;
-BEGIN
-  IF tagged_images IS NULL THEN
-    RETURN TRUE;
-  END IF;
+-- -- Add function to validate tagged images structure
+-- CREATE OR REPLACE FUNCTION validate_tagged_images(tagged_images JSONB)
+-- RETURNS BOOLEAN AS $$
+-- DECLARE
+--   tag_name TEXT;
+--   tag_value JSONB;
+-- BEGIN
+--   IF tagged_images IS NULL THEN
+--     RETURN TRUE;
+--   END IF;
   
-  IF jsonb_typeof(tagged_images) != 'object' THEN
-    RETURN FALSE;
-  END IF;
+--   IF jsonb_typeof(tagged_images) != 'object' THEN
+--     RETURN FALSE;
+--   END IF;
   
-  FOR tag_name, tag_value IN SELECT * FROM jsonb_each(tagged_images) LOOP
-    -- Validate tag name
-    IF NOT validate_tag_name(tag_name) THEN
-      RETURN FALSE;
-    END IF;
+--   FOR tag_name, tag_value IN SELECT * FROM jsonb_each(tagged_images) LOOP
+--     -- Validate tag name
+--     IF NOT validate_tag_name(tag_name) THEN
+--       RETURN FALSE;
+--     END IF;
     
-    -- Validate tag value is array of strings
-    IF jsonb_typeof(tag_value) != 'array' THEN
-      RETURN FALSE;
-    END IF;
+--     -- Validate tag value is array of strings
+--     IF jsonb_typeof(tag_value) != 'array' THEN
+--       RETURN FALSE;
+--     END IF;
     
-    -- Check each URL in the array
-    IF NOT (
-      SELECT bool_and(jsonb_typeof(url) = 'string' AND length(url::text) > 0)
-      FROM jsonb_array_elements(tag_value) AS url
-    ) THEN
-      RETURN FALSE;
-    END IF;
-  END LOOP;
+--     -- Check each URL in the array
+--     IF NOT (
+--       SELECT bool_and(jsonb_typeof(url) = 'string' AND length(url::text) > 0)
+--       FROM jsonb_array_elements(tag_value) AS url
+--     ) THEN
+--       RETURN FALSE;
+--     END IF;
+--   END LOOP;
   
-  RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql;
+--   RETURN TRUE;
+-- END;
+-- $$ LANGUAGE plpgsql;
 
--- Add check constraints for tagged images validation
-ALTER TABLE vendors 
-ADD CONSTRAINT check_portfolio_image_urls_format 
-  CHECK (validate_tagged_images(portfolio_image_urls));
+-- -- Add check constraints for tagged images validation
+-- ALTER TABLE vendors 
+-- ADD CONSTRAINT check_portfolio_image_urls_format 
+--   CHECK (validate_tagged_images(portfolio_image_urls));
 
-ALTER TABLE vendor_services 
-ADD CONSTRAINT check_portfolio_image_urls_format 
-  CHECK (validate_tagged_images(portfolio_image_urls));
+-- ALTER TABLE vendor_services 
+-- ADD CONSTRAINT check_portfolio_image_urls_format 
+--   CHECK (validate_tagged_images(portfolio_image_urls));
 
-ALTER TABLE staff_portfolios 
-ADD CONSTRAINT check_image_urls_format 
-  CHECK (validate_tagged_images(image_urls)),
-ADD CONSTRAINT check_video_urls_format 
-  CHECK (validate_tagged_images(video_urls));
+-- ALTER TABLE staff_portfolios 
+-- ADD CONSTRAINT check_image_urls_format 
+--   CHECK (validate_tagged_images(image_urls)),
+-- ADD CONSTRAINT check_video_urls_format 
+--   CHECK (validate_tagged_images(video_urls));
 
 -- Create indexes for better performance on tag searches
 CREATE INDEX IF NOT EXISTS idx_vendors_portfolio_tags 
