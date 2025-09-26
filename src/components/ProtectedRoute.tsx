@@ -1,52 +1,39 @@
 
 import React from 'react';
 import { useAuth } from '../hooks/useAuthContext';
-import { supabase } from '../integrations/supabase/client';
-import { useLocation, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, vendorProfile } = useAuth();
+  const { user, isLoading, isLoadingUserType, userType, signOut } = useAuth();
   const location = useLocation();
-  const [showPopup, setShowPopup] = useState(false);
-  const [redirect, setRedirect] = useState(false);
 
-  useEffect(() => {
-    const checkStaff = async () => {
-      if (user) {
-        // Check if user is a staff (not owner)
-        const { data: staffData } = await supabase
-          .from('vendor_staff')
-          .select('role')
-          .eq('supabase_auth_uid', user.id)
-          .single();
-        if (staffData && staffData.role && staffData.role !== 'owner') {
-          await supabase.auth.signOut();
-          setShowPopup(true);
-          setTimeout(() => setRedirect(true), 2000);
-        }
-      }
-    };
-    checkStaff();
-  }, [user]);
-
-  if (showPopup) {
+  // Show loading state while checking auth and user type
+  if (isLoading || isLoadingUserType) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-        <div className="bg-white p-6 rounded shadow text-center">
-          <p className="mb-4 text-lg font-semibold">Access Restricted</p>
-          <p className="mb-2">Staff members cannot access vendor portal. Please log in as a vendor.</p>
-          <p>Redirecting to vendor login...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-lg">Loading...</p>
       </div>
     );
   }
-  if (redirect) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+
+  // Not authenticated
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
+
+  // No user type or wrong user type
+  if (!userType) {
+    signOut();
+    return null; // Let AuthContext handle the redirect after signOut
+  }
+
+  if (userType !== 'vendor') {
+    signOut();
+    return null; // Let AuthContext handle the redirect after signOut
+  }
+
   return <>{children}</>;
 };
 

@@ -11,11 +11,11 @@ interface VendorLayoutProps {
 }
 
 const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
-  const { user, vendorProfile, staffProfile, isLoading, isLoadingProfile } = useAuth();
+  const { user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile } = useAuth();
   const location = useLocation();
 
   // Show loading while checking authentication
-  if (isLoading || isLoadingProfile) {
+  if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -31,14 +31,17 @@ const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If user is staff, redirect to staff portal
+  // If user is staff, redirect to staff portal (onboarding handled in staff routes)
   if (staffProfile) {
     return <Navigate to="/staff/dashboard" replace />;
   }
 
-  // If user doesn't have vendor profile, redirect to onboarding
+  // If user is vendor, check onboarding
   if (!vendorProfile && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" state={{ from: location }} replace />;
+    const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+    if (!onboardingSkipped) {
+      return <Navigate to="/onboarding" state={{ from: location }} replace />;
+    }
   }
 
   return (

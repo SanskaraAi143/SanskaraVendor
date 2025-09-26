@@ -111,7 +111,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate('/services');
+        navigate('/dashboard/services');
       }
 
     } catch (error: any) {
@@ -286,7 +286,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
           <Button 
             type="button" 
             variant="outline"
-            onClick={() => navigate('/services')}
+            onClick={() => navigate('/dashboard/services')}
           >
             Cancel
           </Button>

@@ -1,33 +1,29 @@
-
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../integrations/supabase/client';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from '@/components/ui/use-toast';
+import { supabase } from '../integrations/supabase/client';
 
-// Define address and pricing range types
-export interface AddressData {
-  city: string;
-  state: string;
-  country: string;
-  full_address: string;
-}
+import { User, Session } from '@supabase/supabase-js';
+import { toast } from '../components/ui/use-toast';
 
-export interface PricingRangeData {
-  min: string;
-  max: string;
-  currency: string;
-}
+export type AddressData = {
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+};
 
-export interface VendorDetailsData {
-  amenities?: string[];
-  services?: string[];
-  capacity?: number;
-  style?: string;
-  specializations?: string[];
-  policies?: string[];
-  ritual_offerings?: string[];
-}
+export type PricingRangeData = {
+  min?: number;
+  max?: number;
+  currency?: string;
+};
+
+export type VendorDetailsData = {
+  // Define properties based on actual usage or schema
+  // For now, using a generic object type
+  [key: string]: any;
+};
 
 export type VendorProfile = {
   vendor_id: string;
@@ -35,6 +31,7 @@ export type VendorProfile = {
   vendor_category: string;
   contact_email: string;
   is_verified: boolean;
+  is_active: boolean;
   phone_number?: string;
   website_url?: string;
   description?: string;
@@ -42,6 +39,7 @@ export type VendorProfile = {
   address?: AddressData;
   pricing_range?: PricingRangeData;
   details?: VendorDetailsData;
+  status?: string;
 }
 
 type StaffProfile = {
@@ -52,19 +50,23 @@ type StaffProfile = {
   phone_number?: string;
   role: string;
   is_active: boolean;
-  invitation_status: string;
+  invitation_status?: 'pending' | 'accepted' | 'rejected';
 }
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  isLoadingUserType: boolean;
   vendorProfile: VendorProfile | null;
   staffProfile: StaffProfile | null;
-  isLoadingProfile: boolean;
+  userType: 'vendor' | 'staff' | 'customer' | null;
+  isLoadingVendorProfile: boolean;
+  isLoadingStaffProfile: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, metadata?: any, userType?: 'vendor' | 'vendor_staff' | 'customer') => Promise<void>;
   signOut: () => Promise<void>;
+  updateVendor: (vendorId: string, updates: Partial<VendorProfile>) => Promise<void>;
   refreshVendorProfile: () => Promise<void>;
   refreshStaffProfile: () => Promise<void>;
 };
@@ -78,14 +80,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [staffProfile, setStaffProfile] = useState<StaffProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [userType, setUserType] = useState<'vendor' | 'staff' | 'customer' | null>(null);
+  const [isLoadingVendorProfile, setIsLoadingVendorProfile] = useState(false);
+  const [isLoadingStaffProfile, setIsLoadingStaffProfile] = useState(false);
+  const [isLoadingUserType, setIsLoadingUserType] = useState(false);
   const navigate = useNavigate();
 
   // Fetch vendor profile data
   const fetchVendorProfile = async (userId: string) => {
     try {
-      setIsLoadingProfile(true);
-      console.log("Fetching vendor profile for user:", userId);
+      setIsLoadingVendorProfile(true);
       
       const { data, error } = await supabase
         .from('vendors')
@@ -99,7 +103,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data) {
-        console.log("Vendor profile found:", data);
         
         const profile: VendorProfile = {
           vendor_id: data.vendor_id,
@@ -107,32 +110,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           vendor_category: data.vendor_category || '',
           contact_email: data.contact_email || '',
           is_verified: data.is_verified || false,
+          is_active: data.is_active || false,
           phone_number: data.phone_number || undefined,
           website_url: data.website_url || undefined,
           description: data.description || undefined,
-          portfolio_image_urls: data.portfolio_image_urls as string[] || [],
-          address: data.address as unknown as AddressData || undefined,
-          pricing_range: data.pricing_range as unknown as PricingRangeData || undefined,
-          details: data.details as unknown as VendorDetailsData || undefined
+          portfolio_image_urls: (data.portfolio_image_urls as string[]) || [],
+          address: (data.address as unknown as AddressData) || undefined,
+          pricing_range: (data.pricing_range as unknown as PricingRangeData) || undefined,
+          details: (data.details as unknown as VendorDetailsData) || undefined,
+          status: data.status || undefined,
         };
         
-        setVendorProfile(profile);
+        if (JSON.stringify(profile) !== JSON.stringify(vendorProfile)) {
+          setVendorProfile(profile);
+        }
       } else {
-        console.log("No vendor profile found for user:", userId);
         setVendorProfile(null);
       }
     } catch (error) {
       console.error('Error fetching vendor profile:', error);
     } finally {
-      setIsLoadingProfile(false);
+      setIsLoadingVendorProfile(false);
     }
   };
 
   // ... keep existing code (fetchStaffProfile and other functions)
   const fetchStaffProfile = async (userId: string) => {
     try {
-      setIsLoadingProfile(true);
-      console.log("Fetching staff profile for user:", userId);
+      setIsLoadingStaffProfile(true);
       
       const { data, error } = await supabase
         .from('vendor_staff')
@@ -146,7 +151,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data) {
-        console.log("Staff profile found:", data);
         
         const profile: StaffProfile = {
           staff_id: data.staff_id,
@@ -156,18 +160,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           phone_number: data.phone_number || undefined,
           role: data.role || 'staff',
           is_active: data.is_active || false,
-          invitation_status: data.invitation_status || 'pending'
+          invitation_status: data.invitation_status as 'pending' | 'accepted' | 'rejected' || undefined,
         };
         
         setStaffProfile(profile);
+        
       } else {
-        console.log("No staff profile found for user:", userId);
         setStaffProfile(null);
       }
     } catch (error) {
       console.error('Error fetching staff profile:', error);
     } finally {
-      setIsLoadingProfile(false);
+      setIsLoadingStaffProfile(false);
     }
   };
 
@@ -186,46 +190,87 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        console.log("Auth state changed:", event);
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setTimeout(() => {
-            if (currentSession?.user) {
-              // Try to fetch both vendor and staff profiles
-              fetchVendorProfile(currentSession.user.id);
-              fetchStaffProfile(currentSession.user.id);
-            }
-          }, 0);
-        } else if (event === 'SIGNED_OUT') {
-          setVendorProfile(null);
-          setStaffProfile(null);
-        }
-        
-        setIsLoading(false);
-      }
-    );
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      console.log("Got existing session:", currentSession ? "yes" : "no");
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      
-      if (currentSession?.user) {
-        fetchVendorProfile(currentSession.user.id);
-        fetchStaffProfile(currentSession.user.id);
-      }
-      
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
       setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!user) {
+        setUserType(null);
+        return;
+      }
+
+      setIsLoadingUserType(true);
+      try {
+        const { data: userProfile, error: userProfileError } = await supabase
+          .from('users')
+          .select('user_type')
+          .eq('supabase_auth_uid', user.id)
+          .single();
+
+        if (userProfileError) {
+          console.error('Error fetching user profile:', userProfileError);
+          // Don't sign out on temporary errors
+          if (userProfileError.code === 'PGRST116') {
+            // Record not found - this is a serious error
+            await signOut();
+          }
+          return;
+        }
+
+        // Set user type and fetch corresponding profile
+        if (userProfile?.user_type === 'vendor_staff' || userProfile?.user_type === 'staff') {
+          setUserType('staff');
+          await fetchStaffProfile(user.id);
+        } else if (userProfile?.user_type === 'vendor') {
+          setUserType('vendor');
+          await fetchVendorProfile(user.id);
+        } else {
+          setUserType('customer');
+        }
+      } catch (error) {
+        console.error('Error in fetchUserRole:', error);
+        // Only sign out on critical errors
+        if (error instanceof Error && error.message.includes('not found')) {
+          await signOut();
+        }
+      } finally {
+        setIsLoadingUserType(false);
+      }
+    };
+    fetchUserRole();
+  }, [user]);
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (userType === 'vendor' && vendorProfile) {
+        if (!vendorProfile.is_active && location.pathname !== '/onboarding') {
+          navigate('/onboarding');
+        } else if (vendorProfile.is_active && location.pathname === '/onboarding') {
+          navigate('/dashboard');
+        }
+      } else if (userType === 'staff' && staffProfile) {
+        if (staffProfile.invitation_status === 'pending' && location.pathname !== '/staff/onboarding') {
+          navigate('/staff/onboarding');
+        } else if (staffProfile.invitation_status === 'accepted' && location.pathname === '/staff/onboarding') {
+          navigate('/staff/dashboard');
+        }
+      }
+    }
+  }, [user, userType, vendorProfile, staffProfile, isLoading, navigate, location.pathname]);
+
 
   // ... keep existing code (signIn, signUp, signOut functions)
   const signIn = async (email: string, password: string) => {
@@ -275,7 +320,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Welcome back!",
       });
 
-      navigate('/');
+      // Determine redirection based on userType
+      if (userProfile?.user_type === 'vendor') {
+        navigate('/dashboard');
+      } else if (userProfile?.user_type === 'vendor_staff' || userProfile?.user_type === 'staff') {
+        navigate('/staff/dashboard');
+      } else {
+        // Default redirection for other user types or if user_type is not set
+        navigate('/');
+      }
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -291,7 +344,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     email: string,
     password: string,
     metadata: any = {},
-    userType: 'vendor' | 'vendor_staff' | 'customer'
+    userType: 'vendor' | 'vendor_staff' | 'customer' = 'customer'
   ) => {
     try {
       setIsLoading(true);
@@ -301,7 +354,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user_type: userType,
       };
 
-      console.log("Signing up with metadata:", userMetadata);
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -314,16 +366,84 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) {
         throw error;
       }
-
       if (data.user) {
-        const { error: updateError } = await supabase
+        // The trigger creates the user, so we need to update the user_type
+        const { error: userError } = await supabase
           .from('users')
           .update({ user_type: userType })
           .eq('supabase_auth_uid', data.user.id);
 
-        if (updateError) {
-          console.error('Error updating user_type:', updateError);
-          throw updateError;
+        if (userError) throw userError;
+
+        if (userType === 'vendor') {
+          // Check if a vendor record already exists to prevent duplicates
+          const { data: existingVendor, error: existingVendorError } = await supabase
+            .from('vendors')
+            .select('supabase_auth_uid')
+            .eq('supabase_auth_uid', data.user.id)
+            .single();
+
+          if (existingVendorError && existingVendorError.code !== 'PGRST116') {
+            throw existingVendorError;
+          }
+
+          if (!existingVendor) {
+            const { data: vendor, error: vendorError } = await supabase
+              .from('vendors')
+              .insert({
+                vendor_name: metadata.vendor_name,
+                vendor_category: metadata.vendor_category,
+                supabase_auth_uid: data.user.id,
+                contact_email: data.user.email,
+                phone_number: metadata.phone_number,
+                is_active: false,
+                status: 'onboarding_in_progress',
+              })
+              .select()
+              .single();
+
+            if (vendorError) throw vendorError;
+
+            const { error: staffError } = await supabase
+              .from('vendor_staff')
+              .insert({
+                vendor_id: vendor.vendor_id,
+                supabase_auth_uid: data.user.id,
+                display_name: metadata.display_name,
+                email: data.user.email,
+                phone_number: metadata.phone_number,
+                role: 'owner',
+              });
+
+            if (staffError) throw staffError;
+          }
+        } else if (userType === 'vendor_staff') {
+          // Check if a staff record already exists
+          const { data: existingStaff, error: existingStaffError } = await supabase
+            .from('vendor_staff')
+            .select('supabase_auth_uid')
+            .eq('supabase_auth_uid', data.user.id)
+            .single();
+
+          if (existingStaffError && existingStaffError.code !== 'PGRST116') {
+            throw existingStaffError;
+          }
+          
+          if (!existingStaff) {
+            const { error: staffError } = await supabase
+              .from('vendor_staff')
+              .insert({
+                vendor_id: metadata.vendor_id,
+                supabase_auth_uid: data.user.id,
+                display_name: metadata.display_name,
+                email: data.user.email,
+                phone_number: metadata.phone_number,
+                role: metadata.role,
+                invitation_status: 'pending',
+              });
+
+            if (staffError) throw staffError;
+          }
         }
       }
 
@@ -342,9 +462,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateVendor = async (vendorId: string, updates: Partial<VendorProfile>) => {
+    try {
+      const { error } = await supabase
+        .from('vendors')
+        .update(updates as any)
+        .eq('vendor_id', vendorId);
+
+      if (error) throw error;
+
+      // Refresh the vendor profile to get the latest data
+      await refreshVendorProfile();
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message || "An error occurred during the update",
+        variant: "destructive",
+      });
+    } finally {
+      // No need to set isLoading to false here, as it's handled by the parent component
+    }
+  };
+
   const signOut = async () => {
     try {
       setIsLoading(true);
+      
+      // Clear all local storage and session storage
+      localStorage.clear();
+      sessionStorage.clear();
 
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session) {
@@ -357,11 +503,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
+      // Sign out from Supabase
       await supabase.auth.signOut();
+
+      // Reset all states
+      setUser(null);
+      setUserType(null);
+      setVendorProfile(null);
+      setStaffProfile(null);
+
+      // Clear any cached data
+      localStorage.removeItem('vendorProfile');
+      localStorage.removeItem('staffProfile');
+      localStorage.removeItem('userType');
+
       navigate('/login');
       toast({
         title: "Logged out",
-        description: "You have been successfully logged out",
+        description: "You have been logged out for security reasons",
+        variant: "destructive",
       });
     } catch (error: any) {
       toast({
@@ -375,23 +535,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      isLoading, 
-      vendorProfile, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      isLoading,
+      isLoadingUserType,
+      vendorProfile,
       staffProfile,
-      isLoadingProfile,
-      signIn, 
-      signUp: (email, password, metadata, userType) => signUp(email, password, metadata, userType),
+      userType,
+      isLoadingVendorProfile,
+      isLoadingStaffProfile,
+      signIn,
+      signUp,
       signOut,
+      updateVendor,
       refreshVendorProfile,
       refreshStaffProfile
     }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

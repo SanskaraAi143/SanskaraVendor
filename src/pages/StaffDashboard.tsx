@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import StaffDashboardLayout from '@/components/staff/StaffDashboardLayout';
 import DashboardCard from '@/components/DashboardCard';
 import { Calendar, CheckCircle2, Clock, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface StaffDashboardStats {
@@ -47,11 +48,15 @@ const StaffDashboard: React.FC = () => {
   useEffect(() => {
     if (staffProfile?.staff_id) {
       fetchDashboardData();
+    } else {
+      setIsLoading(false); // Ensure loading state is false if profile is not available
     }
   }, [staffProfile]);
 
   const fetchDashboardData = async () => {
-    if (!staffProfile?.staff_id) return;
+    if (!staffProfile?.staff_id) {
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -136,6 +141,16 @@ const StaffDashboard: React.FC = () => {
     );
   }
 
+  if (!staffProfile) {
+    return (
+      <StaffDashboardLayout>
+        <div className="flex justify-center items-center h-full text-gray-500">
+          <p>Please ensure your staff profile is complete and you are assigned to a vendor.</p>
+        </div>
+      </StaffDashboardLayout>
+    );
+  }
+
   return (
     <StaffDashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -204,7 +219,12 @@ const StaffDashboard: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-8">No tasks assigned yet.</p>
+                <div className="flex flex-col items-center justify-center py-8">
+                  <p className="text-gray-500 mb-4">No tasks assigned yet.</p>
+                  <Link to="/staff/tasks">
+                    <Button variant="outline">Create Task</Button>
+                  </Link>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -237,7 +257,12 @@ const StaffDashboard: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-8">No upcoming bookings.</p>
+                <div className="flex flex-col items-center justify-center py-8">
+                  <p className="text-gray-500 mb-4">No upcoming bookings.</p>
+                  <Link to="/staff/bookings">
+                    <Button variant="outline">View Bookings</Button>
+                  </Link>
+                </div>
               )}
             </CardContent>
           </Card>

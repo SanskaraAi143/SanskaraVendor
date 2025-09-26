@@ -1,62 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
-import { supabase } from '../integrations/supabase/client';
+import React from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '../hooks/useAuthContext';
 
 const StaffProtectedRoute: React.FC = () => {
-  const { user, isLoading: authLoading, staffProfile, isLoadingProfile } = useAuth();
-  const [isCheckingStaffStatus, setIsCheckingStaffStatus] = useState(true);
-  const [isStaff, setIsStaff] = useState<boolean | null>(null);
+  const { user, isLoading, isLoadingUserType, userType, staffProfile } = useAuth();
+  const location = useLocation();
 
-  useEffect(() => {
-    const checkStaffStatus = async () => {
-      if (authLoading || isLoadingProfile) return;
+  console.log('StaffProtectedRoute Check:', {
+    currentPath: location.pathname,
+    userType,
+    isAuthenticated: !!user,
+    isLoading,
+    isLoadingUserType,
+    hasStaffProfile: !!staffProfile
+  });
 
-      setIsCheckingStaffStatus(true);
-      try {
-        if (!user) {
-          setIsStaff(false);
-          return;
-        }
-
-        // Check if staffProfile exists from AuthContext
-        if (staffProfile) {
-          setIsStaff(true);
-          return;
-        }
-
-        // Fallback: Direct database check
-        const { data: staffEntry, error: staffError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id')
-          .eq('supabase_auth_uid', user.id)
-          .maybeSingle();
-
-        if (staffError) {
-          console.error('Error checking vendor_staff:', staffError);
-          setIsStaff(false);
-          return;
-        }
-
-        setIsStaff(!!staffEntry);
-      } catch (error) {
-        console.error('Unexpected error during staff check:', error);
-        setIsStaff(false);
-      } finally {
-        setIsCheckingStaffStatus(false);
-      }
-    };
-
-    checkStaffStatus();
-  }, [user, authLoading, isLoadingProfile, staffProfile]);
-
-  // Determine if onboarding is needed for staff
-  const needsStaffOnboarding = isStaff && staffProfile && (
-    !staffProfile.display_name || !staffProfile.role || staffProfile.invitation_status === 'pending'
-  );
-
-  if (authLoading || isLoadingProfile || isCheckingStaffStatus) {
+  // Show loading state while checking auth and user type
+  if (isLoading || isLoadingUserType) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -65,12 +26,14 @@ const StaffProtectedRoute: React.FC = () => {
     );
   }
 
-  if (!isStaff) {
+  if (!user) {
     return <Navigate to="/staff/login" replace />;
   }
 
-  if (needsStaffOnboarding) {
-    return <Navigate to="/staff/onboarding" replace />;
+  // Only redirect if we're sure about the user type and they're not staff
+  // or if we have loaded the staff profile and it doesn't exist
+  if (!isLoadingUserType && userType !== 'staff' && userType !== null) {
+    return <Navigate to="/staff/login" replace />;
   }
 
   return <Outlet />;

@@ -33,7 +33,6 @@ export interface Staff {
   phone_number: string | null;
   role: string;
   is_active: boolean;
-  invitation_status?: string;
 }
 
 interface StaffListProps {
@@ -54,26 +53,6 @@ const getRoleBadgeColor = (role: string) => {
       return 'bg-purple-100 text-purple-800 border-purple-300';
     default:
       return 'bg-gray-100 text-gray-800 border-gray-300';
-  }
-};
-
-// Helper function to get invitation status badge
-const getInvitationStatus = (status: string | undefined, isActive: boolean) => {
-  if (!status) return null;
-  
-  if (!isActive) {
-    return <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">Deactivated</Badge>;
-  }
-  
-  switch (status.toLowerCase()) {
-    case 'pending':
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">Invited</Badge>;
-    case 'accepted':
-      return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">Active</Badge>;
-    case 'declined':
-      return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Declined</Badge>;
-    default:
-      return null;
   }
 };
 
@@ -107,40 +86,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       toast({
         title: 'Error',
         description: 'Failed to update staff status',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const handleResendInvitation = async (staffId: string, email: string) => {
-    try {
-      setIsProcessing(true);
-      console.log("Resending invitation for staff:", staffId, email);
-      
-      // Update the invitation status to trigger a new email
-      const { error } = await supabase
-        .from('vendor_staff_invite')
-        .update({ invitation_status: 'pending', updated_at: new Date().toISOString() })
-        .eq('email', email);
-      
-      if (error) {
-        console.error('Error updating invitation:', error);
-        throw error;
-      }
-      
-      toast({
-        title: 'Invitation Resent',
-        description: `Invitation has been resent to ${email}`,
-      });
-      
-      onRefresh();
-    } catch (error) {
-      console.error('Error resending invitation:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to resend invitation',
         variant: 'destructive',
       });
     } finally {
@@ -216,7 +161,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       <Badge className={getRoleBadgeColor(staff.role)}>
                         {staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}
                       </Badge>
-                      {getInvitationStatus(staff.invitation_status, staff.is_active)}
                       {staff.email === user?.email && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">You</Badge>
                       )}
@@ -246,11 +190,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        {staff.invitation_status === 'pending' && (
-                          <DropdownMenuItem onClick={() => handleResendInvitation(staff.staff_id, staff.email)}>
-                            <Mail className="mr-2 h-4 w-4" /> Resend Invitation
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onClick={() => handleToggleActive(staff.staff_id, staff.is_active)}>
                           {staff.is_active ? (
                             <><UserX className="mr-2 h-4 w-4" /> Deactivate</>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import StaffForm from '@/components/staff/StaffForm';
+import EnhancedStaffForm from '@/components/staff/EnhancedStaffForm';
 import StaffList, { Staff } from '@/components/staff/StaffList';
 
 const StaffPage: React.FC = () => {
@@ -43,8 +43,7 @@ const StaffPage: React.FC = () => {
           email: staff.email,
           phone_number: staff.phone_number,
           role: staff.role,
-          is_active: staff.is_active,
-          invitation_status: staff.invitation_status
+          is_active: staff.is_active
         }));
         
         setStaffMembers(transformedData);
@@ -94,7 +93,7 @@ const StaffPage: React.FC = () => {
       
       <div className="grid gap-6 md:grid-cols-2">
         <div>
-          <StaffForm onSuccess={fetchStaffMembers} />
+          <EnhancedStaffForm onSuccess={fetchStaffMembers} />
         </div>
         
         <div className="md:col-span-2">

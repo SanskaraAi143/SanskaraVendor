@@ -147,18 +147,18 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'CLEAR_ALL' });
   }, []);
 
+  const providerValue = React.useMemo(() => ({
+    state,
+    getCachedData,
+    setLoading,
+    setData,
+    setError,
+    invalidateCache,
+    clearAll,
+  }), [state, getCachedData, setLoading, setData, setError, invalidateCache, clearAll]);
+
   return (
-    <DataCacheContext.Provider
-      value={{
-        state,
-        getCachedData,
-        setLoading,
-        setData,
-        setError,
-        invalidateCache,
-        clearAll,
-      }}
-    >
+    <DataCacheContext.Provider value={providerValue}>
       {children}
     </DataCacheContext.Provider>
   );

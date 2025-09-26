@@ -38,6 +38,7 @@ interface BookingEvent {
   booking_status: string;
   start_time?: string;
   user_id: string;
+  wedding_id?: string;
   notes_for_vendor?: string;
 }
 
@@ -85,7 +86,8 @@ const Calendar: React.FC = () => {
           event_date,
           booking_status,
           user_id,
-          notes_for_vendor
+          notes_for_vendor,
+          wedding_id
         `)
         .eq('vendor_id', vendorProfile.vendor_id);
         

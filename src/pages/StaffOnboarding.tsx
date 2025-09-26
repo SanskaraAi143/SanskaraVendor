@@ -88,10 +88,22 @@ const StaffOnboarding: React.FC = () => {
         setLoading(false);
         return;
       }
-
-      alert('Onboarding complete! Redirecting to dashboard...');
-      navigate('/staff/dashboard');
-    } catch (catchError: any) {
+ 
+       // Update invitation_status to 'accepted' for the staff member
+       const { error: updateInvitationError } = await supabase
+         .from('vendor_staff')
+         .update({ invitation_status: 'accepted' })
+         .eq('staff_id', staffData.staff_id);
+ 
+       if (updateInvitationError) {
+         setError(updateInvitationError.message);
+         setLoading(false);
+         return;
+       }
+ 
+       alert('Onboarding complete! Redirecting to dashboard...');
+       navigate('/staff/dashboard');
+     } catch (catchError: any) {
       setError(catchError.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -244,7 +256,7 @@ const StaffOnboarding: React.FC = () => {
                   <TaggedImageUploader
                     taggedImages={imageUrls}
                     onImagesChange={setImageUrls}
-                    bucket="staff-portfolios"
+                    bucket="vendor-staff"
                     folder="images"
                     category={portfolioType || role.toLowerCase() || 'general'}
                     maxFilesPerTag={10}
@@ -258,7 +270,7 @@ const StaffOnboarding: React.FC = () => {
                   <TaggedImageUploader
                     taggedImages={videoUrls}
                     onImagesChange={setVideoUrls}
-                    bucket="staff-portfolios"
+                    bucket="vendor-staff"
                     folder="videos"
                     category={portfolioType || role.toLowerCase() || 'general'}
                     maxFilesPerTag={5}

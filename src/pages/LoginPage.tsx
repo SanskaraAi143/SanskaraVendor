@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EyeIcon, EyeOffIcon, UserIcon, KeyIcon, Loader, CheckCircle } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/hooks/useAuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Form, FormField, FormItem, FormControl, FormMessage, FormLabel, FormDescription } from '@/components/ui/form';
 import { z } from 'zod';
@@ -40,7 +40,10 @@ const categories = [
 const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { isLoading, user, signIn, signUp } = useAuth();
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>(
+    location.pathname === '/signup' ? 'signup' : 'login'
+  );
   const [signupSuccess, setSignupSuccess] = useState(false);
   const navigate = useNavigate();
   

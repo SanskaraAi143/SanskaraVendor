@@ -16,7 +16,7 @@ const EditService: React.FC = () => {
   useEffect(() => {
     const fetchService = async () => {
       if (!serviceId) {
-        navigate('/services');
+        navigate('/dashboard/services');
         return;
       }
 
@@ -38,7 +38,7 @@ const EditService: React.FC = () => {
             description: "The service you're trying to edit doesn't exist",
             variant: "destructive",
           });
-          navigate('/services');
+          navigate('/dashboard/services');
           return;
         }
 
@@ -50,7 +50,7 @@ const EditService: React.FC = () => {
           description: error.message || "Could not load service details",
           variant: "destructive",
         });
-        navigate('/services');
+        navigate('/dashboard/services');
       } finally {
         setIsLoading(false);
       }

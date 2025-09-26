@@ -30,6 +30,7 @@ interface BookingData {
   clientPhone?: string;
   eventDate: string;
   status: string;
+  weddingId: string;
   totalAmount?: number;
   paidAmount?: number;
   services: Array<{
@@ -68,7 +69,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       // Fetch the booking
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, wedding_id')
         .eq('booking_id', bookingId)
         .single();
         
@@ -113,6 +114,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         clientPhone: 'N/A', // Default to N/A since it might not exist in users table
         eventDate: bookingData.event_date,
         status: bookingData.booking_status,
+        weddingId: bookingData.wedding_id,
         totalAmount: bookingData.total_amount,
         paidAmount: bookingData.paid_amount,
         services: servicesData.map((service: any) => ({

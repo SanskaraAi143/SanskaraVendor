@@ -193,4 +193,4 @@ const VendorSidebar: React.FC = () => {
   );
 };
 
-export default VendorSidebar;
+export default React.memo(VendorSidebar);

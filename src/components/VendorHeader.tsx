@@ -33,7 +33,7 @@ const VendorHeader: React.FC = () => {
   };
 
   const handleProfileClick = () => {
-    navigate('/profile');
+    navigate('/dashboard/profile');
   };
   
   return (
@@ -87,7 +87,7 @@ const VendorHeader: React.FC = () => {
                 Profile Settings
               </DropdownMenuItem>
               
-              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/settings')}>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/dashboard/settings')}>
                 <Settings className="h-4 w-4 mr-2" />
                 Account Settings
               </DropdownMenuItem>
@@ -106,4 +106,4 @@ const VendorHeader: React.FC = () => {
   );
 };
 
-export default VendorHeader;
+export default React.memo(VendorHeader);

@@ -32,8 +32,9 @@ const EditProfile: React.FC = () => {
     phone_number: '',
     website_url: '',
     description: '',
-    address: { city: '', state: '', country: 'India', full_address: '' } as AddressData,
-    pricing_range: { min: '', max: '', currency: 'INR' } as PricingRangeData,
+    address: { city: '', state: '', country: 'India' } as AddressData,
+    pricing_range: { min: undefined, max: undefined, currency: 'INR' } as PricingRangeData,
+    status: '',
   });
   
   // Tagged images state
@@ -54,8 +55,8 @@ const EditProfile: React.FC = () => {
         if (error) throw error;
         
         if (data) {
-          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' };
-          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' };
+          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India' };
+          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: undefined, max: undefined, currency: 'INR' };
           const portfolio_images = convertToTaggedImages(data.portfolio_image_urls);
           
           setProfile({
@@ -67,6 +68,7 @@ const EditProfile: React.FC = () => {
             description: data.description || '',
             address,
             pricing_range,
+            status: data.status || '',
           });
           
           setTaggedImages(portfolio_images);
@@ -108,7 +110,7 @@ const EditProfile: React.FC = () => {
       ...prev,
       pricing_range: {
         ...prev.pricing_range,
-        [name]: value
+        [name]: Number(value) || undefined
       }
     }));
   };
@@ -137,6 +139,7 @@ const EditProfile: React.FC = () => {
           pricing_range: profile.pricing_range as any,
           portfolio_image_urls: convertForDatabase(taggedImages) as any,
           updated_at: new Date().toISOString(),
+          status: profile.status,
         })
         .eq('supabase_auth_uid', user.id);
 
@@ -149,7 +152,7 @@ const EditProfile: React.FC = () => {
         description: 'Your profile has been updated',
       });
       
-      navigate('/profile');
+      navigate('/dashboard/profile');
       
     } catch (error: any) {
       console.error('Error updating profile:', error);
@@ -172,7 +175,7 @@ const EditProfile: React.FC = () => {
             Update your vendor profile information
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate('/profile')}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>Cancel</Button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -281,11 +284,11 @@ const EditProfile: React.FC = () => {
               <div className="space-y-2">
                 <Label htmlFor="full_address">Business Address</Label>
                 <Textarea
-                  id="full_address"
-                  name="full_address"
-                  value={profile.address?.full_address || ''}
+                  id="street"
+                  name="street"
+                  value={profile.address?.street || ''}
                   onChange={handleAddressChange}
-                  placeholder="Full address of your business"
+                  placeholder="Street address of your business"
                   rows={2}
                 />
               </div>

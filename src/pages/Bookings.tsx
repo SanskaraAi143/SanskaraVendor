@@ -29,6 +29,7 @@ interface Booking {
   created_at: string;
   display_name?: string;
   notes_for_vendor?: string;
+  wedding_id?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -61,7 +62,7 @@ const Bookings: React.FC = () => {
       // Build the query
       let query = supabase
         .from('bookings')
-        .select('*')
+        .select('booking_id, user_id, event_date, booking_status, total_amount, paid_amount, created_at, notes_for_vendor, wedding_id')
         .eq('vendor_id', vendorProfile?.vendor_id);
       
       // Apply status filter if selected

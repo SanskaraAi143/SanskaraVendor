@@ -398,7 +398,7 @@ const StaffPortfolioForm: React.FC = () => {
                       onFileRemoved={handleImagesUploaded}
                       fileType="image"
                       maxFiles={15}
-                      bucketName="staff-portfolios"
+                      bucketName="vendor-staff"
                     />
                   </div>
 
@@ -413,7 +413,7 @@ const StaffPortfolioForm: React.FC = () => {
                       onFileRemoved={handleVideosUploaded}
                       fileType="video"
                       maxFiles={5}
-                      bucketName="staff-portfolios"
+                      bucketName="vendor-staff"
                     />
                   </div>
                   

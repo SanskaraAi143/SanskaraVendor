@@ -8,28 +8,48 @@ import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, vendorProfile, staffProfile, isLoading, isLoadingProfile } = useAuth();
+  const { user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile } = useAuth();
 
   useEffect(() => {
-    if (isLoading || isLoadingProfile) return;
+    if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) return;
 
     if (user) {
-      // If user is logged in, redirect based on their role
-      if (staffProfile) {
-        // User is staff, redirect to staff dashboard
-        navigate("/staff/dashboard");
+      // If staffProfile exists and role is 'owner', treat as vendor
+      if (staffProfile && staffProfile.role === 'owner') {
+        // User is vendor owner, check vendor onboarding
+        const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+        const needsVendorOnboarding = !vendorProfile && !onboardingSkipped;
+        if (needsVendorOnboarding) {
+          navigate("/onboarding");
+        } else {
+          navigate("/dashboard");
+        }
+      } else if (staffProfile) {
+        // User is staff (not owner), check staff onboarding
+        const needsStaffOnboarding = !staffProfile.display_name || !staffProfile.role || staffProfile.invitation_status === 'pending';
+        if (needsStaffOnboarding) {
+          navigate("/staff/onboarding");
+        } else {
+          navigate("/staff/dashboard");
+        }
       } else if (vendorProfile) {
-        // User is vendor, redirect to vendor dashboard
-        navigate("/dashboard");
+        // User is vendor, check vendor onboarding
+        const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+        const needsVendorOnboarding = !vendorProfile && !onboardingSkipped;
+        if (needsVendorOnboarding) {
+          navigate("/onboarding");
+        } else {
+          navigate("/dashboard");
+        }
       } else {
-        // User exists but no profile found, redirect to onboarding
-        navigate("/onboarding");
+        // User exists but no profile found, redirect to login
+        navigate("/login");
       }
     }
-  }, [user, vendorProfile, staffProfile, isLoading, isLoadingProfile, navigate]);
+  }, [user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile, navigate]);
 
   // Show loading while checking authentication
-  if (isLoading || isLoadingProfile) {
+  if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />

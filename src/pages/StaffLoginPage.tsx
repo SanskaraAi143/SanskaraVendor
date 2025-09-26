@@ -32,25 +32,6 @@ const StaffLoginPage: React.FC = () => {
       }
 
       if (data.user) {
-        // Check if user is a vendor (not staff)
-        const { data: vendorData, error: vendorError } = await supabase
-          .from('vendors')
-          .select('vendor_id')
-          .eq('supabase_auth_uid', data.user.id)
-          .single();
-
-        if (!vendorError && vendorData) {
-          // User is a vendor, redirect them to vendor portal
-          await supabase.auth.signOut();
-          toast({
-            title: "Wrong Portal",
-            description: "You're a vendor. Please use the main vendor portal to log in.",
-            variant: "destructive",
-          });
-          setError("Vendors should use the main portal. Please visit the vendor login page.");
-          return;
-        }
-
         // Check if user is staff
         const { data: staffData, error: staffError } = await supabase
           .from('vendor_staff')
@@ -58,20 +39,38 @@ const StaffLoginPage: React.FC = () => {
           .eq('supabase_auth_uid', data.user.id)
           .single();
 
-        if (staffError || !staffData) {
+        if (staffData) {
+          if (!staffData.is_active) {
+            await supabase.auth.signOut();
+            setError('Your staff account is inactive. Please contact your vendor.');
+            return;
+          }
+
+          // Staff login successful
+          navigate('/staff/dashboard');
+        } else {
+          // Check if user is a vendor (not staff)
+          const { data: vendorData, error: vendorError } = await supabase
+            .from('vendors')
+            .select('vendor_id')
+            .eq('supabase_auth_uid', data.user.id)
+            .single();
+
+          if (!vendorError && vendorData) {
+            // User is a vendor, redirect them to vendor portal
+            await supabase.auth.signOut();
+            toast({
+              title: "Wrong Portal",
+              description: "You're a vendor. Please use the main vendor portal to log in.",
+              variant: "destructive",
+            });
+            setError("Vendors should use the main portal. Please visit the vendor login page.");
+            return;
+          }
+
           await supabase.auth.signOut();
           setError('Staff profile not found. Please contact your vendor to add you as staff.');
-          return;
         }
-
-        if (!staffData.is_active) {
-          await supabase.auth.signOut();
-          setError('Your staff account is inactive. Please contact your vendor.');
-          return;
-        }
-
-        // Staff login successful
-        navigate('/staff/dashboard');
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
