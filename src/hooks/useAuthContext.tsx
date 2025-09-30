@@ -121,9 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           status: data.status || undefined,
         };
         
-        if (JSON.stringify(profile) !== JSON.stringify(vendorProfile)) {
-          setVendorProfile(profile);
-        }
+        setVendorProfile(profile);
       } else {
         setVendorProfile(null);
       }
@@ -190,20 +188,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const currentUserId = user?.id;
+      const newUserId = newSession?.user?.id;
+      const currentAccessToken = session?.access_token;
+      const newAccessToken = newSession?.access_token;
+
+      // Only update state if the user ID or access token has actually changed,
+      // or if it's a SIGNED_OUT event (which always implies a change)
+      if (currentUserId !== newUserId || currentAccessToken !== newAccessToken || _event === 'SIGNED_OUT') {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+      }
       setIsLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      const currentUserId = user?.id;
+      const newUserId = initialSession?.user?.id;
+      const currentAccessToken = session?.access_token;
+      const newAccessToken = initialSession?.access_token;
+
+      if (currentUserId !== newUserId || currentAccessToken !== newAccessToken) {
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+      }
       setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [user, session]); // Add user and session to dependencies for the comparison to work correctly
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -237,6 +251,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } else if (userProfile?.user_type === 'vendor') {
           setUserType('vendor');
           await fetchVendorProfile(user.id);
+          // Also fetch staff profile for vendor owners
+          await fetchStaffProfile(user.id);
         } else {
           setUserType('customer');
         }
@@ -256,9 +272,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!isLoading && user) {
       if (userType === 'vendor' && vendorProfile) {
-        if (!vendorProfile.is_active && location.pathname !== '/onboarding') {
+        if (!vendorProfile.is_active && location.pathname !== '/onboarding' && location.pathname !== '/manual-vendor-onboarding') {
           navigate('/onboarding');
-        } else if (vendorProfile.is_active && location.pathname === '/onboarding') {
+        } else if (vendorProfile.is_active && (location.pathname === '/onboarding' || location.pathname === '/manual-vendor-onboarding')) {
           navigate('/dashboard');
         }
       } else if (userType === 'staff' && staffProfile) {
@@ -499,7 +515,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: "You are already logged out.",
           variant: "destructive",
         });
-        navigate('/login');
+        window.location.href = '/login';
         return;
       }
 
@@ -517,7 +533,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.removeItem('staffProfile');
       localStorage.removeItem('userType');
 
-      navigate('/login');
+      window.location.href = '/login';
       toast({
         title: "Logged out",
         description: "You have been logged out for security reasons",

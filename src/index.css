@@ -28,8 +28,8 @@
     --accent: 315 65% 48%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%; /* A vibrant red */
+    --destructive-foreground: 222.2 47.4% 11.2%; /* Darker text for contrast */
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
@@ -69,8 +69,8 @@
     --accent: 315 65% 48%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72.8% 50.6%; /* A slightly brighter red for dark mode */
+    --destructive-foreground: 210 40% 98%; /* Keep light text for dark mode */
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;

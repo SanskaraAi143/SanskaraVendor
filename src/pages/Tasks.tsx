@@ -21,13 +21,13 @@ import { useDataCache } from '@/hooks/useDataCache';
 interface Task {
   vendor_task_id: string;
   title: string;
-  description: string;
+  description: string | null;
   status: string;
   priority: string;
-  due_date: string;
+  due_date: string | null;
   category: string;
-  booking_id?: string;
-  assigned_staff_id?: string;
+  booking_id?: string | null;
+  assigned_staff_id?: string | null;
   is_complete: boolean;
   created_at: string;
   updated_at: string;
@@ -47,18 +47,18 @@ interface Booking {
 
 interface TaskFormData {
   title: string;
-  description: string;
+  description: string | null;
   status: string;
   priority: string;
-  due_date: string;
+  due_date: string | null;
   category: string;
-  booking_id: string;
-  assigned_staff_id: string;
+  booking_id: string | null;
+  assigned_staff_id: string | null;
 }
 
 const Tasks: React.FC = () => {
   const { vendorProfile } = useAuth();
-  const { getCachedData, setLoading, setData, setError } = useDataCache();
+  const { getCachedData, setLoading, setData, setError, invalidateCache } = useDataCache();
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -74,13 +74,13 @@ const Tasks: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [formData, setFormData] = useState<TaskFormData>({
     title: '',
-    description: '',
+    description: null,
     status: 'To Do',
     priority: 'Medium',
-    due_date: '',
+    due_date: null,
     category: 'General',
-    booking_id: '',
-    assigned_staff_id: '',
+    booking_id: "-no-booking-selected-", // Initialize with the special string
+    assigned_staff_id: "-unassigned-staff-", // Initialize with the special string
   });
   const [date, setDate] = useState<Date | undefined>(undefined);
   
@@ -227,21 +227,19 @@ const Tasks: React.FC = () => {
   
   const handleDateSelect = (date: Date | undefined) => {
     setDate(date);
-    if (date) {
-      setFormData(prev => ({ ...prev, due_date: format(date, 'yyyy-MM-dd') }));
-    }
+    setFormData(prev => ({ ...prev, due_date: date ? format(date, 'yyyy-MM-dd') : null }));
   };
   
   const resetForm = () => {
     setFormData({
       title: '',
-      description: '',
+      description: null,
       status: 'To Do',
       priority: 'Medium',
-      due_date: '',
+      due_date: null,
       category: 'General',
-      booking_id: '',
-      assigned_staff_id: '',
+      booking_id: "-no-booking-selected-", // Initialize with the special string
+      assigned_staff_id: "-unassigned-staff-", // Initialize with the special string
     });
     setDate(undefined);
     setSelectedTask(null);
@@ -272,8 +270,8 @@ const Tasks: React.FC = () => {
       priority: task.priority,
       due_date: task.due_date,
       category: task.category,
-      booking_id: task.booking_id || '',
-      assigned_staff_id: task.assigned_staff_id || '',
+      booking_id: task.booking_id || "-no-booking-selected-",
+      assigned_staff_id: task.assigned_staff_id || "-unassigned-staff-",
     });
     
     setDate(dueDate);
@@ -291,9 +289,12 @@ const Tasks: React.FC = () => {
     if (!vendorProfile?.vendor_id) return;
     
     try {
-      const updatedTask = {
+      const payload = {
         ...formData,
-        assigned_staff_id: formData.assigned_staff_id,
+        description: formData.description === '' ? null : formData.description,
+        due_date: formData.due_date === '' ? null : formData.due_date,
+        booking_id: formData.booking_id === "-no-booking-selected-" ? null : formData.booking_id,
+        assigned_staff_id: formData.assigned_staff_id === "-unassigned-staff-" ? null : formData.assigned_staff_id,
         vendor_id: vendorProfile?.vendor_id || '',
         is_complete: formData.status === 'Completed'
       };
@@ -302,7 +303,7 @@ const Tasks: React.FC = () => {
         // Update existing task
         const { error } = await supabase
           .from('vendor_tasks')
-          .update(updatedTask)
+          .update(payload)
           .eq('vendor_task_id', selectedTask.vendor_task_id);
           
         if (error) throw error;
@@ -315,7 +316,7 @@ const Tasks: React.FC = () => {
         // Create new task
         const { error } = await supabase
           .from('vendor_tasks')
-          .insert([updatedTask]);
+          .insert([payload]);
           
         if (error) throw error;
         
@@ -325,8 +326,9 @@ const Tasks: React.FC = () => {
         });
       }
       
-      // Refresh tasks
-      fetchTasks();
+      // Refresh tasks and invalidate cache
+      invalidateCache('tasks'); // Invalidate the tasks cache
+      fetchTasks(); // Refetch tasks from the backend
       setIsDialogOpen(false);
       resetForm();
     } catch (error) {
@@ -355,8 +357,9 @@ const Tasks: React.FC = () => {
         description: "Task deleted successfully",
       });
       
-      // Refresh tasks
-      fetchTasks();
+      // Refresh tasks and invalidate cache
+      invalidateCache('tasks'); // Invalidate the tasks cache
+      fetchTasks(); // Refetch tasks from the backend
       setIsDeleteDialogOpen(false);
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -806,7 +809,7 @@ const Tasks: React.FC = () => {
                     <SelectValue placeholder="Select booking" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Booking</SelectItem>
+                    <SelectItem value="-no-booking-selected-">No Booking</SelectItem>
                     {bookings.map(booking => (
                       <SelectItem key={booking.booking_id} value={booking.booking_id}>
                         {booking.client_name} ({formatDate(booking.event_date)})
@@ -823,10 +826,12 @@ const Tasks: React.FC = () => {
                   onValueChange={(value) => handleSelectChange('assigned_staff_id', value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Assign to staff" />
+                    <SelectValue placeholder="Assign to staff">
+                      {formData.assigned_staff_id === "-unassigned-staff-" ? "Unassigned" : getStaffNameById(formData.assigned_staff_id)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="-unassigned-staff-">Unassigned</SelectItem>
                     {staff.map(staffMember => (
                       <SelectItem key={staffMember.staff_id} value={staffMember.staff_id}>
                         {staffMember.name} ({staffMember.role})

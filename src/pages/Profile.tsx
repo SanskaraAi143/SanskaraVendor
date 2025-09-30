@@ -527,7 +527,7 @@ const VendorProfile: React.FC = () => {
               {services.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500 mb-4">No venue spaces/halls (services) defined yet.</p>
-                  <Button onClick={() => navigate('/dashboard/services/add')}>
+                  <Button onClick={() => navigate('/services/add')}>
                     <Plus className="h-4 w-4 mr-2" /> Add Hall/Space
                   </Button>
                 </div>
@@ -579,7 +579,7 @@ const VendorProfile: React.FC = () => {
                       )}
                     </div>
                   ))}
-                  <Button onClick={() => navigate('/dashboard/services/add')} className="w-full mt-4">
+                  <Button onClick={() => navigate('/services/add')} className="w-full mt-4">
                     <Plus className="h-4 w-4 mr-2" /> Add Another Hall/Space
                   </Button>
                 </div>

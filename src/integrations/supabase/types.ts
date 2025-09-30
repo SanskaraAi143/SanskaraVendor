@@ -56,61 +56,77 @@ export type Database = {
         Row: {
           advance_amount_due: number | null
           booking_id: string
+          booking_source: string
           booking_status: string
           commission_amount: number | null
           commission_rate_applied: number | null
           contract_details_url: string | null
           created_at: string | null
+          created_by_staff_id: string | null
+          custom_customer_details: Json | null
           event_date: string
           notes_for_user: string | null
           notes_for_vendor: string | null
           paid_amount: number | null
           total_amount: number | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
           user_shortlisted_vendor_id: string | null
           vendor_id: string
-          wedding_id: string
+          wedding_id: string | null
         }
         Insert: {
           advance_amount_due?: number | null
           booking_id?: string
+          booking_source?: string
           booking_status?: string
           commission_amount?: number | null
           commission_rate_applied?: number | null
           contract_details_url?: string | null
           created_at?: string | null
+          created_by_staff_id?: string | null
+          custom_customer_details?: Json | null
           event_date: string
           notes_for_user?: string | null
           notes_for_vendor?: string | null
           paid_amount?: number | null
           total_amount?: number | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
           user_shortlisted_vendor_id?: string | null
           vendor_id: string
-          wedding_id: string
+          wedding_id?: string | null
         }
         Update: {
           advance_amount_due?: number | null
           booking_id?: string
+          booking_source?: string
           booking_status?: string
           commission_amount?: number | null
           commission_rate_applied?: number | null
           contract_details_url?: string | null
           created_at?: string | null
+          created_by_staff_id?: string | null
+          custom_customer_details?: Json | null
           event_date?: string
           notes_for_user?: string | null
           notes_for_vendor?: string | null
           paid_amount?: number | null
           total_amount?: number | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
           user_shortlisted_vendor_id?: string | null
           vendor_id?: string
-          wedding_id?: string
+          wedding_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_created_by_staff_id_fkey"
+            columns: ["created_by_staff_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_staff"
+            referencedColumns: ["staff_id"]
+          },
           {
             foreignKeyName: "bookings_user_id_fkey"
             columns: ["user_id"]
@@ -138,13 +154,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "weddings"
             referencedColumns: ["wedding_id"]
-          },
-          {
-            foreignKeyName: "bookings_vendor_tasks_fkey", // A new, artificial FK name for client-side
-            columns: ["booking_id"],
-            isOneToOne: false,
-            referencedRelation: "vendor_tasks",
-            referencedColumns: ["booking_id"]
           },
         ]
       }
@@ -462,7 +471,7 @@ export type Database = {
           payment_type: string
           transaction_id: string | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           amount: number
@@ -476,7 +485,7 @@ export type Database = {
           payment_type?: string
           transaction_id?: string | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           amount?: number
@@ -490,7 +499,7 @@ export type Database = {
           payment_type?: string
           transaction_id?: string | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1188,7 +1197,7 @@ export type Database = {
       vendor_tasks: {
         Row: {
           assigned_staff_id: string | null
-          booking_id: string
+          booking_id: string | null
           category: string | null
           created_at: string | null
           dependency_task_id: string | null
@@ -1205,7 +1214,7 @@ export type Database = {
         }
         Insert: {
           assigned_staff_id?: string | null
-          booking_id: string
+          booking_id?: string | null
           category?: string | null
           created_at?: string | null
           dependency_task_id?: string | null
@@ -1222,7 +1231,7 @@ export type Database = {
         }
         Update: {
           assigned_staff_id?: string | null
-          booking_id?: string
+          booking_id?: string | null
           category?: string | null
           created_at?: string | null
           dependency_task_id?: string | null

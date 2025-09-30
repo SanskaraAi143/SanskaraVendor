@@ -100,8 +100,8 @@ const LoginPage: React.FC = () => {
   };
   
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center p-4"
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4"
       style={{
         backgroundImage: 'url("/subtle-bg-pattern.svg"), linear-gradient(135deg, #FFF8DC 0%, #D4AF37 100%)',
         backgroundSize: '300px 300px, cover',
@@ -414,7 +414,7 @@ const LoginPage: React.FC = () => {
         </div>
       </Card>
       
-      <div className="absolute bottom-4 text-center w-full">
+      <div className="mt-auto text-center w-full">
         <p className="text-sm text-sanskara-maroon/70">
           © 2025 Sanskara AI. All rights reserved.
         </p>

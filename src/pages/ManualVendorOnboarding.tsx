@@ -2019,53 +2019,6 @@ const ManualVendorOnboarding: React.FC = () => {
                 {currentStep < steps.length ? 'Next' : isSubmitting ? 'Submitting...' : 'Finish'}
               </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={async () => {
-                if (!user) return;
-                const metadata = user.user_metadata || {};
-                const vendor_name = metadata.vendor_name || metadata.vendorName || user.email?.split('@')[0] || 'Vendor';
-                const vendor_category = metadata.vendor_category || metadata.vendorCategory || 'Other';
-                const contact_email = user.email;
-                const phone_number = metadata.phone_number || metadata.phone || '';
-                // Insert vendor row with minimal/default values
-                const { data: vendor, error } = await supabase.from('vendors').insert([
-                  {
-                    vendor_name,
-                    vendor_category,
-                    contact_email,
-                    phone_number,
-                    supabase_auth_uid: user.id,
-                    is_verified: false,
-                    is_active: true,
-                    status: 'active'
-                  }
-                ]).select().single();
-                if (error) {
-                  toast({ title: 'Error', description: error.message, variant: 'destructive' });
-                  return;
-                }
-                // Also create vendor_staff entry for this user as owner
-                await supabase.from('vendor_staff').insert({
-                  vendor_id: vendor.vendor_id,
-                  supabase_auth_uid: user.id,
-                  email: contact_email,
-                  phone_number,
-                  display_name: metadata.display_name || user.email?.split('@')[0] || 'Owner',
-                  role: 'owner'
-                });
-                if (vendor) {
-                  await updateVendor(vendor.vendor_id, { is_active: true, status: 'active' });
-                }
-                await refreshVendorProfile();
-                navigate('/');
-              }}
-              className="w-full"
-              disabled={isSubmitting}
-            >
-              Skip Onboarding & Go to Dashboard
-            </Button>
           </div>
         </Card>
       </div>

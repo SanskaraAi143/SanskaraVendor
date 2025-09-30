@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../integrations/supabase/client';
@@ -11,6 +10,15 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
+import { Tables } from '@/integrations/supabase/types'; // Import Tables type
+
+// Define a type for the joined booking data
+type JoinedBooking = {
+  event_date: string | null;
+  users: Array<{
+    display_name: string | null;
+  }> | null;
+}
 
 interface VendorTask {
   vendor_task_id: string;
@@ -20,12 +28,7 @@ interface VendorTask {
   status: string;
   priority: string | null;
   booking_id: string | null;
-  bookings: {
-    event_date: string | null;
-    users: {
-      display_name: string | null;
-    } | null;
-  } | null;
+  bookings: JoinedBooking | null; // This is the simplified version for the component's state
 }
 
 const taskStatusOptions = ["Pending", "In Progress", "Completed", "Blocked"];
@@ -82,7 +85,22 @@ const StaffTasks: React.FC = () => {
       const { data: tasksData, error: tasksError } = await query;
 
       if (tasksError) throw tasksError;
-      setTasks(tasksData as VendorTask[] || []);
+      setTasks(tasksData?.map((task: any) => { // Use 'any' for the raw task from Supabase
+        const processedBookings: JoinedBooking | null = (task.bookings && Array.isArray(task.bookings) && task.bookings.length > 0)
+          ? {
+              event_date: task.bookings[0].event_date,
+              users: (task.bookings[0].users && Array.isArray(task.bookings[0].users) && task.bookings[0].users.length > 0)
+                ? [{ display_name: task.bookings[0].users[0].display_name }]
+                : null,
+            }
+          : null;
+
+        return {
+          ...task,
+          status: task.status === "" ? "Pending" : task.status, // Ensure status is never an empty string
+          bookings: processedBookings,
+        };
+      }) as VendorTask[] || []);
 
     } catch (fetchError: any) {
       console.error('Error fetching staff tasks:', fetchError);
@@ -209,7 +227,7 @@ const StaffTasks: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   {taskStatusOptions.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                    <SelectItem key={status} value={status} className="text-xs">{status}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -294,10 +312,10 @@ const StaffTasks: React.FC = () => {
                         <Badge className={`${getStatusColor(task.status)} text-xs`}>{task.status}</Badge>
                       </td>
                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {task.booking_id ? (
+                        {task.booking_id && task.bookings ? (
                           <div className="space-y-1">
                             <div className="text-xs font-medium">
-                              {task.bookings?.users?.display_name || 'Unknown Client'}
+                              {task.bookings?.users?.[0]?.display_name || 'Unknown Client'}
                             </div>
                             <div className="text-xs text-gray-400">
                               {task.bookings?.event_date ? new Date(task.bookings.event_date).toLocaleDateString() : 'No date'}

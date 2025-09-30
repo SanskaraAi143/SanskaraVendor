@@ -28,12 +28,6 @@ const AutofillVendorOnboarding: React.FC = () => {
     navigate('/manual-vendor-onboarding');
   };
 
-  const handleContinue = async () => {
-    if (vendorProfile) {
-      await updateVendor(vendorProfile.vendor_id, { is_active: true });
-      navigate('/');
-    }
-  };
 
   const handleFileCardClick = () => {
     fileInputRef.current?.click();
@@ -131,8 +125,6 @@ const AutofillVendorOnboarding: React.FC = () => {
               <AudioCallManager />
             </DialogContent>
           </Dialog>
-
-          <Button className="w-full" onClick={handleContinue}>Continue</Button>
 
           <Button variant="link" className="w-full" onClick={handleManualOnboarding}>
             Skip & Fill Manually

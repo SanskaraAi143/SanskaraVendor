@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { Tables } from '@/integrations/supabase/types';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { Calendar, Clock, User, MapPin, Package, CheckCircle2, AlertCircle } from 'lucide-react';
 
+// Define a type for custom customer details for clarity and type safety
+type CustomCustomerDetails = {
+  name: string;
+  email: string;
+  phone?: string;
+};
+
 interface BookingDetailsProps {
   bookingId: string;
   open: boolean;
@@ -30,7 +37,9 @@ interface BookingData {
   clientPhone?: string;
   eventDate: string;
   status: string;
-  weddingId: string;
+  weddingId: string | null;
+  booking_source: Tables<'bookings'>['booking_source'];
+  custom_customer_details?: CustomCustomerDetails; // Use the new CustomCustomerDetails type
   totalAmount?: number;
   paidAmount?: number;
   services: Array<{
@@ -69,20 +78,34 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       // Fetch the booking
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select('*, wedding_id')
+        .select('*, custom_customer_details, booking_source')
         .eq('booking_id', bookingId)
-        .single();
+        .single() as { data: Tables<'bookings'> | null, error: any };
         
       if (bookingError) throw bookingError;
-      
-      // Fetch the client (user) info
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('user_id', bookingData.user_id)
-        .single();
-        
-      if (userError) throw userError;
+
+      let clientName = 'Unknown Client';
+      let clientEmail = 'N/A';
+      let clientPhone = 'N/A';
+
+      if (bookingData.booking_source === 'vendor_manual' && bookingData.custom_customer_details) {
+        // Assert the type of custom_customer_details for direct access
+        const customDetails = bookingData.custom_customer_details as CustomCustomerDetails;
+        clientName = customDetails.name;
+        clientEmail = customDetails.email;
+        clientPhone = customDetails.phone || 'N/A';
+      } else if (bookingData.user_id) {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('user_id', bookingData.user_id)
+          .single();
+          
+        if (userError) throw userError;
+
+        clientName = userData.display_name || 'Unknown Client';
+        clientEmail = userData.email || 'N/A';
+      }
       
       // Fetch booking services
       const { data: servicesData, error: servicesError } = await supabase
@@ -109,12 +132,14 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       // Format the data
       const formattedBooking: BookingData = {
         bookingId: bookingData.booking_id,
-        clientName: userData.display_name || 'Unknown Client',
-        clientEmail: userData.email || 'N/A',
-        clientPhone: 'N/A', // Default to N/A since it might not exist in users table
+        clientName: clientName,
+        clientEmail: clientEmail,
+        clientPhone: clientPhone,
         eventDate: bookingData.event_date,
         status: bookingData.booking_status,
         weddingId: bookingData.wedding_id,
+        booking_source: bookingData.booking_source,
+        custom_customer_details: bookingData.custom_customer_details as CustomCustomerDetails | undefined | null,
         totalAmount: bookingData.total_amount,
         paidAmount: bookingData.paid_amount,
         services: servicesData.map((service: any) => ({

@@ -57,7 +57,7 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
         // Transform data to match component's expected format
         const formattedBookings = data.map(booking => ({
           booking_id: booking.booking_id,
-          client: `Client #${booking.user_id.substring(0, 8)}`,  // We'll use user ID as a placeholder
+          client: booking.user_id ? `Client #${booking.user_id.substring(0, 8)}` : 'Unknown Client',
           date: booking.event_date,
           time: "TBD", // Time might not be available
           location: "Location details unavailable",

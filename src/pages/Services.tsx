@@ -117,7 +117,7 @@ const Services: React.FC = () => {
         </div>
         <Button 
           className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
-          onClick={() => navigate('/dashboard/services/add')}
+          onClick={() => navigate('/services/add')}
         >
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Service
@@ -142,7 +142,7 @@ const Services: React.FC = () => {
             </p>
             <Button 
               className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
-              onClick={() => navigate('/dashboard/services/add')}
+              onClick={() => navigate('/services/add')}
             >
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Your First Service
@@ -181,7 +181,7 @@ const Services: React.FC = () => {
                     variant="outline" 
                     size="sm" 
                     className="flex-1"
-                    onClick={() => navigate(`/dashboard/services/edit/${service.service_id}`)}
+                    onClick={() => navigate(`/services/edit/${service.service_id}`)}
                   >
                     <Edit className="h-4 w-4 mr-1" /> Edit
                   </Button>
