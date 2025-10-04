@@ -272,9 +272,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!isLoading && user) {
       if (userType === 'vendor' && vendorProfile) {
-        if (!vendorProfile.is_active && location.pathname !== '/onboarding' && location.pathname !== '/manual-vendor-onboarding') {
-          navigate('/onboarding');
-        } else if (vendorProfile.is_active && (location.pathname === '/onboarding' || location.pathname === '/manual-vendor-onboarding')) {
+        if (vendorProfile.status !== 'onboarding_complete' && !location.pathname.startsWith('/onboard')) {
+          navigate('/onboard');
+        } else if (vendorProfile.status === 'onboarding_complete' && location.pathname.startsWith('/onboard')) {
           navigate('/dashboard');
         }
       } else if (userType === 'staff' && staffProfile) {
@@ -338,7 +338,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Determine redirection based on userType
       if (userProfile?.user_type === 'vendor') {
-        navigate('/dashboard');
+        // After sign-in, check vendor onboarding status
+        const { data: currentVendorProfile, error: vendorProfileError } = await supabase
+          .from('vendors')
+          .select('status')
+          .eq('supabase_auth_uid', data.user?.id)
+          .single();
+
+        if (vendorProfileError) {
+          console.error('Error fetching vendor profile for redirection:', vendorProfileError);
+          // Fallback to dashboard if profile fetch fails
+          navigate('/dashboard');
+        } else if (currentVendorProfile?.status !== 'onboarding_complete') {
+          navigate('/onboard');
+        } else {
+          navigate('/dashboard');
+        }
       } else if (userProfile?.user_type === 'vendor_staff' || userProfile?.user_type === 'staff') {
         navigate('/staff/dashboard');
       } else {

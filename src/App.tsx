@@ -21,8 +21,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Reviews from './pages/Reviews';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
-import VendorOnboarding from './pages/VendorOnboarding';
-import ManualVendorOnboarding from './pages/ManualVendorOnboarding';
+// import VendorOnboarding from './pages/VendorOnboarding';
+// import ManualVendorOnboarding from './pages/ManualVendorOnboarding';
 import StaffLoginPage from './pages/StaffLoginPage';
 import StaffDashboard from './pages/StaffDashboard';
 import StaffProtectedRoute from './components/StaffProtectedRoute';
@@ -35,6 +35,12 @@ import StaffVendorServicesPage from './pages/StaffVendorServicesPage';
 import StaffNotifications from './pages/StaffNotifications';
 import StaffProfile from './pages/StaffProfile';
 import StaffSettings from './pages/StaffSettings';
+import OnboardingLayout from './layouts/OnboardingLayout';
+import CompletionStep from './components/onboarding/CompletionStep';
+import DocumentUploadStep from './components/onboarding/DocumentUploadStep';
+import AiChatStep from './components/onboarding/AiChatStep';
+import AutofillVendorOnboarding from './components/onboarding/AutofillVendorOnboarding';
+// Removed empty vendor-onboarding step imports
 
 function App() {
   const { user, isLoading, userType } = useAuth();
@@ -98,11 +104,20 @@ function App() {
           <Route path="/staff/settings" element={<StaffSettings />} />
         </Route>
 
+        {/* Onboarding Routes */}
+        <Route path="/onboard" element={<OnboardingLayout />}>
+          <Route index element={<AiChatStep onCompletion={(data) => console.log('AI Chat completed', data)} />} /> {/* Default to AI chat */}
+          <Route path="documents" element={<DocumentUploadStep onCompletion={(data) => console.log('Document Upload completed', data)} />} />
+          <Route path="vendor-form" element={<AutofillVendorOnboarding onCompletion={(data) => console.log('Autofill Vendor Onboarding completed', data)} />} />
+          <Route path="complete" element={<CompletionStep />} />
+        </Route>
+
         {/* Protected Vendor Routes */}
         <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/onboarding" element={<VendorOnboarding />} />
-          <Route path="/manual-vendor-onboarding" element={<ManualVendorOnboarding />} />
+          {/* Old onboarding routes - can be removed after full migration */}
+          {/* <Route path="/onboarding" element={<VendorOnboarding />} /> */}
+          {/* <Route path="/manual-vendor-onboarding" element={<ManualVendorOnboarding />} /> */}
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/services" element={<Services />} />

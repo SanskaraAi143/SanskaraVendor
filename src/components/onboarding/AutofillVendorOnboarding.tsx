@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/dialog";
 import AudioCallManager from './AudioCallManager';
 
-const AutofillVendorOnboarding: React.FC = () => {
+interface AutofillVendorOnboardingProps {
+  onCompletion: (data: any) => void;
+}
+
+const AutofillVendorOnboarding: React.FC<AutofillVendorOnboardingProps> = ({ onCompletion }) => {
   const navigate = useNavigate();
   const { isUploading, uploadError, uploadFile } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +58,7 @@ const AutofillVendorOnboarding: React.FC = () => {
         description: 'Your biodata has been uploaded.',
       });
       // TODO: Handle the returned publicUrl, e.g., save it to state or database
+      onCompletion({ publicUrl }); // Call onCompletion with the uploaded data
     } else if (uploadError) {
       toast({
         title: 'Upload failed',
@@ -126,7 +131,7 @@ const AutofillVendorOnboarding: React.FC = () => {
             </DialogContent>
           </Dialog>
 
-          <Button variant="link" className="w-full" onClick={handleManualOnboarding}>
+          <Button variant="link" className="w-full" onClick={() => onCompletion({})}>
             Skip & Fill Manually
           </Button>
         </Card>
