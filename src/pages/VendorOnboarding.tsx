@@ -1,7 +1,14 @@
-import AutofillVendorOnboarding from "@/components/onboarding/AutofillVendorOnboarding";
+import AiOnboardingApp from "@/components/onboarding/AiOnboardingApp";
+import { useNavigate } from "react-router-dom";
 
 const VendorOnboarding = () => {
-  return <AutofillVendorOnboarding />;
+  const navigate = useNavigate();
+
+  const handleCompletion = () => {
+    navigate('/dashboard');
+  };
+
+  return <AiOnboardingApp onComplete={handleCompletion} />;
 };
 
 export default VendorOnboarding;

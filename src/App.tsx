@@ -40,6 +40,7 @@ import CompletionStep from './components/onboarding/CompletionStep';
 import DocumentUploadStep from './components/onboarding/DocumentUploadStep';
 import AiChatStep from './components/onboarding/AiChatStep';
 import AutofillVendorOnboarding from './components/onboarding/AutofillVendorOnboarding';
+import { VendorOnboarding } from './components/onboarding/VendorOnboarding';
 // Removed empty vendor-onboarding step imports
 
 function App() {
@@ -104,33 +105,25 @@ function App() {
           <Route path="/staff/settings" element={<StaffSettings />} />
         </Route>
 
-        {/* Onboarding Routes */}
-        <Route path="/onboard" element={<OnboardingLayout />}>
-          <Route index element={<AiChatStep onCompletion={(data) => console.log('AI Chat completed', data)} />} /> {/* Default to AI chat */}
-          <Route path="documents" element={<DocumentUploadStep onCompletion={(data) => console.log('Document Upload completed', data)} />} />
-          <Route path="vendor-form" element={<AutofillVendorOnboarding onCompletion={(data) => console.log('Autofill Vendor Onboarding completed', data)} />} />
-          <Route path="complete" element={<CompletionStep />} />
-        </Route>
+        {/* Onboarding Routes - Updated to use new AI onboarding */}
+        <Route path="/onboard" element={<VendorOnboarding onBack={() => {}} />} />
 
         {/* Protected Vendor Routes */}
         <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
-          {/* Old onboarding routes - can be removed after full migration */}
-          {/* <Route path="/onboarding" element={<VendorOnboarding />} /> */}
-          {/* <Route path="/manual-vendor-onboarding" element={<ManualVendorOnboarding />} /> */}
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/services/add" element={<AddService />} />
-          <Route path="/services/edit/:serviceId" element={<EditService />} />
-          <Route path="/staff" element={<Staff />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/payments" element={<Payments />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/edit" element={<EditProfile />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/reviews" element={<Reviews />} />
+          <Route path="/dashboard/bookings" element={<Bookings />} />
+          <Route path="/dashboard/calendar" element={<Calendar />} />
+          <Route path="/dashboard/services" element={<Services />} />
+          <Route path="/dashboard/services/add" element={<AddService />} />
+          <Route path="/dashboard/services/edit/:serviceId" element={<EditService />} />
+          <Route path="/dashboard/staff" element={<Staff />} />
+          <Route path="/dashboard/tasks" element={<Tasks />} />
+          <Route path="/dashboard/payments" element={<Payments />} />
+          <Route path="/dashboard/notifications" element={<Notifications />} />
+          <Route path="/dashboard/profile" element={<Profile />} />
+          <Route path="/dashboard/profile/edit" element={<EditProfile />} />
+          <Route path="/dashboard/settings" element={<Settings />} />
+          <Route path="/dashboard/reviews" element={<Reviews />} />
         </Route>
 
         {/* 404 route */}
