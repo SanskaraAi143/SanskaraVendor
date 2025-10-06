@@ -34,7 +34,7 @@ const AiChatStep = ({ onCompletion, onError, userType }: AiChatStepProps): JSX.E
   // Audio constants
   const SEND_SAMPLE_RATE = 16000;
   const PLAYBACK_SAMPLE_RATE = 24000;
-  const WS_URL = 'ws://localhost:8765/vendor/onboard';
+  const WS_URL = 'ws://localhost:8765/onboarding/onboard';
 
   // Helper functions
   const downsampleBuffer = useCallback((buffer: Float32Array, inputSampleRate: number, outputSampleRate: number): Float32Array => {
