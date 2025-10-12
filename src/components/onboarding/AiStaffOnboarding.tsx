@@ -1,5 +1,5 @@
 import React from 'react';
-import { StaffOnboarding as NewStaffOnboarding } from '@/ai-venue-onboarding-agent/features/staff/StaffOnboarding';
+import { StaffOnboarding as NewStaffOnboarding } from './features/staff/StaffOnboarding';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +12,7 @@ interface AiStaffOnboardingProps {
 }
 
 export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onComplete, onError }) => {
-  const { user } = useAuth();
+  const { user, refreshStaffProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -128,13 +128,24 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
         throw new Error(`Failed to create staff portfolio: ${portfolioError.message}`);
       }
 
+      const { error: updateStatusError } = await supabase
+        .from('vendor_staff')
+        .update({ is_active: true })
+        .eq('staff_id', vendorStaff.staff_id);
+
+      if (updateStatusError) {
+        console.warn('Failed to update staff status to active:', updateStatusError);
+      }
+
+      await refreshStaffProfile();
+
       toast({
         title: "Staff Onboarding Completed!",
         description: "Your portfolio has been successfully created with SanskaraAi.",
         variant: "default",
       });
 
-      onComplete({ portfolioId: portfolio?.portfolio_id, navigate: navigate });
+      navigate('/staff/dashboard');
     } catch (error: any) {
       console.error('Error submitting staff onboarding:', error);
       onError("Submission Error", error.message || "Failed to complete staff onboarding.");

@@ -278,9 +278,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           navigate('/dashboard');
         }
       } else if (userType === 'staff' && staffProfile) {
-        if (staffProfile.invitation_status === 'pending' && location.pathname !== '/staff/onboarding') {
+        if (!staffProfile.is_active && location.pathname !== '/staff/onboarding') {
           navigate('/staff/onboarding');
-        } else if (staffProfile.invitation_status === 'accepted' && location.pathname === '/staff/onboarding') {
+        } else if (staffProfile.is_active && location.pathname === '/staff/onboarding') {
           navigate('/staff/dashboard');
         }
       }
