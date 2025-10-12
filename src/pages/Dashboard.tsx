@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import DashboardCard from '@/components/DashboardCard';
 import RevenueChart from '@/components/RevenueChart';
 import UpcomingBookings from '@/components/UpcomingBookings';
 import UpcomingTasks from '@/components/UpcomingTasks';
 import ServicesList from '@/components/ServicesList';
-import { BookOpen, CalendarCheck, Star, DollarSign } from 'lucide-react';
+import { BookOpen, CalendarCheck, Star, DollarSign, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -161,11 +163,19 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold gradient-text">Welcome, {vendorProfile?.vendor_name || 'Vendor'}!</h1>
-        <p className="text-muted-foreground mt-1">
-          Here's an overview of your business performance and upcoming events.
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+            <h1 className="text-3xl font-bold gradient-text">Welcome, {vendorProfile?.vendor_name || 'Vendor'}!</h1>
+            <p className="text-muted-foreground mt-1">
+            Here's an overview of your business performance and upcoming events.
+            </p>
+        </div>
+        <Link to="/dashboard/profile">
+            <Button variant="outline">
+                <User className="mr-2 h-4 w-4" />
+                View Profile
+            </Button>
+        </Link>
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

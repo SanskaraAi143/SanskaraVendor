@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StaffDashboardLayout from '@/components/staff/StaffDashboardLayout';
 import DashboardCard from '@/components/DashboardCard';
-import { Calendar, CheckCircle2, Clock, Users } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, Users, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -154,13 +154,21 @@ const StaffDashboard: React.FC = () => {
   return (
     <StaffDashboardLayout>
       <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-3xl font-bold gradient-text">
-            Welcome, {staffProfile?.display_name || 'Staff Member'}!
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Here's an overview of your tasks and upcoming events.
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold gradient-text">
+                Welcome, {staffProfile?.display_name || 'Staff Member'}!
+            </h1>
+            <p className="text-muted-foreground mt-1">
+                Here's an overview of your tasks and upcoming events.
+            </p>
+          </div>
+          <Link to="/staff/profile">
+              <Button variant="outline">
+                  <User className="mr-2 h-4 w-4" />
+                  View Profile
+              </Button>
+          </Link>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

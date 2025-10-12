@@ -369,69 +369,76 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
             </div>
           </>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm">{profile.email}</span>
-                </div>
-                {profile.phone_number && (
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm">{profile.phone_number}</span>
-                  </div>
-                )}
-                {profile.address && (
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm">{profile.address}</span>
-                  </div>
-                )}
-                {profile.experience_years && (
-                  <div className="flex items-center space-x-2">
-                    <Tag className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm">{profile.experience_years} years experience</span>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-4">
-                {profile.date_of_birth && (
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm">Born {new Date(profile.date_of_birth).toLocaleDateString()}</span>
-                  </div>
-                )}
-                {profile.emergency_contact && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Emergency Contact</p>
-                    <p className="text-sm text-gray-600">{profile.emergency_contact}</p>
-                    {profile.emergency_phone && (
-                      <p className="text-sm text-gray-600">{profile.emergency_phone}</p>
-                    )}
-                  </div>
-                )}
-                {profile.skills && profile.skills.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Skills</p>
-                    <div className="flex flex-wrap gap-1">
-                      {profile.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {skill}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="space-y-6">
             {profile.bio && (
-              <div className="pt-4 border-t">
-                <p className="text-sm font-medium text-gray-700 mb-2">About</p>
-                <p className="text-sm text-gray-600">{profile.bio}</p>
-              </div>
+                <div className="pt-4 border-t">
+                    <h3 className="text-lg font-semibold mb-2 text-gray-800">About Me</h3>
+                    <p className="text-gray-600 leading-relaxed">{profile.bio}</p>
+                </div>
             )}
-          </>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                {/* Contact Information */}
+                <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-800">Contact & Personal</h3>
+                    <div className="flex items-center text-sm text-gray-600">
+                        <Mail className="h-4 w-4 mr-3 text-gray-400" />
+                        <span>{profile.email}</span>
+                    </div>
+                    {profile.phone_number && (
+                        <div className="flex items-center text-sm text-gray-600">
+                            <Phone className="h-4 w-4 mr-3 text-gray-400" />
+                            <span>{profile.phone_number}</span>
+                        </div>
+                    )}
+                    {profile.address && (
+                        <div className="flex items-start text-sm text-gray-600">
+                            <MapPin className="h-4 w-4 mr-3 mt-1 text-gray-400" />
+                            <span>{profile.address}</span>
+                        </div>
+                    )}
+                    {profile.date_of_birth && (
+                        <div className="flex items-center text-sm text-gray-600">
+                            <Calendar className="h-4 w-4 mr-3 text-gray-400" />
+                            <span>Born on {new Date(profile.date_of_birth).toLocaleDateString()}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Professional Information */}
+                <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-800">Professional Details</h3>
+                    {profile.experience_years && (
+                        <div className="flex items-center text-sm text-gray-600">
+                            <Tag className="h-4 w-4 mr-3 text-gray-400" />
+                            <span>{profile.experience_years} years of experience</span>
+                        </div>
+                    )}
+                    {profile.skills && profile.skills.length > 0 && (
+                        <div className="space-y-2">
+                            <h4 className="font-medium text-sm text-gray-700">Skills</h4>
+                            <div className="flex flex-wrap gap-2">
+                            {profile.skills.map((skill, index) => (
+                                <Badge key={index} variant="secondary">
+                                {skill}
+                                </Badge>
+                            ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {profile.emergency_contact && (
+                <div className="pt-4 border-t">
+                    <h3 className="text-lg font-semibold text-red-600">Emergency Contact</h3>
+                    <div className="text-sm text-gray-600 mt-2">
+                        <p><strong>Name:</strong> {profile.emergency_contact}</p>
+                        {profile.emergency_phone && <p><strong>Phone:</strong> {profile.emergency_phone}</p>}
+                    </div>
+                </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
