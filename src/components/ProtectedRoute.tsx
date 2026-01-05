@@ -23,20 +23,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // No user type or wrong user type
-  if (!userType) {
-    // Call signOut in a useEffect to avoid state update during render
-    React.useEffect(() => {
-      signOut();
-    }, [signOut]);
-    return null; // Let AuthContext handle the redirect after signOut
-  }
+  // Compute if we need to sign out due to missing or wrong userType
+  const shouldSignOut =
+    user && !isLoading && !isLoadingUserType && (!userType || userType !== 'vendor');
 
-  if (userType !== 'vendor') {
-    // Call signOut in a useEffect to avoid state update during render
-    React.useEffect(() => {
+  React.useEffect(() => {
+    if (shouldSignOut) {
       signOut();
-    }, [signOut]);
+    }
+  }, [shouldSignOut, signOut]);
+
+  if (shouldSignOut) {
     return null; // Let AuthContext handle the redirect after signOut
   }
 

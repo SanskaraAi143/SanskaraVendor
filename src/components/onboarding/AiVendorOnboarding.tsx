@@ -401,14 +401,34 @@ export const VendorOnboarding: React.FC<AiVendorOnboardingProps> = ({ onBack, on
 
   const isBusy = isRecording || isPlaying;
 
+  const handleSkip = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('vendors')
+        .update({ status: 'onboarding_complete' })
+        .eq('supabase_auth_uid', user.id);
+
+      if (error) throw error;
+
+      onComplete({ skipped: true });
+    } catch (error: any) {
+      console.error('Error skipping AI onboarding:', error);
+      onError("Skip Error", error.message || "Failed to skip onboarding.");
+    }
+  };
+
   return (
     <Card className="flex flex-col h-full p-4">
-      <div className="flex items-center mb-4">
+      <div className="flex items-center justify-between mb-4">
         <Button onClick={onBack} variant="outline" size="sm">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <h2 className="text-2xl font-bold mx-auto">AI Vendor Onboarding Assistant</h2>
+        <h2 className="text-xl font-bold">AI Onboarding Assistant</h2>
+        <Button onClick={handleSkip} variant="ghost" size="sm" className="text-gray-500">
+          Skip for now
+        </Button>
       </div>
 
       <ScrollArea className="flex-grow bg-gray-100 dark:bg-gray-800 p-4 rounded-md mb-4" ref={chatHistoryRef}>

@@ -44,7 +44,7 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const [vadThreshold, setVadThreshold] = useState(0.01);
     const { user, refreshVendorProfile } = useAuth();
 
-     const updateFormFromAI = useCallback((args: Partial<VendorOnboardingForm>) => {
+    const updateFormFromAI = useCallback((args: Partial<VendorOnboardingForm>) => {
         const deepMerge = (target: any, source: any): any => {
             const output = { ...target };
             if (target && typeof target === 'object' && source && typeof source === 'object') {
@@ -105,7 +105,7 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
                     const groupKey = target.dataset.group;
                     const groupKeys = groupKey.split('.');
                     let groupCurrent = newState;
-                     for (let i = 0; i < groupKeys.length - 1; i++) { groupCurrent = groupCurrent[groupKeys[i]]; }
+                    for (let i = 0; i < groupKeys.length - 1; i++) { groupCurrent = groupCurrent[groupKeys[i]]; }
                     const array = groupCurrent[groupKeys[groupKeys.length - 1]] || [];
                     if (checked) {
                         if (!array.includes(value)) array.push(value);
@@ -145,24 +145,24 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     };
 
     const processFilesWithAI = async (files: { content: string; mimeType: string }[]) => {
-        if (!process.env.API_KEY) {
-            alert("API_KEY environment variable not set.");
+        if (!import.meta.env.VITE_GOOGLE_API_KEY) {
+            alert("VITE_GOOGLE_API_KEY environment variable not set.");
             return;
         }
         setIsProcessingFile(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY as string });
             const textPrompt = `Extract the vendor's information from the provided document(s)/image(s) and format it according to the provided JSON schema. Consolidate information from all files.`;
             const parts: any[] = [{ text: textPrompt }];
 
             for (const file of files) {
-                 if (file.mimeType.startsWith('text/')) {
+                if (file.mimeType.startsWith('text/')) {
                     parts.push({ text: `\n\n--- DOCUMENT: ${file.mimeType} ---\n${file.content}` });
                 } else {
                     parts.push({ inlineData: { data: file.content, mimeType: file.mimeType } });
                 }
             }
-            
+
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: { parts },
@@ -216,7 +216,7 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const handleSubmit = useCallback(async () => {
         try {
             if (!user) {
-                if(onError) onError("Authentication Error", "User not authenticated.");
+                if (onError) onError("Authentication Error", "User not authenticated.");
                 return;
             }
 
@@ -307,6 +307,29 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
         }
     }, [step, handleSubmit]);
 
+    const handleSkip = useCallback(async () => {
+        if (!user) return;
+        try {
+            const { error } = await supabase
+                .from('vendors')
+                .update({ status: 'onboarding_complete' })
+                .eq('supabase_auth_uid', user.id);
+
+            if (error) throw error;
+
+            await refreshVendorProfile();
+
+            if (onComplete) {
+                onComplete({});
+            }
+        } catch (error: any) {
+            console.error('Error skipping onboarding:', error);
+            if (onError) {
+                onError("Skip Error", error.message || "Failed to skip onboarding.");
+            }
+        }
+    }, [user, refreshVendorProfile, onComplete, onError]);
+
     const renderStepContent = () => {
         const props = {
             formData,
@@ -351,10 +374,18 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     };
 
     return (
-        <div className="relative">
-             <button onClick={onBack} className="absolute -top-14 left-0 flex items-center gap-2 text-gray-600 hover:text-gray-900 font-semibold">
-                <ArrowLeftIcon className="w-5 h-5"/> Back to Role Selection
-            </button>
+        <div className="py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto mb-6 flex items-center justify-between">
+                <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-semibold transition-colors">
+                    <ArrowLeftIcon className="w-5 h-5" /> Back to Role Selection
+                </button>
+                <button
+                    onClick={handleSkip}
+                    className="text-gray-500 hover:text-gray-800 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
+                >
+                    Skip Onboarding for now
+                </button>
+            </div>
             {renderAppBody()}
         </div>
     );

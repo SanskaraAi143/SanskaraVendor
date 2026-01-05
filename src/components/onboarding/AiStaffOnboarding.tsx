@@ -16,6 +16,24 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const handleSkip = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('vendor_staff')
+        .update({ is_active: true })
+        .eq('supabase_auth_uid', user.id);
+
+      if (error) throw error;
+
+      await refreshStaffProfile();
+      navigate('/staff/dashboard');
+    } catch (error: any) {
+      console.error('Error skipping staff onboarding:', error);
+      onError("Skip Error", error.message || "Failed to skip onboarding.");
+    }
+  };
+
   const handleSubmit = async (data: any) => {
     try {
       if (!user) {
@@ -152,5 +170,25 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
     }
   };
 
-  return <NewStaffOnboarding onBack={onBack} onSubmit={handleSubmit} />;
+  return (
+    <div className="py-8 px-4">
+      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-semibold transition-colors">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Role Selection
+        </button>
+        <button
+          onClick={handleSkip}
+          className="text-gray-500 hover:text-gray-800 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
+        >
+          Skip for now
+        </button>
+      </div>
+      <div className="max-w-4xl mx-auto">
+        <NewStaffOnboarding onBack={onBack} onSubmit={handleSubmit} />
+      </div>
+    </div>
+  );
 };

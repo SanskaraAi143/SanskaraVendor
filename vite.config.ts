@@ -17,10 +17,7 @@ export default defineConfig(({ mode }) => {
       mode === 'development' &&
       componentTagger(),
     ].filter(Boolean),
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.GOOGLE_API_KEY || env.GEMINI_API_KEY),
-      'process.env.GOOGLE_API_KEY': JSON.stringify(env.GOOGLE_API_KEY || env.GEMINI_API_KEY)
-    },
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

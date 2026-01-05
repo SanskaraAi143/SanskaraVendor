@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { VendorOnboarding } from './AiVendorOnboarding.tsx';
 import { StaffOnboarding } from './AiStaffOnboarding';
+import { useAuth } from '@/hooks/useAuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
 
 type OnboardingType = 'vendor' | 'staff' | null;
 
@@ -25,6 +29,15 @@ const RoleSelection: React.FC<{ onSelect: (type: OnboardingType) => void }> = ({
                 <p className="text-gray-500">Onboard as a photographer, DJ, makeup artist, etc., and showcase your portfolio.</p>
             </button>
         </div>
+        <div className="mt-12">
+            <Button
+                variant="ghost"
+                onClick={() => onSelect('skip' as any)}
+                className="text-gray-500 hover:text-gray-800"
+            >
+                Skip for now, I'll do this later
+            </Button>
+        </div>
     </div>
 );
 
@@ -35,8 +48,48 @@ interface AiOnboardingAppProps {
 
 const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }) => {
     const [onboardingType, setOnboardingType] = useState<OnboardingType>(null);
-
+    const { user, userType, refreshVendorProfile, refreshStaffProfile } = useAuth();
+    const { toast } = useToast();
     const navigate = useNavigate();
+
+    const handleSkipOnboarding = async () => {
+        if (!user) return;
+
+        try {
+            if (userType === 'vendor') {
+                const { error } = await supabase
+                    .from('vendors')
+                    .update({ status: 'onboarding_complete' })
+                    .eq('supabase_auth_uid', user.id);
+
+                if (error) throw error;
+                await refreshVendorProfile();
+            } else if (userType === 'staff') {
+                const { error } = await supabase
+                    .from('vendor_staff')
+                    .update({ is_active: true })
+                    .eq('supabase_auth_uid', user.id);
+
+                if (error) throw error;
+                await refreshStaffProfile();
+            }
+
+            toast({
+                title: "Onboarding skipped",
+                description: "You can complete your profile later from settings.",
+            });
+
+            navigate('/dashboard');
+        } catch (error: any) {
+            console.error('Error skipping onboarding:', error);
+            toast({
+                title: "Error",
+                description: error.message || "Failed to skip onboarding",
+                variant: "destructive",
+            });
+        }
+    };
+
     const handleBackToSelection = () => {
         setOnboardingType(null);
     };
@@ -61,7 +114,13 @@ const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }
             case 'staff':
                 return <StaffOnboarding onBack={handleBackToSelection} onComplete={handleCompletion} onError={handleError} />;
             default:
-                return <RoleSelection onSelect={setOnboardingType} />;
+                return <RoleSelection onSelect={(type) => {
+                    if (type === 'skip' as any) {
+                        handleSkipOnboarding();
+                    } else {
+                        setOnboardingType(type);
+                    }
+                }} />;
         }
     };
 

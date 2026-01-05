@@ -58,13 +58,13 @@ export const useLiveSession = ({ systemInstruction, functionDeclarations, onFunc
     const startSession = async () => {
         setStatus(SessionStatus.CONNECTING);
         setCurrentUtterance({ user: '', agent: '' });
-        if (!process.env.API_KEY) {
+        if (!import.meta.env.VITE_GOOGLE_API_KEY) {
             setStatus(SessionStatus.ERROR);
-            alert("API_KEY environment variable not set.");
+            alert("VITE_GOOGLE_API_KEY environment variable not set.");
             return;
         }
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY as string });
             sessionPromiseRef.current = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
                 config: {
@@ -77,40 +77,78 @@ export const useLiveSession = ({ systemInstruction, functionDeclarations, onFunc
                 callbacks: {
                     onopen: async () => {
                         setStatus(SessionStatus.CONNECTED);
-                        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                        outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+
+                        // Ensure we have fresh AudioContexts (create if missing or closed)
+                        const makeOrResumeContext = async (ref: React.MutableRefObject<AudioContext | null>, sampleRate: number) => {
+                            if (!ref.current || ref.current.state === 'closed') {
+                                ref.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
+                            } else if (ref.current.state === 'suspended') {
+                                try {
+                                    await ref.current.resume();
+                                } catch (e) {
+                                    // resume may fail in some contexts; recreate instead
+                                    ref.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
+                                }
+                            }
+                        };
+
+                        await makeOrResumeContext(inputAudioContextRef, 16000);
+                        await makeOrResumeContext(outputAudioContextRef, 24000);
+
+                        // Acquire microphone stream
                         mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                        // If contexts are unexpectedly closed, bail out early to avoid "construction when context is closed" warnings
+                        if (!inputAudioContextRef.current || inputAudioContextRef.current.state === 'closed') {
+                            console.warn('Input AudioContext is closed - aborting node creation');
+                            return;
+                        }
                         const source = inputAudioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
                         const analyser = inputAudioContextRef.current.createAnalyser();
                         setAnalyserNode(analyser);
 
-                        scriptProcessorRef.current = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
-                        scriptProcessorRef.current.onaudioprocess = (audioProcessingEvent) => {
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                        // Create a processor only when the context is usable.
+                        if (typeof inputAudioContextRef.current.createScriptProcessor === 'function') {
+                            scriptProcessorRef.current = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                            scriptProcessorRef.current.onaudioprocess = (audioProcessingEvent) => {
+                                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
 
-                            let rms = 0;
-                            for (let i = 0; i < inputData.length; i++) {
-                                rms += inputData[i] * inputData[i];
-                            }
-                            rms = Math.sqrt(rms / inputData.length);
+                                let rms = 0;
+                                for (let i = 0; i < inputData.length; i++) {
+                                    rms += inputData[i] * inputData[i];
+                                }
+                                rms = Math.sqrt(rms / inputData.length);
 
-                            if (rms < vadThresholdRef.current) {
-                                setIsSpeaking(false);
-                                return; // Don't send silent audio
-                            }
-                            setIsSpeaking(true);
+                                if (rms < vadThresholdRef.current) {
+                                    setIsSpeaking(false);
+                                    return; // Don't send silent audio
+                                }
+                                setIsSpeaking(true);
 
-                            const pcmBlob = {
-                                data: encode(new Uint8Array(new Int16Array(inputData.map(v => v * 32768)).buffer)),
-                                mimeType: 'audio/pcm;rate=16000',
+                                const pcmBlob = {
+                                    data: encode(new Uint8Array(new Int16Array(inputData.map(v => v * 32768)).buffer)),
+                                    mimeType: 'audio/pcm;rate=16000',
+                                };
+                                sessionPromiseRef.current?.then((session) => {
+                                    session.sendRealtimeInput({ media: pcmBlob });
+                                });
                             };
-                            sessionPromiseRef.current?.then((session) => {
-                                session.sendRealtimeInput({ media: pcmBlob });
-                            });
-                        };
-                        source.connect(analyser);
-                        analyser.connect(scriptProcessorRef.current);
-                        scriptProcessorRef.current.connect(inputAudioContextRef.current.destination);
+
+                            // Only connect nodes if the context is still open
+                            if (inputAudioContextRef.current.state !== 'closed') {
+                                try {
+                                    source.connect(analyser);
+                                    analyser.connect(scriptProcessorRef.current);
+                                    // connect to a destination so the processor runs; avoid if context closed
+                                    scriptProcessorRef.current.connect(inputAudioContextRef.current.destination);
+                                } catch (e) {
+                                    console.warn('Failed to connect audio nodes (context may be closed):', e);
+                                }
+                            }
+                        } else {
+                            // createScriptProcessor may be removed in the future; keep a graceful fallback here
+                            console.warn('createScriptProcessor is not available on this AudioContext. Consider migrating to AudioWorkletNode.');
+                        }
                     },
                     onmessage: async (message: LiveServerMessage) => {
                         if (message.serverContent?.inputTranscription) {

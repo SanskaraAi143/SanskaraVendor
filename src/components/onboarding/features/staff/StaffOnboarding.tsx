@@ -80,13 +80,13 @@ export const StaffOnboarding: React.FC<{ onBack: () => void; onSubmit: (data: St
     }
 
     const processFilesWithAI = async (files: { content: string; mimeType: string }[]) => {
-        if (!process.env.API_KEY) {
-            alert("API_KEY environment variable not set.");
+        if (!import.meta.env.VITE_GOOGLE_API_KEY) {
+            alert("VITE_GOOGLE_API_KEY environment variable not set.");
             return;
         }
         setIsProcessingFile(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY as string });
             const textPrompt = `Extract the staff member's information from the provided document(s)/image(s) for roles like photographer, DJ, etc., and format it according to the provided JSON schema. Consolidate information from all files.`;
             const parts: any[] = [{ text: textPrompt }];
 
