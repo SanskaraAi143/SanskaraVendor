@@ -4,7 +4,17 @@ import DashboardCard from '@/components/DashboardCard';
 import { Calendar, CheckCircle2, Clock, Users, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  getDoc,
+  doc
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -28,7 +38,7 @@ interface UpcomingBooking {
   booking_id: string;
   event_date: string;
   booking_status: string;
-  users: {
+  users?: {
     display_name: string | null;
   };
 }
@@ -61,49 +71,69 @@ const StaffDashboard: React.FC = () => {
     setIsLoading(true);
     try {
       // Fetch task statistics
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('vendor_tasks')
-        .select('status')
-        .eq('assigned_staff_id', staffProfile.staff_id);
+      const tasksQuery = query(
+        collection(db, 'vendor_tasks'),
+        where('assigned_staff_id', '==', staffProfile.staff_id)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const tasksData = tasksSnapshot.docs.map(doc => doc.data());
 
-      if (tasksError) throw tasksError;
-
-      const totalTasks = tasksData?.length || 0;
-      const pendingTasks = tasksData?.filter(task => task.status === 'Pending').length || 0;
-      const completedTasks = tasksData?.filter(task => task.status === 'Completed').length || 0;
+      const totalTasks = tasksData.length;
+      const pendingTasks = tasksData.filter(task => task.status === 'Pending').length;
+      const completedTasks = tasksData.filter(task => task.status === 'Completed').length;
 
       // Fetch upcoming bookings for vendor
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('booking_id, event_date, booking_status, users(display_name)')
-        .eq('vendor_id', staffProfile.vendor_id)
-        .gte('event_date', new Date().toISOString())
-        .order('event_date', { ascending: true })
-        .limit(5);
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('vendor_id', '==', staffProfile.vendor_id),
+        where('event_date', '>=', new Date().toISOString().split('T')[0]),
+        orderBy('event_date', 'asc'),
+        limit(5)
+      );
+      const bookingsSnapshot = await getDocs(bookingsQuery);
+      const bookingsData = await Promise.all(bookingsSnapshot.docs.map(async (bookingDoc) => {
+        const data = bookingDoc.data();
+        let display_name = 'Unknown Client';
 
-      if (bookingsError) throw bookingsError;
+        if (data.user_id) {
+          const userSnap = await getDoc(doc(db, 'users', data.user_id));
+          if (userSnap.exists()) {
+            display_name = userSnap.data().display_name || 'Unknown Client';
+          }
+        }
 
-      const upcomingBookings = bookingsData?.length || 0;
+        return {
+          booking_id: bookingDoc.id,
+          event_date: data.event_date,
+          booking_status: data.booking_status,
+          users: { display_name }
+        };
+      }));
+
+      const upcomingBookingsCount = bookingsData.length;
 
       // Fetch recent tasks
-      const { data: recentTasksData, error: recentTasksError } = await supabase
-        .from('vendor_tasks')
-        .select('vendor_task_id, title, status, due_date, priority')
-        .eq('assigned_staff_id', staffProfile.staff_id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (recentTasksError) throw recentTasksError;
+      const recentTasksQuery = query(
+        collection(db, 'vendor_tasks'),
+        where('assigned_staff_id', '==', staffProfile.staff_id),
+        orderBy('created_at', 'desc'),
+        limit(5)
+      );
+      const recentTasksSnapshot = await getDocs(recentTasksQuery);
+      const recentTasksData = recentTasksSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        vendor_task_id: doc.id
+      })) as RecentTask[];
 
       setStats({
         totalTasks,
         pendingTasks,
-        upcomingBookings,
+        upcomingBookings: upcomingBookingsCount,
         completedTasks
       });
 
-      setRecentTasks(recentTasksData as RecentTask[] || []);
-      setUpcomingBookings(bookingsData as UpcomingBooking[] || []);
+      setRecentTasks(recentTasksData);
+      setUpcomingBookings(bookingsData);
 
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
@@ -125,13 +155,13 @@ const StaffDashboard: React.FC = () => {
             <div className="h-8 w-64 bg-gray-200 rounded mb-2"></div>
             <div className="h-4 w-96 bg-gray-200 rounded"></div>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-32 bg-gray-200 rounded"></div>
             ))}
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="h-64 bg-gray-200 rounded"></div>
             <div className="h-64 bg-gray-200 rounded"></div>
@@ -157,47 +187,47 @@ const StaffDashboard: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold gradient-text">
-                Welcome, {staffProfile?.display_name || 'Staff Member'}!
+              Welcome, {staffProfile?.display_name || 'Staff Member'}!
             </h1>
             <p className="text-muted-foreground mt-1">
-                Here's an overview of your tasks and upcoming events.
+              Here's an overview of your tasks and upcoming events.
             </p>
           </div>
           <Link to="/staff/profile">
-              <Button variant="outline">
-                  <User className="mr-2 h-4 w-4" />
-                  View Profile
-              </Button>
+            <Button variant="outline">
+              <User className="mr-2 h-4 w-4" />
+              View Profile
+            </Button>
           </Link>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <DashboardCard 
+          <DashboardCard
             title="Total Tasks"
             value={stats.totalTasks.toString()}
             icon={<CheckCircle2 className="h-5 w-5" />}
             color="sanskara-red"
           />
-          <DashboardCard 
+          <DashboardCard
             title="Pending Tasks"
             value={stats.pendingTasks.toString()}
             icon={<Clock className="h-5 w-5" />}
             color="sanskara-amber"
           />
-          <DashboardCard 
+          <DashboardCard
             title="Upcoming Events"
             value={stats.upcomingBookings.toString()}
             icon={<Calendar className="h-5 w-5" />}
             color="sanskara-blue"
           />
-          <DashboardCard 
+          <DashboardCard
             title="Completed Tasks"
             value={stats.completedTasks.toString()}
             icon={<Users className="h-5 w-5" />}
             color="sanskara-green"
           />
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -211,16 +241,15 @@ const StaffDashboard: React.FC = () => {
                       <div>
                         <p className="font-medium text-sm">{task.title}</p>
                         <p className="text-xs text-gray-500">
-                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date'} 
+                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date'}
                           {task.priority && ` • ${task.priority}`}
                         </p>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        task.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                        task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                        task.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${task.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                          task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            task.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                        }`}>
                         {task.status}
                       </span>
                     </div>
@@ -254,11 +283,10 @@ const StaffDashboard: React.FC = () => {
                           {new Date(booking.event_date).toLocaleDateString()}
                         </p>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        booking.booking_status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                        booking.booking_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${booking.booking_status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          booking.booking_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                        }`}>
                         {booking.booking_status}
                       </span>
                     </div>

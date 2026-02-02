@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../integrations/supabase/client';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  doc,
+  updateDoc,
+  getDoc
+} from 'firebase/firestore';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
-import { Loader2, CheckSquare, Square, AlertTriangle, ExternalLink, Edit, Save, X } from 'lucide-react';
+import { Loader2, CheckSquare, Square, AlertTriangle, Edit, Save, X } from 'lucide-react';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
-import { Tables } from '@/integrations/supabase/types'; // Import Tables type
 
 // Define a type for the joined booking data
 type JoinedBooking = {
@@ -28,7 +37,7 @@ interface VendorTask {
   status: string;
   priority: string | null;
   booking_id: string | null;
-  bookings: JoinedBooking | null; // This is the simplified version for the component's state
+  bookings: JoinedBooking | null;
 }
 
 const taskStatusOptions = ["Pending", "In Progress", "Completed", "Blocked"];
@@ -63,44 +72,65 @@ const StaffTasks: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
-        .from('vendor_tasks')
-        .select(`
-          *,
-          bookings (
-            event_date,
-            users (
-              display_name
-            )
-          )
-        `)
-        .eq('assigned_staff_id', staffProfile.staff_id);
+      let tasksQuery = query(
+        collection(db, 'vendor_tasks'),
+        where('assigned_staff_id', '==', staffProfile.staff_id)
+      );
 
       if (statusFilter !== "all") {
-        query = query.eq('status', statusFilter);
+        tasksQuery = query(tasksQuery, where('status', '==', statusFilter));
       }
-      
-      query = query.order('due_date', { ascending: true, nullsFirst: false });
 
-      const { data: tasksData, error: tasksError } = await query;
+      // Firestore doesn't support multiple inequalities/ordering without indexes, 
+      // but status is filter and due_date is order, which should be fine.
+      // However, we'll order in memory if needed or ensure index exists.
 
-      if (tasksError) throw tasksError;
-      setTasks(tasksData?.map((task: any) => { // Use 'any' for the raw task from Supabase
-        const processedBookings: JoinedBooking | null = (task.bookings && Array.isArray(task.bookings) && task.bookings.length > 0)
-          ? {
-              event_date: task.bookings[0].event_date,
-              users: (task.bookings[0].users && Array.isArray(task.bookings[0].users) && task.bookings[0].users.length > 0)
-                ? [{ display_name: task.bookings[0].users[0].display_name }]
-                : null,
+      const tasksSnapshot = await getDocs(tasksQuery);
+
+      const tasksData = await Promise.all(tasksSnapshot.docs.map(async (taskDoc) => {
+        const data = taskDoc.data();
+        let processedBookings: JoinedBooking | null = null;
+
+        if (data.booking_id) {
+          const bookingSnap = await getDoc(doc(db, 'bookings', data.booking_id));
+          if (bookingSnap.exists()) {
+            const bData = bookingSnap.data();
+            let display_name = 'Unknown Client';
+
+            if (bData.user_id) {
+              const userSnap = await getDoc(doc(db, 'users', bData.user_id));
+              if (userSnap.exists()) {
+                display_name = userSnap.data().display_name || 'Unknown Client';
+              }
             }
-          : null;
+
+            processedBookings = {
+              event_date: bData.event_date || null,
+              users: [{ display_name }]
+            };
+          }
+        }
 
         return {
-          ...task,
-          status: task.status === "" ? "Pending" : task.status, // Ensure status is never an empty string
+          vendor_task_id: taskDoc.id,
+          title: data.title,
+          description: data.description || null,
+          due_date: data.due_date || null,
+          status: data.status || 'Pending',
+          priority: data.priority || null,
+          booking_id: data.booking_id || null,
           bookings: processedBookings,
-        };
-      }) as VendorTask[] || []);
+        } as VendorTask;
+      }));
+
+      // Sort by due date ascending
+      tasksData.sort((a, b) => {
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      });
+
+      setTasks(tasksData);
 
     } catch (fetchError: any) {
       console.error('Error fetching staff tasks:', fetchError);
@@ -112,14 +142,13 @@ const StaffTasks: React.FC = () => {
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: string) => {
     try {
-      const { error: updateError } = await supabase
-        .from('vendor_tasks')
-        .update({ status: newStatus })
-        .eq('vendor_task_id', taskId);
+      const taskRef = doc(db, 'vendor_tasks', taskId);
+      await updateDoc(taskRef, {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      });
 
-      if (updateError) throw updateError;
-
-      setTasks(prevTasks => prevTasks.map(task => 
+      setTasks(prevTasks => prevTasks.map(task =>
         task.vendor_task_id === taskId ? { ...task, status: newStatus } : task
       ));
 
@@ -144,14 +173,13 @@ const StaffTasks: React.FC = () => {
 
   const handleSaveDescription = async (taskId: string) => {
     try {
-      const { error: updateError } = await supabase
-        .from('vendor_tasks')
-        .update({ description: editingDescription })
-        .eq('vendor_task_id', taskId);
+      const taskRef = doc(db, 'vendor_tasks', taskId);
+      await updateDoc(taskRef, {
+        description: editingDescription,
+        updated_at: new Date().toISOString()
+      });
 
-      if (updateError) throw updateError;
-
-      setTasks(prevTasks => prevTasks.map(task => 
+      setTasks(prevTasks => prevTasks.map(task =>
         task.vendor_task_id === taskId ? { ...task, description: editingDescription } : task
       ));
 
@@ -176,7 +204,7 @@ const StaffTasks: React.FC = () => {
     setEditingTaskId(null);
     setEditingDescription('');
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Completed': return 'bg-green-100 text-green-800';
@@ -192,7 +220,7 @@ const StaffTasks: React.FC = () => {
       case 'High': return <AlertTriangle className="h-4 w-4 text-red-500 mr-1" />;
       case 'Medium': return <AlertTriangle className="h-4 w-4 text-yellow-500 mr-1" />;
       case 'Low': return <CheckSquare className="h-4 w-4 text-green-500 mr-1" />;
-      default: return <Square className="h-4 w-4 text-gray-400 mr-1"/>;
+      default: return <Square className="h-4 w-4 text-gray-400 mr-1" />;
     }
   };
 
@@ -205,7 +233,7 @@ const StaffTasks: React.FC = () => {
         </div>
       );
     }
-  
+
     if (error && tasks.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
@@ -217,7 +245,7 @@ const StaffTasks: React.FC = () => {
     return (
       <Card className="w-full max-w-7xl mx-auto">
         <CardHeader>
-           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
             <h1 className="text-2xl font-semibold text-gray-700">My Assigned Tasks</h1>
             <div className="w-full sm:w-48">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -236,7 +264,7 @@ const StaffTasks: React.FC = () => {
           <p className="text-sm text-muted-foreground mt-1">
             Tasks assigned to you. Use the filter to narrow down by status.
           </p>
-           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </CardHeader>
         <CardContent className="space-y-4">
           {tasks.length > 0 ? (
@@ -311,7 +339,7 @@ const StaffTasks: React.FC = () => {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <Badge className={`${getStatusColor(task.status)} text-xs`}>{task.status}</Badge>
                       </td>
-                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                         {task.booking_id && task.bookings ? (
                           <div className="space-y-1">
                             <div className="text-xs font-medium">
@@ -326,8 +354,8 @@ const StaffTasks: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        <Select 
-                          value={task.status} 
+                        <Select
+                          value={task.status}
                           onValueChange={(newStatus) => handleUpdateTaskStatus(task.vendor_task_id, newStatus)}
                           disabled={loading}
                         >

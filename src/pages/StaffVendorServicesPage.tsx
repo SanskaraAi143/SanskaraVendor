@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Loader2, Settings, CheckCircle2, XCircle, Star } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,21 +56,17 @@ const StaffVendorServicesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('vendor_services')
-        .select(`
-          service_id,
-          service_name,
-          description,
-          base_price,
-          service_category,
-          is_active,
-          responsible_staff_id,
-          is_in_house
-        `)
-        .eq('vendor_id', staffProfile.vendor_id);
-      if (servicesError) throw servicesError;
-      setAllServices((servicesData as VendorService[]) || []);
+      const q = query(
+        collection(db, 'vendor_services'),
+        where('vendor_id', '==', staffProfile.vendor_id)
+      );
+      const querySnapshot = await getDocs(q);
+      const servicesData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        service_id: doc.id
+      })) as VendorService[];
+
+      setAllServices(servicesData);
     } catch (err: any) {
       setError(err.message || 'Failed to load all services.');
     } finally {
@@ -76,27 +80,27 @@ const StaffVendorServicesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: assignments, error: assignmentError } = await supabase
-        .from('vendor_service_staff')
-        .select(`
-          service_id,
-          vendor_services (
-            service_id,
-            service_name,
-            description,
-            base_price,
-            service_category,
-            is_active,
-            responsible_staff_id,
-            is_in_house
-          )
-        `)
-        .eq('staff_id', staffProfile.staff_id);
-      if (assignmentError) throw assignmentError;
-      // Flatten and filter out nulls
-      const assigned = (assignments || [])
-        .map(a => a.vendor_services)
-        .filter(Boolean);
+      const q = query(
+        collection(db, 'vendor_service_staff'),
+        where('staff_id', '==', staffProfile.staff_id)
+      );
+      const querySnapshot = await getDocs(q);
+
+      const servicePromises = querySnapshot.docs.map(async (assignmentDoc) => {
+        const assignmentData = assignmentDoc.data();
+        if (assignmentData.service_id) {
+          const serviceDoc = await getDoc(doc(db, 'vendor_services', assignmentData.service_id));
+          if (serviceDoc.exists()) {
+            return {
+              ...serviceDoc.data(),
+              service_id: serviceDoc.id
+            } as VendorService;
+          }
+        }
+        return null;
+      });
+
+      const assigned = (await Promise.all(servicePromises)).filter(Boolean) as VendorService[];
       setServices(assigned);
     } catch (err: any) {
       setError(err.message || 'Failed to load assigned services.');
@@ -153,7 +157,7 @@ const StaffVendorServicesPage: React.FC = () => {
             </div>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {showAssigned 
+            {showAssigned
               ? "Services you are responsible for"
               : "All services offered by your vendor"
             }
@@ -168,11 +172,10 @@ const StaffVendorServicesPage: React.FC = () => {
                 const isAssigned = showAssigned ? true : (service.responsible_staff_id === staffProfile?.staff_id);
 
                 return (
-                  <Card 
-                    key={service.service_id} 
-                    className={`transition-all hover:shadow-md ${
-                      isAssigned ? 'border-sanskara-blue/30 bg-blue-50/30' : ''
-                    }`}
+                  <Card
+                    key={service.service_id}
+                    className={`transition-all hover:shadow-md ${isAssigned ? 'border-sanskara-blue/30 bg-blue-50/30' : ''
+                      }`}
                   >
                     <CardContent className="p-6">
                       <div className="space-y-4">
@@ -245,8 +248,8 @@ const StaffVendorServicesPage: React.FC = () => {
                 {showAssigned ? "No services assigned to you yet." : "No services found."}
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                {showAssigned 
-                  ? "Contact your vendor to get assigned as responsible for services." 
+                {showAssigned
+                  ? "Contact your vendor to get assigned as responsible for services."
                   : "Your vendor hasn't added any services yet."
                 }
               </p>

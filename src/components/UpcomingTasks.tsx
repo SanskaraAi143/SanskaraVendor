@@ -5,7 +5,17 @@ import { ArrowUpRight, Calendar, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  doc,
+  updateDoc
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 
 interface Task {
@@ -27,30 +37,34 @@ interface UpcomingTasksProps {
 const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  
+
   useEffect(() => {
     const fetchTasks = async () => {
       if (!vendorId) return;
-      
+
       try {
         setIsLoading(true);
-        
-        const { data, error } = await supabase
-          .from('vendor_tasks')
-          .select('*')
-          .eq('vendor_id', vendorId)
-          .order('due_date', { ascending: true })
-          .limit(4);
-          
-        if (error) throw error;
-        
+
+        const tasksQuery = query(
+          collection(db, 'vendor_tasks'),
+          where('vendor_id', '==', vendorId),
+          orderBy('due_date', 'asc'),
+          limit(4)
+        );
+        const querySnapshot = await getDocs(tasksQuery);
+
+        const data = querySnapshot.docs.map(doc => ({
+          ...(doc.data() as any),
+          vendor_task_id: doc.id
+        }));
+
         // Map data to ensure proper typing for priority field
         const typedTasks = data?.map(task => ({
           ...task,
           priority: (task.priority as 'high' | 'medium' | 'low' | 'urgent')
         }));
-        
-        setTaskList(typedTasks || []);
+
+        setTaskList(typedTasks as Task[] || []);
       } catch (error) {
         console.error('Error fetching tasks:', error);
         toast({
@@ -62,16 +76,16 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
         setIsLoading(false);
       }
     };
-    
+
     fetchTasks();
   }, [vendorId]);
-  
+
   const formatDate = (dateString: string) => {
     if (!dateString) return 'No due date';
     const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
-  
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return 'bg-red-100 text-red-800 border-red-200';
@@ -81,25 +95,22 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const toggleTaskDone = async (id: string, currentStatus: boolean) => {
     try {
       const newStatus = !currentStatus;
-      
-      const { error } = await supabase
-        .from('vendor_tasks')
-        .update({ 
-          is_complete: newStatus,
-          status: newStatus ? 'Completed' : 'To Do'
-        })
-        .eq('vendor_task_id', id);
-      
-      if (error) throw error;
-      
-      setTaskList(taskList.map(task => 
+
+      const taskRef = doc(db, 'vendor_tasks', id);
+      await updateDoc(taskRef, {
+        is_complete: newStatus,
+        status: newStatus ? 'Completed' : 'To Do',
+        updated_at: new Date().toISOString()
+      });
+
+      setTaskList(taskList.map(task =>
         task.vendor_task_id === id ? { ...task, is_complete: newStatus, status: newStatus ? 'Completed' : 'To Do' } : task
       ));
-      
+
       toast({
         title: newStatus ? "Task completed" : "Task reopened",
         description: `Task has been marked as ${newStatus ? 'completed' : 'to do'}.`,
@@ -113,7 +124,7 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
       });
     }
   };
-  
+
   return (
     <Card className="sanskara-card">
       <CardHeader className="pb-2">
@@ -148,7 +159,7 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
             {taskList.map((task) => (
               <div key={task.vendor_task_id} className={`flex items-start justify-between p-2 rounded-md border ${task.is_complete ? 'bg-muted/50 border-dashed' : 'bg-white'}`}>
                 <div className="flex items-start gap-3">
-                  <Checkbox 
+                  <Checkbox
                     checked={task.is_complete}
                     onCheckedChange={() => toggleTaskDone(task.vendor_task_id, task.is_complete)}
                     className="mt-1"

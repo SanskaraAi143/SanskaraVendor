@@ -2,7 +2,8 @@ import React from 'react';
 import { StaffOnboarding as NewStaffOnboarding } from './features/staff/StaffOnboarding';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
 
 interface AiStaffOnboardingProps {
@@ -19,12 +20,11 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
   const handleSkip = async () => {
     if (!user) return;
     try {
-      const { error } = await supabase
-        .from('vendor_staff')
-        .update({ is_active: true })
-        .eq('supabase_auth_uid', user.id);
-
-      if (error) throw error;
+      const staffRef = doc(db, 'vendor_staff', user.uid);
+      await updateDoc(staffRef, {
+        is_active: true,
+        updated_at: new Date().toISOString()
+      });
 
       await refreshStaffProfile();
       navigate('/staff/dashboard');
@@ -33,7 +33,6 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
       onError("Skip Error", error.message || "Failed to skip onboarding.");
     }
   };
-
   const handleSubmit = async (data: any) => {
     try {
       if (!user) {
@@ -41,119 +40,74 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
         return;
       }
 
-      let { data: vendorStaff, error: staffError } = await supabase
-        .from('vendor_staff')
-        .select('*')
-        .eq('supabase_auth_uid', user.id)
-        .single();
+      const staffRef = doc(db, 'vendor_staff', user.uid);
+      const staffSnap = await getDoc(staffRef);
+      let vendorStaff = staffSnap.data();
 
-      if (staffError && staffError.code === 'PGRST116') {
-        const { data: personalVendor, error: vendorError } = await supabase
-          .from('vendors')
-          .insert({
-            supabase_auth_uid: user.id,
-            vendor_name: `${data.name || 'Staff'} Services`,
-            vendor_category: 'Staff Services',
-            contact_email: user.email || '',
-            description: `Personal services by ${data.name || 'staff member'}`,
-            details: {
-              status: 'active',
-              is_personal_staff_vendor: true
-            }
-          })
-          .select()
-          .single();
+      if (!staffSnap.exists()) {
+        // Create personal vendor if staff record doesn't exist
+        const vendorId = `vendor_${user.uid}`;
+        const vendorRef = doc(db, 'vendors', vendorId);
 
-        if (vendorError) {
-          throw new Error(`Failed to create personal vendor: ${vendorError.message}`);
-        }
-
-        const { data: newStaff, error: createError } = await supabase
-          .from('vendor_staff')
-          .insert({
-            supabase_auth_uid: user.id,
-            vendor_id: personalVendor.vendor_id,
-            email: user.email || '',
-            display_name: data.name || '',
-            role: data.role || 'staff',
-            phone_number: ''
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          throw new Error(`Failed to create vendor staff entry: ${createError.message}`);
-        }
-        vendorStaff = newStaff;
-      } else if (staffError) {
-        throw new Error(`Failed to get vendor staff entry: ${staffError.message}`);
-      }
-
-      let vendorId = vendorStaff.vendor_id;
-      if (!vendorId) {
-        const { data: personalVendor, error: vendorError } = await supabase
-          .from('vendors')
-          .insert({
-            supabase_auth_uid: user.id,
-            vendor_name: `${data.name || 'Staff'} Services`,
-            vendor_category: 'Staff Services',
-            contact_email: user.email || '',
-            description: `Personal services by ${data.name || 'staff member'}`,
-            details: {
-              status: 'active',
-              is_personal_staff_vendor: true
-            }
-          })
-          .select()
-          .single();
-
-        if (vendorError) {
-          throw new Error(`Failed to create personal vendor: ${vendorError.message}`);
-        }
-
-        vendorId = personalVendor.vendor_id;
-
-        const { error: updateError } = await supabase
-          .from('vendor_staff')
-          .update({ vendor_id: vendorId })
-          .eq('staff_id', vendorStaff.staff_id);
-
-        if (updateError) {
-          console.warn('Failed to update vendor_staff with vendor_id:', updateError);
-        }
-      }
-
-      const { data: portfolio, error: portfolioError } = await supabase
-        .from('staff_portfolios')
-        .insert({
-          staff_id: vendorStaff.staff_id,
+        const vendorData = {
           vendor_id: vendorId,
-          portfolio_type: data.portfolioType || 'individual',
-          title: data.portfolioTitle || `${data.name || 'Staff'} Portfolio`,
-          description: data.portfolioDescription || '',
-          generic_attributes: {
-            name: data.name,
-            role: data.role,
-            food_options: data.food_options,
-            pricing_details: data.pricing_details,
-            service_type: data.service_type
-          }
-        })
-        .select()
-        .single();
+          firebase_uid: user.uid,
+          vendor_name: `${data.name || 'Staff'} Services`,
+          vendor_category: 'Staff Services',
+          contact_email: user.email || '',
+          description: `Personal services by ${data.name || 'staff member'}`,
+          details: {
+            status: 'active',
+            is_personal_staff_vendor: true
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-      if (portfolioError) {
-        throw new Error(`Failed to create staff portfolio: ${portfolioError.message}`);
+        await setDoc(vendorRef, vendorData);
+
+        const newStaffData = {
+          staff_id: user.uid,
+          firebase_uid: user.uid,
+          vendor_id: vendorId,
+          email: user.email || '',
+          display_name: data.name || '',
+          role: data.role || 'staff',
+          phone_number: '',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        await setDoc(staffRef, newStaffData);
+        vendorStaff = newStaffData;
       }
 
-      const { error: updateStatusError } = await supabase
-        .from('vendor_staff')
-        .update({ is_active: true })
-        .eq('staff_id', vendorStaff.staff_id);
+      const vendorId = vendorStaff?.vendor_id || user.uid;
 
-      if (updateStatusError) {
-        console.warn('Failed to update staff status to active:', updateStatusError);
-      }
+      // Create staff portfolio
+      const portfolioRef = collection(db, 'staff_portfolios');
+      await addDoc(portfolioRef, {
+        staff_id: user.uid,
+        vendor_id: vendorId,
+        portfolio_type: data.portfolioType || 'individual',
+        title: data.portfolioTitle || `${data.name || 'Staff'} Portfolio`,
+        description: data.portfolioDescription || '',
+        generic_attributes: {
+          name: data.name,
+          role: data.role,
+          food_options: data.food_options,
+          pricing_details: data.pricing_details,
+          service_type: data.service_type
+        },
+        created_at: new Date().toISOString()
+      });
+
+      // Update staff status to active
+      await updateDoc(staffRef, {
+        is_active: true,
+        updated_at: new Date().toISOString()
+      });
 
       await refreshStaffProfile();
 

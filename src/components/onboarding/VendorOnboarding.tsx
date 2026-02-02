@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, getDoc, setDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { GoogleGenAI } from "@google/genai";
 import { VendorOnboardingForm } from './types';
 import { useLiveSession } from './hooks/useLiveSession';
@@ -226,72 +227,53 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
                 contact_email: formData.emailAddress || user?.email || '',
                 phone_number: formData.directPhoneNumbers || '',
                 website_url: formData.websiteLinks || null,
-                address: JSON.stringify({ full_address: formData.fullAddress }),
-                details: JSON.stringify(formData),
+                address: { full_address: formData.fullAddress },
+                details: formData,
                 portfolio_image_urls: formData.imageUrls || [],
-                status: 'onboarding_complete' // Mark onboarding as complete
+                status: 'onboarding_complete', // Mark onboarding as complete
+                updated_at: new Date().toISOString()
             };
 
-            // Update the existing vendor record
-            const { data: updatedVendor, error: updateError } = await supabase
-                .from('vendors')
-                .update(vendorUpdateData)
-                .eq('supabase_auth_uid', user.id)
-                .select()
-                .single();
+            // Update the existing vendor record in Firestore
+            const vendorRef = doc(db, 'vendors', user.uid);
+            await updateDoc(vendorRef, vendorUpdateData);
 
-            if (updateError) {
-                throw new Error(`Failed to update vendor data: ${updateError.message}`);
-            }
+            // Fetch current vendor data to get vendor_id (which might be the doc ID or a field)
+            const vendorSnap = await getDoc(vendorRef);
+            const vendorData = vendorSnap.data();
+            const vendorId = vendorData?.vendor_id || user.uid;
 
             // Check if vendor_staff record exists and update or insert
-            const { data: existingStaff, error: fetchStaffError } = await supabase
-                .from('vendor_staff')
-                .select('staff_id')
-                .eq('supabase_auth_uid', user.id)
-                .single();
-
-            if (fetchStaffError && fetchStaffError.code !== 'PGRST116') { // PGRST116 means no rows found
-                throw new Error(`Failed to fetch vendor staff: ${fetchStaffError.message}`);
-            }
+            const staffRef = doc(db, 'vendor_staff', user.uid);
+            const staffSnap = await getDoc(staffRef);
 
             const staffData = {
-                vendor_id: updatedVendor.vendor_id,
-                supabase_auth_uid: user.id,
+                vendor_id: vendorId,
+                firebase_uid: user.uid,
                 email: formData.emailAddress || user?.email || '',
                 phone_number: formData.directPhoneNumbers || '',
                 display_name: formData.contactPersonName || '',
-                role: 'owner'
+                role: 'owner',
+                updated_at: new Date().toISOString()
             };
 
-            if (existingStaff) {
-                // Update existing staff record
-                const { error: staffUpdateError } = await supabase
-                    .from('vendor_staff')
-                    .update(staffData)
-                    .eq('staff_id', existingStaff.staff_id);
-
-                if (staffUpdateError) {
-                    throw new Error(`Failed to update vendor staff entry: ${staffUpdateError.message}`);
-                }
+            if (staffSnap.exists()) {
+                await updateDoc(staffRef, staffData);
             } else {
-                // Insert new staff record
-                const { error: staffInsertError } = await supabase
-                    .from('vendor_staff')
-                    .insert([staffData]);
-
-                if (staffInsertError) {
-                    throw new Error(`Failed to insert vendor staff entry: ${staffInsertError.message}`);
-                }
+                await setDoc(staffRef, {
+                    ...staffData,
+                    created_at: new Date().toISOString()
+                });
             }
 
             if (onComplete) {
-                onComplete({ vendorId: updatedVendor?.vendor_id });
+                onComplete({ vendorId: vendorId });
             }
-            // Refresh the vendor profile in AuthContext to trigger re-evaluation of userType and redirection
+            // Refresh the vendor profile in AuthContext
             refreshVendorProfile();
             setStep(8);
         } catch (error: any) {
+            console.error("Submission Error:", error);
             if (onError) {
                 onError("Submission Error", error.message || "Failed to submit form.");
             }
@@ -310,12 +292,11 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const handleSkip = useCallback(async () => {
         if (!user) return;
         try {
-            const { error } = await supabase
-                .from('vendors')
-                .update({ status: 'onboarding_complete' })
-                .eq('supabase_auth_uid', user.id);
-
-            if (error) throw error;
+            const vendorRef = doc(db, 'vendors', user.uid);
+            await updateDoc(vendorRef, {
+                status: 'onboarding_complete',
+                updated_at: new Date().toISOString()
+            });
 
             await refreshVendorProfile();
 

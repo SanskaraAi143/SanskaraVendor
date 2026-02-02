@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { VendorOnboarding } from './AiVendorOnboarding.tsx';
 import { StaffOnboarding } from './AiStaffOnboarding';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -57,20 +58,18 @@ const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }
 
         try {
             if (userType === 'vendor') {
-                const { error } = await supabase
-                    .from('vendors')
-                    .update({ status: 'onboarding_complete' })
-                    .eq('supabase_auth_uid', user.id);
-
-                if (error) throw error;
+                const vendorRef = doc(db, 'vendors', user.uid);
+                await updateDoc(vendorRef, {
+                    status: 'onboarding_complete',
+                    updated_at: new Date().toISOString()
+                });
                 await refreshVendorProfile();
             } else if (userType === 'staff') {
-                const { error } = await supabase
-                    .from('vendor_staff')
-                    .update({ is_active: true })
-                    .eq('supabase_auth_uid', user.id);
-
-                if (error) throw error;
+                const staffRef = doc(db, 'vendor_staff', user.uid);
+                await updateDoc(staffRef, {
+                    is_active: true,
+                    updated_at: new Date().toISOString()
+                });
                 await refreshStaffProfile();
             }
 

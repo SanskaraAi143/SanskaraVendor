@@ -5,7 +5,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
 import { Mic, MicOff, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 interface AiVendorOnboardingProps {
   onBack: () => void;
@@ -340,38 +341,26 @@ export const VendorOnboarding: React.FC<AiVendorOnboardingProps> = ({ onBack, on
           currency: 'INR'
         },
         description: data.uniqueFeatures || '',
-        details: data, // Store the entire form data as JSONB
-        portfolio_image_urls: data.imageUrls || [], // Assuming imageUrls is an array of strings
-        supabase_auth_uid: user?.id,
-        status: 'active'
+        details: data, // Store the entire form data
+        portfolio_image_urls: data.imageUrls || [],
+        firebase_uid: user.uid,
+        status: 'active',
+        updated_at: new Date().toISOString()
       };
 
-      const { data: vendor, error: vendorError } = await supabase
-        .from('vendors')
-        .insert([vendorData])
-        .select()
-        .single();
+      const vendorRef = doc(db, 'vendors', user.uid);
+      await setDoc(vendorRef, vendorData, { merge: true });
 
-      if (vendorError) {
-        throw new Error(`Failed to insert vendor data: ${vendorError.message}`);
-      }
-
-      const { error: staffError } = await supabase
-        .from('vendor_staff')
-        .insert([
-          {
-            vendor_id: vendor.vendor_id,
-            supabase_auth_uid: user?.id,
-            email: data.emailAddress || user?.email || '',
-            phone_number: data.directPhoneNumbers || '',
-            display_name: data.contactPersonName || '',
-            role: 'owner'
-          }
-        ]);
-
-      if (staffError) {
-        throw new Error(`Failed to create vendor staff entry: ${staffError.message}`);
-      }
+      const staffRef = doc(db, 'vendor_staff', user.uid);
+      await setDoc(staffRef, {
+        vendor_id: user.uid,
+        firebase_uid: user.uid,
+        email: data.emailAddress || user?.email || '',
+        phone_number: data.directPhoneNumbers || '',
+        display_name: data.contactPersonName || '',
+        role: 'owner',
+        updated_at: new Date().toISOString()
+      }, { merge: true });
 
       toast({
         title: "Onboarding Completed!",
@@ -379,7 +368,7 @@ export const VendorOnboarding: React.FC<AiVendorOnboardingProps> = ({ onBack, on
         variant: "default",
       });
 
-      onComplete({ vendorId: vendor?.vendor_id });
+      onComplete({ vendorId: user.uid });
     } catch (error: any) {
       console.error('Error submitting onboarding:', error);
       onError("Submission Error", error.message || "Failed to complete onboarding.");
@@ -404,12 +393,11 @@ export const VendorOnboarding: React.FC<AiVendorOnboardingProps> = ({ onBack, on
   const handleSkip = async () => {
     if (!user) return;
     try {
-      const { error } = await supabase
-        .from('vendors')
-        .update({ status: 'onboarding_complete' })
-        .eq('supabase_auth_uid', user.id);
-
-      if (error) throw error;
+      const vendorRef = doc(db, 'vendors', user.uid);
+      await updateDoc(vendorRef, {
+        status: 'onboarding_complete',
+        updated_at: new Date().toISOString()
+      });
 
       onComplete({ skipped: true });
     } catch (error: any) {
@@ -417,7 +405,6 @@ export const VendorOnboarding: React.FC<AiVendorOnboardingProps> = ({ onBack, on
       onError("Skip Error", error.message || "Failed to skip onboarding.");
     }
   };
-
   return (
     <Card className="flex flex-col h-full p-4">
       <div className="flex items-center justify-between mb-4">

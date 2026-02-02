@@ -1,5 +1,5 @@
-
-import { supabase } from '@/integrations/supabase/client';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 export interface TaggedImages {
   [tag: string]: string[];
@@ -35,20 +35,11 @@ export const uploadTaggedFiles = async (
       const fileExt = file.name.split('.').pop();
       const fileName = `${tag}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = folder ? `${folder}/${fileName}` : fileName;
+      const storageRef = ref(storage, `${bucket}/${filePath}`);
 
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
-
-      urls.push(data.publicUrl);
+      const snapshot = await uploadBytes(storageRef, file);
+      const publicUrl = await getDownloadURL(snapshot.ref);
+      urls.push(publicUrl);
     }
 
     return {
@@ -99,17 +90,17 @@ export const getAvailableTags = (taggedImages: TaggedImages | null): string[] =>
 
 export const convertToTaggedImages = (data: any): TaggedImages | null => {
   if (!data) return null;
-  
+
   // If it's already in TaggedImages format
   if (typeof data === 'object' && !Array.isArray(data)) {
     return data as TaggedImages;
   }
-  
+
   // If it's an array of URLs, convert to default tag
   if (Array.isArray(data)) {
     return { 'Portfolio': data };
   }
-  
+
   return null;
 };
 
@@ -119,8 +110,8 @@ export const convertForDatabase = (taggedImages: TaggedImages | null): any => {
 };
 
 export const addImagesToTag = (
-  currentImages: TaggedImages | null, 
-  tag: string, 
+  currentImages: TaggedImages | null,
+  tag: string,
   urls: string[]
 ): TaggedImages => {
   const images = currentImages || {};
@@ -132,8 +123,8 @@ export const addImagesToTag = (
 };
 
 export const removeImageFromTag = (
-  currentImages: TaggedImages, 
-  tag: string, 
+  currentImages: TaggedImages,
+  tag: string,
   url: string
 ): TaggedImages => {
   const updatedImages = { ...currentImages };
@@ -148,30 +139,33 @@ export const removeImageFromTag = (
 
 export const deleteImageFromStorage = async (bucket: string, url: string): Promise<DeleteResult> => {
   try {
-    // Extract file path from URL
-    const urlParts = url.split('/');
-    const bucketIndex = urlParts.findIndex(part => part === bucket);
-    if (bucketIndex === -1) {
-      return { success: false, error: 'Invalid URL format' };
+    // In Firebase Storage, 'url' might be the full download URL.
+    // However, if we store the path, it's easier.
+    // If it's a download URL, we might need to extract the path or use refFromURL.
+    // For now, assuming we can get the path from the URL if it's a standard Firebase Storage URL.
+
+    // Standard Firebase Storage URL format:
+    // https://firebasestorage.googleapis.com/v0/b/[bucket]/o/[path]?alt=media&token=[token]
+
+    const decodedUrl = decodeURIComponent(url);
+    const pathMatch = decodedUrl.match(/\/o\/(.+?)\?/);
+
+    if (pathMatch && pathMatch[1]) {
+      const filePath = pathMatch[1];
+      const storageRef = ref(storage, filePath);
+      await deleteObject(storageRef);
+      return { success: true };
     }
-    
-    const filePath = urlParts.slice(bucketIndex + 1).join('/');
-    
-    const { error } = await supabase.storage
-      .from(bucket)
-      .remove([filePath]);
-    
-    if (error) {
-      console.error('Error deleting image from storage:', error);
-      return { success: false, error: error.message };
-    }
-    
-    return { success: true };
+
+    // Fallback or alternative method if refFromURL is available (it is in the Web SDK)
+    // But we'll try to recreate the ref if possible.
+
+    return { success: false, error: 'Could not extract file path from URL' };
   } catch (error) {
     console.error('Error deleting image:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 };

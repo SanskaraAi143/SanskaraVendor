@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const StaffUpcomingBookingsWidget: React.FC = () => {
   const [bookingCount, setBookingCount] = useState<number | null>(null);
@@ -26,29 +27,35 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('vendor_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile || !staffProfile.vendor_id) {
-          setError('Staff profile or vendor association not found.');
+        if (staffSnapshot.empty) {
+          setError('Staff profile not found.');
           return;
         }
-        
+
+        const staffData = staffSnapshot.docs[0].data();
+        const vendorId = staffData.vendor_id;
+
+        if (!vendorId) {
+          setError('Vendor association not found.');
+          return;
+        }
+
         const today = new Date().toISOString().split('T')[0];
 
-        const { count, error: bookingsError } = await supabase
-          .from('bookings')
-          .select('*', { count: 'exact', head: true })
-          .eq('vendor_id', staffProfile.vendor_id)
-          .gte('event_date', today);
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          where('vendor_id', '==', vendorId),
+          where('event_date', '>=', today)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
 
-        if (bookingsError) throw bookingsError;
-        
-        setBookingCount(count ?? 0);
+        setBookingCount(bookingsSnapshot.size);
 
       } catch (err: any) {
         console.error('Error fetching upcoming booking count:', err);

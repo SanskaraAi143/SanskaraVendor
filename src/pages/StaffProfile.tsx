@@ -1,11 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import StaffProfileCard from '../components/staff/StaffProfileCard';
 import StaffPortfolioManager from '../components/staff/StaffPortfolioManager';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
+import { db } from '../lib/firebase';
+import {
+  doc,
+  getDoc,
+  query,
+  collection,
+  where,
+  getDocs
+} from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 
 interface StaffProfile {
@@ -60,31 +67,32 @@ const StaffProfile: React.FC = () => {
 
     try {
       // Get basic staff data
-      const { data: staffData, error: staffError } = await supabase
-        .from('vendor_staff')
-        .select('*')
-        .eq('staff_id', staffProfile.staff_id)
-        .single();
+      const staffDoc = await getDoc(doc(db, 'vendor_staff', staffProfile.staff_id));
 
-      if (staffError) throw staffError;
+      if (!staffDoc.exists()) {
+        setLoading(false);
+        return;
+      }
+
+      const staffData = staffDoc.data();
 
       // Get additional profile data from staff_portfolios generic_attributes
-      const { data: profileData, error: profileError } = await supabase
-        .from('staff_portfolios')
-        .select('generic_attributes')
-        .eq('staff_id', staffProfile.staff_id)
-        .eq('portfolio_type', 'profile_data')
-        .maybeSingle();
+      const portfolioQuery = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', staffProfile.staff_id),
+        where('portfolio_type', '==', 'profile_data')
+      );
+      const portfolioSnapshot = await getDocs(portfolioQuery);
 
       // Parse additional profile data
       let additionalData: StaffProfileData = {};
-      if (profileData?.generic_attributes) {
-        additionalData = profileData.generic_attributes as StaffProfileData;
+      if (!portfolioSnapshot.empty) {
+        additionalData = portfolioSnapshot.docs[0].data().generic_attributes as StaffProfileData || {};
       }
-      
+
       // Combine basic staff data with additional profile data
       const profileData_combined: StaffProfile = {
-        staff_id: staffData.staff_id,
+        staff_id: staffDoc.id,
         vendor_id: staffData.vendor_id,
         display_name: staffData.display_name,
         email: staffData.email,
@@ -99,7 +107,7 @@ const StaffProfile: React.FC = () => {
         emergency_phone: additionalData.emergency_phone,
         joining_date: staffData.created_at
       };
-      
+
       setProfile(profileData_combined);
     } catch (err: any) {
       console.error('Error loading profile:', err);

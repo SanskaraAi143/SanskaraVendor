@@ -1,6 +1,17 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  writeBatch,
+  getDocs,
+  Timestamp
+} from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 
 interface Notification {
@@ -14,6 +25,7 @@ interface Notification {
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
+  isLoading: boolean;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   fetchNotifications: () => Promise<void>;
@@ -33,21 +45,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { vendorProfile, staffProfile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchNotifications = async () => {
     if (!vendorProfile && !staffProfile) return;
 
     try {
       const recipientId = vendorProfile?.vendor_id || staffProfile?.staff_id;
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipient_staff_id', recipientId)
-        .order('created_at', { ascending: false });
+      const q = query(
+        collection(db, 'notifications'),
+        where('recipient_staff_id', '==', recipientId),
+        orderBy('created_at', 'desc')
+      );
 
-      if (error) throw error;
+      const querySnapshot = await getDocs(q);
+      const notificationData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        notification_id: doc.id,
+      })) as Notification[];
 
-      const notificationData = data || [];
       setNotifications(notificationData);
       setUnreadCount(notificationData.filter(n => !n.is_read).length);
     } catch (error) {
@@ -57,12 +73,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq('notification_id', notificationId);
-
-      if (error) throw error;
+      const notificationRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notificationRef, {
+        is_read: true,
+        read_at: new Date().toISOString()
+      });
 
       setNotifications(prev =>
         prev.map(notification =>
@@ -80,13 +95,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAllAsRead = async () => {
     try {
       const recipientId = vendorProfile?.vendor_id || staffProfile?.staff_id;
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq('recipient_staff_id', recipientId)
-        .eq('is_read', false);
+      const q = query(
+        collection(db, 'notifications'),
+        where('recipient_staff_id', '==', recipientId),
+        where('is_read', '==', false)
+      );
 
-      if (error) throw error;
+      const querySnapshot = await getDocs(q);
+      const batch = writeBatch(db);
+
+      querySnapshot.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          is_read: true,
+          read_at: new Date().toISOString()
+        });
+      });
+
+      await batch.commit();
 
       setNotifications(prev =>
         prev.map(notification => ({ ...notification, is_read: true }))
@@ -99,25 +124,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     if (vendorProfile || staffProfile) {
-      fetchNotifications();
-
-      // Set up realtime subscription
       const recipientId = vendorProfile?.vendor_id || staffProfile?.staff_id;
-      const channel = supabase
-        .channel('notification_changes')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `recipient_staff_id=eq.${recipientId}`
-        }, () => {
-          fetchNotifications();
-        })
-        .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      const q = query(
+        collection(db, 'notifications'),
+        where('recipient_staff_id', '==', recipientId),
+        orderBy('created_at', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const notificationData = querySnapshot.docs.map(doc => ({
+          ...doc.data(),
+          notification_id: doc.id,
+        })) as Notification[];
+
+        setNotifications(notificationData);
+        setUnreadCount(notificationData.filter(n => !n.is_read).length);
+        setIsLoading(false);
+      }, (error) => {
+        console.error('Error with notification snapshot:', error);
+        setIsLoading(false);
+      });
+
+      return () => unsubscribe();
     }
   }, [vendorProfile, staffProfile]);
 
@@ -125,6 +154,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     <NotificationContext.Provider value={{
       notifications,
       unreadCount,
+      isLoading,
       markAsRead,
       markAllAsRead,
       fetchNotifications

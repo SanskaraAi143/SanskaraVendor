@@ -5,7 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  doc,
+  getDoc,
+  query,
+  collection,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { ImageIcon, Plus, Trash2, Loader2, Upload } from 'lucide-react';
 import TaggedImageUploadModal from '@/components/modals/TaggedImageUploadModal';
@@ -59,14 +71,12 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
   const loadStaffInfo = async () => {
     try {
-      const { data, error } = await supabase
-        .from('vendor_staff')
-        .select('vendor_id')
-        .eq('staff_id', staffId)
-        .single();
+      const staffRef = doc(db, 'vendor_staff', staffId);
+      const staffSnap = await getDoc(staffRef);
 
-      if (error) throw error;
-      setVendorId(data.vendor_id);
+      if (staffSnap.exists()) {
+        setVendorId(staffSnap.data().vendor_id);
+      }
     } catch (error) {
       console.error('Error loading staff info:', error);
       toast({
@@ -81,20 +91,35 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
     if (!vendorId) return;
 
     try {
-      const { data, error } = await supabase
-        .from('staff_portfolios')
-        .select('*')
-        .eq('staff_id', staffId)
-        .neq('portfolio_type', 'profile_data')
-        .order('created_at', { ascending: false });
+      const q = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', staffId),
+        where('portfolio_type', '!=', 'profile_data'),
+        orderBy('portfolio_type'), // Firestore requires specific ordering for inequality filters
+        orderBy('created_at', 'desc')
+      );
+      // Actually, Firestore doesn't allow != and orderBy on another field without an index.
+      // Let's simplify and filter in memory if needed, or just use simple query.
+      const q2 = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', staffId),
+        orderBy('created_at', 'desc')
+      );
 
-      if (error) throw error;
-      
-      const convertedPortfolios = (data || []).map(portfolio => ({
+      const querySnapshot = await getDocs(q2);
+
+      const data = querySnapshot.docs
+        .map(doc => ({
+          ...(doc.data() as any),
+          portfolio_id: doc.id
+        }))
+        .filter((p: any) => p.portfolio_type !== 'profile_data');
+
+      const convertedPortfolios = data.map((portfolio: any) => ({
         ...portfolio,
         image_urls: convertToTaggedImages(portfolio.image_urls)
-      }));
-      
+      })) as Portfolio[];
+
       setPortfolios(convertedPortfolios);
     } catch (error) {
       console.error('Error loading portfolios:', error);
@@ -129,18 +154,15 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
     setUploading(true);
     try {
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .insert({
-          staff_id: staffId,
-          vendor_id: vendorId,
-          title: newPortfolio.title,
-          description: newPortfolio.description,
-          portfolio_type: newPortfolio.portfolio_type,
-          image_urls: null
-        });
-
-      if (error) throw error;
+      await addDoc(collection(db, 'staff_portfolios'), {
+        staff_id: staffId,
+        vendor_id: vendorId,
+        title: newPortfolio.title,
+        description: newPortfolio.description,
+        portfolio_type: newPortfolio.portfolio_type,
+        image_urls: null,
+        created_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
@@ -168,12 +190,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
   const handleDeletePortfolio = async (portfolioId: string) => {
     try {
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .delete()
-        .eq('portfolio_id', portfolioId);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'staff_portfolios', portfolioId));
 
       setPortfolios(portfolios.filter(p => p.portfolio_id !== portfolioId));
       toast({
@@ -196,16 +213,14 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
       if (!portfolio) return;
 
       const updatedImages = addImagesToTag(portfolio.image_urls, tag, urls);
-      
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .update({ image_urls: convertForDatabase(updatedImages) })
-        .eq('portfolio_id', portfolioId);
 
-      if (error) throw error;
+      await updateDoc(doc(db, 'staff_portfolios', portfolioId), {
+        image_urls: convertForDatabase(updatedImages),
+        updated_at: new Date().toISOString()
+      });
 
-      setPortfolios(prev => prev.map(p => 
-        p.portfolio_id === portfolioId 
+      setPortfolios(prev => prev.map(p =>
+        p.portfolio_id === portfolioId
           ? { ...p, image_urls: updatedImages }
           : p
       ));
@@ -222,21 +237,19 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
   const handleImageRemove = async (portfolioId: string, tag: string, url: string) => {
     try {
       await deleteImageFromStorage('vendor-staff', url);
-      
+
       const portfolio = portfolios.find(p => p.portfolio_id === portfolioId);
       if (!portfolio) return;
 
       const updatedImages = removeImageFromTag(portfolio.image_urls || {}, tag, url);
-      
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .update({ image_urls: convertForDatabase(Object.keys(updatedImages).length > 0 ? updatedImages : null) })
-        .eq('portfolio_id', portfolioId);
 
-      if (error) throw error;
+      await updateDoc(doc(db, 'staff_portfolios', portfolioId), {
+        image_urls: convertForDatabase(Object.keys(updatedImages).length > 0 ? updatedImages : null),
+        updated_at: new Date().toISOString()
+      });
 
-      setPortfolios(prev => prev.map(p => 
-        p.portfolio_id === portfolioId 
+      setPortfolios(prev => prev.map(p =>
+        p.portfolio_id === portfolioId
           ? { ...p, image_urls: Object.keys(updatedImages).length > 0 ? updatedImages : null }
           : p
       ));
@@ -394,14 +407,14 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
                           </Button>
                         </div>
                       </div>
-                      
+
                       <TaggedImageViewer
                         taggedImages={portfolio.image_urls}
                         onRemoveImage={(tag, url) => handleImageRemove(portfolio.portfolio_id, tag, url)}
                         title="Portfolio Images"
                         showRemoveButton={true}
                       />
-                      
+
                       <div className="text-xs text-gray-500 border-t pt-2">
                         Created {new Date(portfolio.created_at).toLocaleDateString()}
                       </div>

@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
@@ -18,7 +19,6 @@ import { Calendar, CalendarIcon, User, FileText, PlusCircle } from 'lucide-react
 import BookingDetails from '@/components/BookingDetails';
 import BookingNotes from '@/components/bookings/BookingNotes';
 import { ManualBookingForm } from '@/components/bookings/ManualBookingForm';
-import { Tables, Json } from '@/integrations/supabase/types';
 
 // Define a type for custom customer details for clarity and type safety
 type CustomCustomerDetails = {
@@ -38,7 +38,7 @@ interface Booking {
   display_name?: string;
   notes_for_vendor?: string | null;
   wedding_id?: string | null;
-  booking_source: Tables<'bookings'>['booking_source'];
+  booking_source: 'platform' | 'vendor_manual';
   custom_customer_details: CustomCustomerDetails | null;
 }
 
@@ -67,65 +67,60 @@ const Bookings: React.FC = () => {
   }, [vendorProfile, statusFilter]);
 
   const fetchBookings = async () => {
+    if (!vendorProfile?.vendor_id) return;
     setIsLoading(true);
-    
+
     try {
       // Build the query
-      let query = supabase
-        .from('bookings')
-        .select('*, custom_customer_details, booking_source')
-        .eq('vendor_id', vendorProfile?.vendor_id);
-      
+      const bookingsRef = collection(db, 'bookings');
+      let bookingsQuery = query(
+        bookingsRef,
+        where('vendor_id', '==', vendorProfile.vendor_id),
+        orderBy('event_date', 'asc')
+      );
+
       // Apply status filter if selected
       if (statusFilter) {
-        query = query.eq('booking_status', statusFilter);
+        bookingsQuery = query(
+          bookingsRef,
+          where('vendor_id', '==', vendorProfile.vendor_id),
+          where('booking_status', '==', statusFilter),
+          orderBy('event_date', 'asc')
+        );
       }
-      
+
       // Fetch bookings
-      const { data, error } = await query.order('event_date', { ascending: true });
-      
-      if (error) throw error;
-      
+      const querySnapshot = await getDocs(bookingsQuery);
+
       // Fetch user names for each booking
       const enhancedBookings = await Promise.all(
-        (data || []).map(async (booking) => {
-          // Cast booking for easier type handling
-          const typedBooking = booking as Tables<'bookings'>;
+        querySnapshot.docs.map(async (bookingDoc) => {
+          const data = bookingDoc.data();
+          const booking_id = bookingDoc.id;
 
-          let customCustomerDetails: CustomCustomerDetails | null = null;
-          if (typedBooking.custom_customer_details) {
-            customCustomerDetails = typedBooking.custom_customer_details as CustomCustomerDetails;
+          let display_name = 'Unknown Client';
+          let customCustomerDetails = data.custom_customer_details as CustomCustomerDetails | null;
+
+          if (data.booking_source === 'vendor_manual' && customCustomerDetails) {
+            display_name = customCustomerDetails.name;
+          } else if (data.user_id) {
+            const userRef = doc(db, 'users', data.user_id);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              display_name = userSnap.data().display_name || 'Unknown Client';
+            }
           }
 
-          if (typedBooking.booking_source === 'vendor_manual' && customCustomerDetails) {
-            return {
-              ...typedBooking,
-              display_name: customCustomerDetails.name,
-              custom_customer_details: customCustomerDetails,
-            };
-          }
-
-          if (typedBooking.user_id) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('display_name')
-              .eq('user_id', typedBooking.user_id)
-              .single();
-            
-            return {
-              ...typedBooking,
-              display_name: userData?.display_name || 'Unknown Client'
-            };
-          }
-          
           return {
-            ...typedBooking,
-            display_name: 'Unknown Client'
-          };
+            ...data,
+            booking_id,
+            display_name,
+            custom_customer_details: customCustomerDetails
+          } as Booking;
         })
       );
-      
-      setBookings(enhancedBookings as Booking[]);
+
+      setBookings(enhancedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       toast({
@@ -140,20 +135,16 @@ const Bookings: React.FC = () => {
 
   const updateBookingStatus = async (bookingId: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ booking_status: status })
-        .eq('booking_id', bookingId);
-      
-      if (error) throw error;
-      
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, { booking_status: status });
+
       // Update local state
-      setBookings(bookings.map(booking => 
-        booking.booking_id === bookingId 
+      setBookings(bookings.map(booking =>
+        booking.booking_id === bookingId
           ? { ...booking, booking_status: status }
           : booking
       ));
-      
+
       toast({
         title: "Status updated",
         description: `Booking status set to ${status.replace('_', ' ')}`,
@@ -249,7 +240,7 @@ const Bookings: React.FC = () => {
                     <span className="text-sm text-muted-foreground">
                       Booking #{booking.booking_id.substring(0, 8)}
                     </span>
-                     {booking.booking_source === 'vendor_manual' && (
+                    {booking.booking_source === 'vendor_manual' && (
                       <Badge variant="secondary">Manual</Badge>
                     )}
                   </div>
@@ -279,7 +270,7 @@ const Bookings: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex space-x-3 items-start">
                       <User className="h-5 w-5 mt-0.5 text-sanskara-red" />
                       <div>
@@ -289,7 +280,7 @@ const Bookings: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex space-x-3 items-start">
                       <CalendarIcon className="h-5 w-5 mt-0.5 text-sanskara-red" />
                       <div>
@@ -300,7 +291,7 @@ const Bookings: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between mt-4 pt-4 border-t">
                     <div>
                       <p className="font-medium">Total Amount</p>

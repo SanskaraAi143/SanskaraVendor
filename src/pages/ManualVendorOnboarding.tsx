@@ -8,7 +8,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db, storage } from '@/lib/firebase';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  where,
+  getDocs
+} from 'firebase/firestore';
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 import { useToast } from "../hooks/use-toast";
 import { toast } from '@/components/ui/use-toast';
 import { FileInput } from '@/components/ui/file-input';
@@ -50,10 +64,10 @@ interface VenueFormData {
   emailAddress: string;
   websiteLinks: string;
   yearsInOperation: string;
-  
+
   // Hall Details
   halls: HallDetails[];
-  
+
   // Pricing & Packages
   rentalIncludedInCatering: boolean;
   rentalCharges: {
@@ -64,7 +78,7 @@ interface VenueFormData {
   rentalDuration: string[];
   hourlyRate: string;
   basicRentalIncludes: string[];
-  
+
   // Catering
   cateringOptions: string;
   outsideCaterersDetails: {
@@ -80,7 +94,7 @@ interface VenueFormData {
   };
   cuisineSpecialties: string[];
   menuCustomization: string;
-  
+
   // Alcohol Policy
   alcoholAllowed: boolean;
   inHouseBar: boolean;
@@ -89,7 +103,7 @@ interface VenueFormData {
     applicable: boolean;
     amount: string;
   };
-  
+
   // Decoration
   decorationOptions: string;
   outsideDecoratorRestrictions: string;
@@ -101,7 +115,7 @@ interface VenueFormData {
   };
   decorCustomization: boolean;
   popularThemes: string;
-  
+
   // Taxes & Payment
   gstApplied: boolean;
   gstPercentage: string;
@@ -110,7 +124,7 @@ interface VenueFormData {
   paymentTerms: string;
   cancellationPolicy: string;
   paymentModes: string[];
-  
+
   // Amenities
   parking: {
     cars: string;
@@ -149,11 +163,11 @@ interface VenueFormData {
     services: string;
   };
   wifiAvailable: boolean;
-  
+
   // Ritual & Cultural
   fireRitual: string;
   mandapSetup: string;
-  
+
   // AI & Operational
   bookingSystem: string;
   integrateWithApp: boolean;
@@ -176,16 +190,16 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
   const loading = isLoading || isLoadingVendorProfile;
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoadingState, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // File upload state
   const [venuePhotos, setVenuePhotos] = useState<File[]>([]);
   const [sampleMenus, setSampleMenus] = useState<File[]>([]);
   const [pastEventPhotos, setPastEventPhotos] = useState<File[]>([]);
-  
+
   const [formData, setFormData] = useState<VenueFormData>({
     // Basic Information
     venueName: '',
@@ -195,7 +209,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
     emailAddress: user?.email || '',
     websiteLinks: '',
     yearsInOperation: '',
-    
+
     // Hall Details
     halls: [{
       id: '1',
@@ -210,14 +224,14 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
       danceFloor: { available: false, size: '' },
       ambience: ''
     }],
-    
+
     // Pricing & Packages
     rentalIncludedInCatering: false,
     rentalCharges: { weekday: '', weekend: '', festival: '' },
     rentalDuration: [],
     hourlyRate: '',
     basicRentalIncludes: [],
-    
+
     // Catering
     cateringOptions: '',
     outsideCaterersDetails: { tieUps: '', royaltyFee: false, kitchenAccess: false },
@@ -229,13 +243,13 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
     },
     cuisineSpecialties: [],
     menuCustomization: '',
-    
+
     // Alcohol Policy
     alcoholAllowed: false,
     inHouseBar: false,
     permitRequired: false,
     corkageFee: { applicable: false, amount: '' },
-    
+
     // Decoration
     decorationOptions: '',
     outsideDecoratorRestrictions: '',
@@ -244,7 +258,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
     decorPackages: { priceRange: { min: '', max: '' }, themes: '' },
     decorCustomization: false,
     popularThemes: '',
-    
+
     // Taxes & Payment
     gstApplied: false,
     gstPercentage: '',
@@ -253,7 +267,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
     paymentTerms: '',
     cancellationPolicy: '',
     paymentModes: [],
-    
+
     // Amenities
     parking: { cars: '', twoWheelers: '', valetAvailable: false, valetCost: '' },
     rooms: { total: '', ac: '', nonAc: '', complimentary: false, extraCharges: '', amenities: [] },
@@ -268,11 +282,11 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
     accessibility: { wheelchairAccess: false, elevator: false },
     eventStaffing: { staffCount: '', services: '' },
     wifiAvailable: false,
-    
+
     // Ritual & Cultural
     fireRitual: '',
     mandapSetup: '',
-    
+
     // AI & Operational
     bookingSystem: '',
     integrateWithApp: false,
@@ -507,32 +521,24 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
   const updateHall = (hallId: string, updates: Partial<HallDetails>) => {
     setFormData(prev => ({
       ...prev,
-      halls: prev.halls.map(hall => 
+      halls: prev.halls.map(hall =>
         hall.id === hallId ? { ...hall, ...updates } : hall
       )
     }));
   };
 
   const uploadFiles = async (files: File[], folder: string): Promise<string[]> => {
-    const vendorFolder = user?.id || 'unknown-vendor';
+    const vendorFolder = user?.uid || 'unknown-vendor';
     const uploadPromises = files.map(async (file) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${vendorFolder}/${folder}/${fileName}`;
+      const filePath = `vendors/${vendorFolder}/${folder}/${fileName}`;
 
-      const { data, error } = await supabase.storage
-        .from('vendors')
-        .upload(filePath, file);
+      const storageRef = ref(storage, filePath);
+      const snapshot = await uploadBytes(storageRef, file);
+      const publicUrl = await getDownloadURL(snapshot.ref);
 
-      if (error) {
-        throw new Error(`Failed to upload file ${file.name}: ${error.message}`);
-      }
-
-      const { data: publicUrl } = supabase.storage
-        .from('vendors')
-        .getPublicUrl(filePath);
-
-      return publicUrl.publicUrl;
+      return publicUrl;
     });
 
     return Promise.all(uploadPromises);
@@ -554,7 +560,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
 
       // Prepare vendor data
       const vendorData = {
-        supabase_auth_uid: user.id,
+        supabase_auth_uid: user.uid,
         vendor_name: formData.venueName,
         vendor_category: 'Venue',
         contact_email: formData.emailAddress,
@@ -582,7 +588,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
         details: {
           establishmentYear: formData.yearsInOperation,
           contactPerson: formData.contactPersonName,
-          
+
           // Catering details
           cateringOptions: formData.cateringOptions,
           outsideCaterersDetails: formData.outsideCaterersDetails,
@@ -590,7 +596,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           cuisineSpecialties: formData.cuisineSpecialties,
           menuCustomization: formData.menuCustomization,
           sampleMenuUrls,
-          
+
           // Policies
           alcoholPolicy: {
             allowed: formData.alcoholAllowed,
@@ -598,7 +604,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
             permitRequired: formData.permitRequired,
             corkageFee: formData.corkageFee
           },
-          
+
           decoration: {
             options: formData.decorationOptions,
             restrictions: formData.outsideDecoratorRestrictions,
@@ -606,7 +612,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
             packages: formData.decorPackages,
             customization: formData.decorCustomization
           },
-          
+
           // Rental & Pricing
           rental: {
             includedInCatering: formData.rentalIncludedInCatering,
@@ -615,21 +621,21 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
             hourlyRate: formData.hourlyRate,
             basicIncludes: formData.basicRentalIncludes
           },
-          
+
           // Taxes & Payment
           taxes: {
             gstApplied: formData.gstApplied,
             gstPercentage: formData.gstPercentage,
             otherCharges: formData.otherCharges
           },
-          
+
           payment: {
             advanceBooking: formData.advanceBooking,
             terms: formData.paymentTerms,
             cancellationPolicy: formData.cancellationPolicy,
             modes: formData.paymentModes
           },
-          
+
           // Amenities
           parking: formData.parking,
           rooms: formData.rooms,
@@ -639,11 +645,11 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           accessibility: formData.accessibility,
           eventStaffing: formData.eventStaffing,
           wifi: formData.wifiAvailable,
-          
+
           // Cultural & Ritual
           fireRitual: formData.fireRitual,
           mandapSetup: formData.mandapSetup,
-          
+
           // Operational
           bookingSystem: formData.bookingSystem,
           integrateWithApp: formData.integrateWithApp,
@@ -658,90 +664,75 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
       };
 
       // Insert vendor
-      const { data: vendor, error: vendorError } = await supabase
-        .from('vendors')
-        .insert(vendorData)
-        .select()
-        .single();
-
-      if (vendorError) {
-        throw new Error(`Failed to insert vendor data: ${vendorError.message}`);
-      }
+      const vendorRef = await addDoc(collection(db, 'vendors'), {
+        ...vendorData,
+        created_at: new Date().toISOString()
+      });
+      const vendorId = vendorRef.id;
 
       // Create vendor staff entry for contact person
-      const { error: staffError } = await supabase
-        .from('vendor_staff')
-        .insert({
-          vendor_id: vendor.vendor_id,
-          supabase_auth_uid: user.id,
-          email: formData.emailAddress,
-          phone_number: formData.directPhoneNumbers,
-          display_name: formData.contactPersonName,
-          role: 'owner'
-        });
-
-      if (staffError) {
-        throw new Error(`Failed to create vendor staff entry: ${staffError.message}`);
-      }
+      await addDoc(collection(db, 'vendor_staff'), {
+        vendor_id: vendorId,
+        supabase_auth_uid: user.uid,
+        email: formData.emailAddress,
+        phone_number: formData.directPhoneNumbers,
+        display_name: formData.contactPersonName,
+        role: 'owner',
+        is_active: true,
+        created_at: new Date().toISOString()
+      });
 
       // Create services for each hall
-      const hallServices = formData.halls.map(hall => ({
-        vendor_id: vendor.vendor_id,
-        service_name: hall.name || `${hall.type} Space`,
-        service_category: 'Venue Space',
-        description: `${hall.type} with ${hall.area} sq ft area. ${hall.ambience}`,
-        base_price: null, // Will be determined based on catering/rental setup
-        min_capacity: Math.min(
-          parseInt(hall.seatingCapacity.theatre) || 0,
-          parseInt(hall.seatingCapacity.roundTable) || 0,
-          parseInt(hall.seatingCapacity.floating) || 0
-        ),
-        max_capacity: Math.max(
-          parseInt(hall.seatingCapacity.theatre) || 0,
-          parseInt(hall.seatingCapacity.roundTable) || 0,
-          parseInt(hall.seatingCapacity.floating) || 0
-        ),
-        customizability_details: JSON.stringify({
-          type: hall.type,
-          area: hall.area,
-          airConditioning: hall.airConditioning,
-          stage: hall.stage,
-          danceFloor: hall.danceFloor,
-          seatingCapacity: hall.seatingCapacity,
-          diningArrangement: hall.diningArrangement
-        })
-      }));
+      const hallServicePromises = formData.halls.map(hall => {
+        const hallService = {
+          vendor_id: vendorId,
+          service_name: hall.name || `${hall.type} Space`,
+          service_category: 'Venue Space',
+          description: `${hall.type} with ${hall.area} sq ft area. ${hall.ambience}`,
+          base_price: null, // Will be determined based on catering/rental setup
+          min_capacity: Math.min(
+            parseInt(hall.seatingCapacity.theatre) || 0,
+            parseInt(hall.seatingCapacity.roundTable) || 0,
+            parseInt(hall.seatingCapacity.floating) || 0
+          ),
+          max_capacity: Math.max(
+            parseInt(hall.seatingCapacity.theatre) || 0,
+            parseInt(hall.seatingCapacity.roundTable) || 0,
+            parseInt(hall.seatingCapacity.floating) || 0
+          ),
+          customizability_details: JSON.stringify({
+            type: hall.type,
+            area: hall.area,
+            airConditioning: hall.airConditioning,
+            stage: hall.stage,
+            danceFloor: hall.danceFloor,
+            seatingCapacity: hall.seatingCapacity,
+            diningArrangement: hall.diningArrangement
+          }),
+          created_at: new Date().toISOString(),
+          is_active: true
+        };
+        return addDoc(collection(db, 'vendor_services'), hallService);
+      });
 
-      if (hallServices.length > 0) {
-        const { error: servicesError } = await supabase
-          .from('vendor_services')
-          .insert(hallServices);
-
-        if (servicesError) {
-          throw new Error(`Failed to create hall services: ${servicesError.message}`);
-        }
-      }
+      await Promise.all(hallServicePromises);
 
       // Add catering service if in-house catering is offered
       if (formData.cateringOptions === 'in-house' || formData.cateringOptions === 'both') {
-        const { error: cateringError } = await supabase
-          .from('vendor_services')
-          .insert({
-            vendor_id: vendor.vendor_id,
-            service_name: 'In-house Catering',
-            service_category: 'Catering',
-            description: `Specialties: ${formData.cuisineSpecialties.join(', ')}`,
-            base_price: parseInt(formData.pricing.vegStandard.min) || null,
-            customizability_details: JSON.stringify({
-              cuisines: formData.cuisineSpecialties,
-              pricing: formData.pricing,
-              customization: formData.menuCustomization
-            })
-          });
-
-        if (cateringError) {
-          throw new Error(`Failed to create catering service: ${cateringError.message}`);
-        }
+        await addDoc(collection(db, 'vendor_services'), {
+          vendor_id: vendorId,
+          service_name: 'In-house Catering',
+          service_category: 'Catering',
+          description: `Specialties: ${formData.cuisineSpecialties.join(', ')}`,
+          base_price: parseInt(formData.pricing.vegStandard.min) || null,
+          customizability_details: JSON.stringify({
+            cuisines: formData.cuisineSpecialties,
+            pricing: formData.pricing,
+            customization: formData.menuCustomization
+          }),
+          created_at: new Date().toISOString(),
+          is_active: true
+        });
       }
 
       await refreshVendorProfile();
@@ -749,18 +740,16 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
       toast({
         title: "Onboarding Completed!",
         description: "Your venue has been successfully registered with SanskaraAi.",
-        variant: "success",
       });
 
-      if (vendor) {
-        await updateVendor(vendor.vendor_id, { is_active: true, status: 'active' });
-      }
+      // Update vendor to active
+      await updateDoc(doc(db, 'vendors', vendorId), {
+        is_active: true,
+        status: 'active',
+        updated_at: new Date().toISOString()
+      });
 
-      if (vendor) {
-        await updateVendor(vendor.vendor_id, { is_active: true, status: 'active' });
-      }
-
-      onCompletion({ vendorId: vendor?.vendor_id });
+      onCompletion({ vendorId });
       // navigate('/'); // OnboardingLayout will handle navigation
     } catch (error: any) {
       console.error('Error submitting onboarding:', error);
@@ -815,7 +804,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="contactPersonName">Contact Person Name (Owner/Manager) *</Label>
                   <Input
@@ -826,7 +815,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="directPhoneNumbers">Direct Phone Number(s) *</Label>
                   <Input
@@ -838,7 +827,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="emailAddress">Email Address *</Label>
                   <Input
@@ -850,7 +839,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="yearsInOperation">Years in Operation / Establishment Year *</Label>
                   <Input
@@ -863,7 +852,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2 mt-4">
                 <Label htmlFor="fullAddress">Full Address with Pin Code *</Label>
                 <Textarea
@@ -875,7 +864,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="websiteLinks">Website or Social Media Links</Label>
                 <Textarea
@@ -887,7 +876,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>Upload High-Quality Photos & Videos of Venue *</Label>
                 <FileInput
@@ -908,7 +897,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-sanskara-text-primary">Venue Space / Hall Details</h3>
-              
+
               {formData.halls.map((hall, index) => (
                 <div key={hall.id} className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                   <div className="flex justify-between items-center">
@@ -936,7 +925,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Type of Space *</Label>
                         <Select value={hall.type} onValueChange={(value) => updateHall(hall.id, { type: value })}>
@@ -962,7 +951,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <Label>Seating Capacity (Max/Min)</Label>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1001,7 +990,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <Label>Dining Arrangement</Label>
                       <div className="flex items-center space-x-2">
@@ -1028,7 +1017,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Area/Dimensions (Sq. Ft. or Sq. M)</Label>
@@ -1039,7 +1028,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Air Conditioning</Label>
                         <Select value={hall.airConditioning} onValueChange={(value) => updateHall(hall.id, { airConditioning: value })}>
@@ -1055,7 +1044,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         </Select>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -1081,7 +1070,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -1107,7 +1096,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label>Ambience/Lighting/Natural Light Description</Label>
                       <Textarea
@@ -1121,7 +1110,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   </div>
                 </div>
               ))}
-              
+
               <Button onClick={addHall} variant="outline" className="w-full border-sanskara-text-secondary text-sanskara-text-secondary hover:bg-sanskara-cream hover:border-sanskara-maroon hover:text-sanskara-maroon">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Another Hall/Space
@@ -1135,7 +1124,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-sanskara-text-primary">Pricing, Catering, and Packages</h3>
-              
+
               {/* Rental & Booking Charges */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">Rental & Booking Charges</h3>
@@ -1148,13 +1137,13 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Is Rental Included in Catering Charges?</Label>
                   </div>
-                  
+
                   {formData.rentalIncludedInCatering && (
                     <p className="text-sm text-green-600 bg-green-50 p-2 rounded">
                       We'll show the hall as 'complimentary with in-house catering' in your listing.
                     </p>
                   )}
-                  
+
                   {!formData.rentalIncludedInCatering && (
                     <div className="space-y-4">
                       <Label>Rental Charges</Label>
@@ -1199,7 +1188,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           />
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Rental Duration Options</Label>
                         <div className="space-y-2">
@@ -1226,7 +1215,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                             </div>
                           ))}
                         </div>
-                        
+
                         {formData.rentalDuration.includes('Per Hour') && (
                           <div className="space-y-2">
                             <Label className="text-sm">Rate per hour</Label>
@@ -1240,7 +1229,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>What is Included in the Basic Rental?</Label>
                         <div className="space-y-2">
@@ -1272,7 +1261,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   )}
                 </div>
               </div>
-              
+
               {/* Food & Catering */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">Food & Catering</h3>
@@ -1297,7 +1286,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </RadioGroup>
                   </div>
-                  
+
                   {(formData.cateringOptions === 'outside' || formData.cateringOptions === 'both') && (
                     <div className="space-y-4 p-4 bg-gray-50 rounded">
                       <div className="space-y-2">
@@ -1312,7 +1301,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                         />
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={formData.outsideCaterersDetails.royaltyFee}
@@ -1324,7 +1313,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         />
                         <Label>Royalty Fee Charged?</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={formData.outsideCaterersDetails.kitchenAccess}
@@ -1338,7 +1327,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </div>
                   )}
-                  
+
                   {(formData.cateringOptions === 'in-house' || formData.cateringOptions === 'both') && (
                     <div className="space-y-4">
                       <Label>Price Per Plate</Label>
@@ -1408,7 +1397,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-4">
                           <Label className="text-sm font-medium">Non-Veg</Label>
                           <div className="space-y-2">
@@ -1475,7 +1464,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Cuisine Specialties Offered</Label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1503,7 +1492,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           ))}
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Menu Customization Allowed?</Label>
                         <RadioGroup
@@ -1524,7 +1513,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           </div>
                         </RadioGroup>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label>Upload Sample Menus (PDF/Images)</Label>
                         <FileInput
@@ -1549,7 +1538,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4">Amenities & Event Services</h3>
-              
+
               {/* Alcohol Policy */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold">Alcohol Policy</h3>
@@ -1561,7 +1550,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Is Alcohol Allowed?</Label>
                   </div>
-                  
+
                   {formData.alcoholAllowed && (
                     <div className="space-y-4 pl-6">
                       <div className="flex items-center space-x-2">
@@ -1571,7 +1560,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         />
                         <Label>In-house Bar Available?</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={formData.permitRequired}
@@ -1579,7 +1568,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         />
                         <Label>Permit Required?</Label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           checked={formData.corkageFee.applicable}
@@ -1590,7 +1579,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         />
                         <Label>Corkage Fee Applicable?</Label>
                       </div>
-                      
+
                       {formData.corkageFee.applicable && (
                         <div className="space-y-2">
                           <Label className="text-sm">Corkage Fee Amount</Label>
@@ -1609,7 +1598,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   )}
                 </div>
               </div>
-              
+
               {/* Decoration */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold">Decoration</h3>
@@ -1634,7 +1623,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </RadioGroup>
                   </div>
-                  
+
                   {(formData.decorationOptions === 'outside' || formData.decorationOptions === 'both') && (
                     <div className="space-y-2">
                       <Label>Restrictions for Outside Decorators?</Label>
@@ -1645,7 +1634,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       />
                     </div>
                   )}
-                  
+
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={formData.basicDecorIncluded}
@@ -1653,7 +1642,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Basic Decor Included?</Label>
                   </div>
-                  
+
                   {formData.basicDecorIncluded && (
                     <div className="space-y-2">
                       <Label className="text-sm">What's Included?</Label>
@@ -1664,7 +1653,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       />
                     </div>
                   )}
-                  
+
                   <div className="space-y-4">
                     <Label>Standard Decor Packages</Label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1697,7 +1686,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           />
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label className="text-sm">Themes/Styles Offered</Label>
                         <Textarea
@@ -1712,7 +1701,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={formData.decorCustomization}
@@ -1720,7 +1709,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Customization Allowed in Decoration?</Label>
                   </div>
-                  
+
                   {formData.decorCustomization && (
                     <div className="space-y-2">
                       <Label className="text-sm">Popular Themes with Price Range</Label>
@@ -1733,7 +1722,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   )}
                 </div>
               </div>
-              
+
               {/* Parking */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold">Parking</h3>
@@ -1750,7 +1739,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         }))}
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label>Capacity (2-Wheelers)</Label>
                       <Input
@@ -1763,7 +1752,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={formData.parking.valetAvailable}
@@ -1774,7 +1763,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Valet Parking Available?</Label>
                   </div>
-                  
+
                   {formData.parking.valetAvailable && (
                     <div className="space-y-2">
                       <Label className="text-sm">Additional Cost</Label>
@@ -1791,7 +1780,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   )}
                 </div>
               </div>
-              
+
               {/* Power Backup & AV Equipment */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold">Power Backup & AV Equipment</h3>
@@ -1807,7 +1796,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                         }))}
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label>Duration Supported (Hours)</Label>
                       <Input
@@ -1820,7 +1809,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <Label>Audio/Visual Equipment Available</Label>
                     <div className="space-y-3">
@@ -1852,7 +1841,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center space-x-4">
                         <Checkbox
                           checked={formData.audioVisual.projector.available}
@@ -1883,7 +1872,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>DJ Services</Label>
                     <RadioGroup
@@ -1907,7 +1896,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </RadioGroup>
                   </div>
-                  
+
                   {formData.audioVisual.djServices === 'in-house' && (
                     <div className="space-y-2">
                       <Label className="text-sm">DJ Cost if In-house</Label>
@@ -1933,7 +1922,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-sanskara-text-primary">Policies & Operations</h3>
-              
+
               {/* Taxes & Payment */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">Taxes & Payment</h3>
@@ -1946,7 +1935,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>GST Applied?</Label>
                   </div>
-                  
+
                   {formData.gstApplied && (
                     <div className="space-y-2">
                       <Label className="text-sm">GST %</Label>
@@ -1959,7 +1948,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       />
                     </div>
                   )}
-                  
+
                   <div className="space-y-2">
                     <Label>Other Charges/Hidden Fees (if any)</Label>
                     <Textarea
@@ -1969,7 +1958,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Advance Booking Amount</Label>
                     <Input
@@ -1979,7 +1968,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Payment Terms & Schedule</Label>
                     <Textarea
@@ -1989,7 +1978,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Cancellation & Refund Policy</Label>
                     <Textarea
@@ -1999,7 +1988,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Accepted Payment Modes</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -2029,7 +2018,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   </div>
                 </div>
               </div>
-              
+
               {/* Ritual & Cultural Support */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">Ritual & Cultural Support</h3>
@@ -2047,7 +2036,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Mandap Setup Location Preferences or Restrictions</Label>
                     <Textarea
@@ -2059,7 +2048,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                   </div>
                 </div>
               </div>
-              
+
               {/* AI & Operational Data */}
               <div className="mb-6 rounded-lg bg-white/50 p-4 backdrop-blur-sm">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">AI & Operational Data</h3>
@@ -2078,7 +2067,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       checked={formData.integrateWithApp}
@@ -2087,7 +2076,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                     />
                     <Label>Willing to Integrate with SanskaraAi App/Portal?</Label>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Unique Features / Selling Points of Your Venue</Label>
                     <Textarea
@@ -2097,7 +2086,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Ideal Client Profile (type of events, budget preferences)</Label>
                     <Textarea
@@ -2107,7 +2096,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Select value={formData.flexibilityLevel} onValueChange={(value) => setFormData(prev => ({ ...prev, flexibilityLevel: value }))}>
                       <SelectTrigger className="border-gray-300 focus:border-sanskara-deep-blue focus:ring-sanskara-deep-blue rounded-md">
@@ -2122,7 +2111,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Upload Photos of Past Events with Themes/Setup Styles</Label>
                     <FileInput
@@ -2135,7 +2124,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       <p className="text-sm text-sanskara-text-secondary">{pastEventPhotos.length} files selected</p>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Would You Consider Allowing AI to Suggest Menu or Decor Based on Client Profiles?</Label>
                     <RadioGroup
@@ -2156,7 +2145,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </div>
                     </RadioGroup>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Preferred Mode of Receiving Leads/Bookings from SanskaraAi</Label>
                     <Select value={formData.preferredLeadMode} onValueChange={(value) => setFormData(prev => ({ ...prev, preferredLeadMode: value }))}>
@@ -2171,7 +2160,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Any Venue Rules or Restrictions Clients Must Know?</Label>
                     <Textarea

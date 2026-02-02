@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import DashboardCard from '@/components/DashboardCard';
-import { CheckCircle2, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from 'firebase/firestore';
 
 interface AssignedService {
   service_id: string;
@@ -33,47 +36,57 @@ const VendorServicesWidget: React.FC = () => {
       setError(null);
       try {
         // First get the staff ID
-        const { data: staffData, error: staffError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id, vendor_id, vendors(vendor_name)')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffError) throw staffError;
-        if (!staffData) {
+        if (staffSnapshot.empty) {
           setError('Staff profile not found.');
           return;
         }
 
-        // Get assigned services with full details from vendor_services
-        const { data: serviceAssignments, error: assignmentError } = await supabase
-          .from('vendor_service_staff')
-          .select(`
-            service_id,
-            vendor_services(
-              service_id,
-              service_name,
-              service_category,
-              description,
-              base_price,
-              price_unit,
-              is_negotiable,
-              vendor_id
-            )
-          `)
-          .eq('staff_id', staffData.staff_id);
-        if (assignmentError) throw assignmentError;
+        const staffData = staffSnapshot.docs[0].data();
+        const staffId = staffSnapshot.docs[0].id;
+        const vendorId = staffData.vendor_id;
 
-        const services = (serviceAssignments || [])
-          .map(assignment => assignment.vendor_services)
-          .filter(Boolean)
-          .map(service => ({
-            service_id: service.service_id,
-            service_name: service.service_name || 'Unknown Service',
-            service_category: service.service_category || 'Unknown',
-            vendor_name: (staffData.vendors as any)?.vendor_name || 'Unknown Vendor'
-          }));
+        // Fetch vendor name
+        let vendorName = 'Unknown Vendor';
+        if (vendorId) {
+          const vendorDoc = await getDoc(doc(db, 'vendors', vendorId));
+          if (vendorDoc.exists()) {
+            vendorName = vendorDoc.data().vendor_name || 'Unknown Vendor';
+          }
+        }
 
+        // Get assigned services from vendor_service_staff
+        const assignmentQuery = query(
+          collection(db, 'vendor_service_staff'),
+          where('staff_id', '==', staffId)
+        );
+        const assignmentSnapshot = await getDocs(assignmentQuery);
+
+        const servicesPromises = assignmentSnapshot.docs.map(async (assignmentDoc) => {
+          const assignment = assignmentDoc.data();
+          const serviceId = assignment.service_id;
+
+          if (!serviceId) return null;
+
+          const serviceDoc = await getDoc(doc(db, 'vendor_services', serviceId));
+          if (serviceDoc.exists()) {
+            const serviceData = serviceDoc.data();
+            return {
+              service_id: serviceDoc.id,
+              service_name: serviceData.service_name || 'Unknown Service',
+              service_category: serviceData.service_category || 'Unknown',
+              vendor_name: vendorName
+            };
+          }
+          return null;
+        });
+
+        const services = (await Promise.all(servicesPromises)).filter(Boolean) as AssignedService[];
         setAssignedServices(services);
       } catch (err: any) {
         console.error('Error fetching assigned services:', err);

@@ -4,7 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Edit2, Save, X, Plus, Trash2, Eye } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import ProfileBasicInfo from '@/components/ProfileBasicInfo';
 import ProfileAddressInfo from '@/components/ProfileAddressInfo';
@@ -160,7 +168,7 @@ interface ExtendedVendorProfile {
 const VendorProfile: React.FC = () => {
   const { user, vendorProfile, refreshVendorProfile } = useAuth();
   const navigate = useNavigate();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -205,13 +213,13 @@ const VendorProfile: React.FC = () => {
       return;
     }
     fetchVendorData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, vendorProfile, navigate]);
 
   const fetchVendorData = async () => {
     if (!vendorProfile?.vendor_id) {
-        setIsLoading(false);
-        return;
+      setIsLoading(false);
+      return;
     }
     try {
       setIsLoading(true);
@@ -219,15 +227,19 @@ const VendorProfile: React.FC = () => {
         setIsLoading(false);
         return;
       }
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('vendor_services')
-        .select('*')
-        .eq('vendor_id', vendorProfile.vendor_id);
+      const servicesQuery = query(
+        collection(db, 'vendor_services'),
+        where('vendor_id', '==', vendorProfile.vendor_id)
+      );
+      const servicesSnapshot = await getDocs(servicesQuery);
+      const servicesData = servicesSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        service_id: doc.id
+      }));
 
-      if (servicesError) throw servicesError;
 
       const extendedProfile = vendorProfile as unknown as ExtendedVendorProfile;
-      
+
       setVenueData(extendedProfile);
       setServices(servicesData || []);
       initializeEditedData(extendedProfile);
@@ -264,11 +276,8 @@ const VendorProfile: React.FC = () => {
         portfolio_image_urls: editedData.portfolio_image_urls || [],
         updated_at: new Date().toISOString()
       };
-      const { error } = await supabase
-        .from('vendors')
-        .update(updatePayload)
-        .eq('vendor_id', venueData.vendor_id);
-      if (error) throw error;
+      const vendorRef = doc(db, 'vendors', venueData.vendor_id);
+      await updateDoc(vendorRef, updatePayload);
       await refreshVendorProfile();
       setIsEditing(false);
       toast({
@@ -289,7 +298,7 @@ const VendorProfile: React.FC = () => {
 
   const handleCancel = () => {
     if (!venueData) return;
-    initializeEditedData(venueData); 
+    initializeEditedData(venueData);
     setIsEditing(false);
   };
 
@@ -303,7 +312,7 @@ const VendorProfile: React.FC = () => {
       address: { ...(prev.address || {}), [field]: value }
     }));
   };
-  
+
   const updatePricingRangeField = (field: keyof PricingRangeData, value: any) => {
     setEditedData(prev => ({
       ...prev,
@@ -313,7 +322,7 @@ const VendorProfile: React.FC = () => {
 
   const updateDetailField = (path: string, value: any) => {
     setEditedData(prev => {
-      const newDetails = JSON.parse(JSON.stringify(prev.details || {})); 
+      const newDetails = JSON.parse(JSON.stringify(prev.details || {}));
       const pathArray = path.split('.');
       let current = newDetails;
       for (let i = 0; i < pathArray.length - 1; i++) {
@@ -326,7 +335,7 @@ const VendorProfile: React.FC = () => {
       return { ...prev, details: newDetails };
     });
   };
-  
+
   const getDetailValue = (path: string, defaultValue: any = '') => {
     const pathArray = path.split('.');
     let current = editedData.details || {};
@@ -342,10 +351,10 @@ const VendorProfile: React.FC = () => {
 
   // --- Image Upload Handlers ---
   const handlePortfolioFileSelect = async (files: File[]) => {
-    if (!venueData?.vendor_id || !user?.id) return;
+    if (!venueData?.vendor_id || !user?.uid) return;
     setUploadingPortfolio(true);
     try {
-      const urls = await uploadMultipleFiles(files, 'vendors', user.id);
+      const urls = await uploadMultipleFiles(files, 'vendors', user.uid);
       setEditedData(prev => ({
         ...prev,
         portfolio_image_urls: [...(prev.portfolio_image_urls || []), ...urls],
@@ -359,10 +368,10 @@ const VendorProfile: React.FC = () => {
   };
 
   const handlePastEventFileSelect = async (files: File[]) => {
-    if (!venueData?.vendor_id || !user?.id) return;
+    if (!venueData?.vendor_id || !user?.uid) return;
     setUploadingPastEvents(true);
     try {
-      const urls = await uploadMultipleFiles(files, 'vendors', user.id);
+      const urls = await uploadMultipleFiles(files, 'vendors', user.uid);
       setEditedData(prev => ({
         ...prev,
         details: {
@@ -385,7 +394,7 @@ const VendorProfile: React.FC = () => {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading profile...</span></div>;
   }
 
-  if (!venueData?.vendor_id) { 
+  if (!venueData?.vendor_id) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -405,193 +414,193 @@ const VendorProfile: React.FC = () => {
           <p className="text-gray-600">Manage your business information, services, and settings.</p>
         </div>
         <Button variant="outline" onClick={() => setIsEditing(!isEditing)}>
-            {isEditing ? (
-                <>
-                    <Eye className="h-4 w-4 mr-2" /> View Profile
-                </>
-            ) : (
-                <>
-                    <Edit2 className="h-4 w-4 mr-2" /> Edit Profile
-                </>
-            )}
+          {isEditing ? (
+            <>
+              <Eye className="h-4 w-4 mr-2" /> View Profile
+            </>
+          ) : (
+            <>
+              <Edit2 className="h-4 w-4 mr-2" /> Edit Profile
+            </>
+          )}
         </Button>
       </div>
 
       {!isEditing ? (
-        <VendorProfileView profile={{...venueData, services: services }} />
+        <VendorProfileView profile={{ ...venueData, services: services }} />
       ) : (
         <>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 rounded-lg border bg-muted p-1">
-                <TabsTrigger value="basic">Basic</TabsTrigger>
-                <TabsTrigger value="address">Address</TabsTrigger>
-                <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                <TabsTrigger value="amenities">Amenities</TabsTrigger>
-                <TabsTrigger value="policies">Policies</TabsTrigger>
-                <TabsTrigger value="ritual_ai">Ritual/AI</TabsTrigger>
-                <TabsTrigger value="photos">Photos</TabsTrigger>
-                <TabsTrigger value="services">Spaces</TabsTrigger>
-                </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="flex w-full overflow-x-auto whitespace-nowrap gap-2 rounded-lg border bg-muted p-1">
+              <TabsTrigger value="basic">Basic</TabsTrigger>
+              <TabsTrigger value="address">Address</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              <TabsTrigger value="amenities">Amenities</TabsTrigger>
+              <TabsTrigger value="policies">Policies</TabsTrigger>
+              <TabsTrigger value="ritual_ai">Ritual/AI</TabsTrigger>
+              <TabsTrigger value="photos">Photos</TabsTrigger>
+              <TabsTrigger value="services">Spaces</TabsTrigger>
+            </TabsList>
 
-                <TabsContent value="basic">
-                <ProfileBasicInfo
-                    isEditing={isEditing}
-                    editedData={editedData}
-                    updateField={updateField}
-                    getDetailValue={getDetailValue}
-                    updateDetailField={updateDetailField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="address">
-                <ProfileAddressInfo
-                    isEditing={isEditing}
-                    editedData={editedData}
-                    updateAddressField={updateAddressField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="pricing">
-                <ProfilePricingInfo
-                    isEditing={isEditing}
-                    editedData={editedData}
-                    updatePricingRangeField={updatePricingRangeField}
-                    getDetailValue={getDetailValue}
-                    updateDetailField={updateDetailField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="amenities">
-                <ProfileAmenitiesInfo
-                    isEditing={isEditing}
-                    getDetailValue={getDetailValue}
-                    updateDetailField={updateDetailField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="policies">
-                <ProfilePolicies
-                    isEditing={isEditing}
-                    getDetailValue={getDetailValue}
-                    updateDetailField={updateDetailField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="ritual_ai">
-                <ProfileRitualAiInfo
-                    isEditing={isEditing}
-                    getDetailValue={getDetailValue}
-                    updateDetailField={updateDetailField}
-                    venueData={venueData}
-                />
-                </TabsContent>
-                <TabsContent value="photos">
-                <Card>
-                    <CardHeader><CardTitle>Photos</CardTitle></CardHeader>
-                    <CardContent className="space-y-6">
-                    <div>
-                        <h3 className="font-semibold mb-2 text-lg">Venue Photos & Videos (Main Portfolio)</h3>
-                        <ImageUploader
-                            title="Upload High-Quality Photos & Videos of Venue"
-                            existingImages={editedData.portfolio_image_urls || []}
-                            onFileSelect={handlePortfolioFileSelect}
-                            uploading={uploadingPortfolio}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold mb-2 text-lg">Past Event Photos (Themes/Setup Styles)</h3>
-                        <ImageUploader
-                            title="Upload Photos of Past Events"
-                            existingImages={getDetailValue('pastEventPhotoUrls', [])}
-                            onFileSelect={handlePastEventFileSelect}
-                            uploading={uploadingPastEvents}
-                        />
-                      </div>
-                    </CardContent>
-                </Card>
-                </TabsContent>
-                <TabsContent value="services">
-                <Card>
-                    <CardHeader>
-                    <CardTitle>Venue Spaces / Halls (Services)</CardTitle>
-                    <CardDescription>
-                        Manage individual halls or distinct service spaces. Each hall/space is a 'service' entry.
-                    </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                    {services.length === 0 ? (
-                        <div className="text-center py-8">
-                        <p className="text-gray-500 mb-4">No venue spaces/halls (services) defined yet.</p>
-                        <Button onClick={() => navigate('/services/add')}>
-                            <Plus className="h-4 w-4 mr-2" /> Add Hall/Space
-                        </Button>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                        {services.map((service) => (
-                            <div key={service.service_id} className="border rounded-lg p-4 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                <h4 className="font-semibold text-md">{service.service_name} (e.g., Main Hall, Lawn 1)</h4>
-                                <Badge variant="outline" className="text-xs">
-                                    Category: {service.service_category}
-                                </Badge>
-                                </div>
-                                <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => navigate(`/services/edit/${service.service_id}`)}
-                                >
-                                <Edit2 className="h-4 w-4 mr-1" /> Edit Details
-                                </Button>
+            <TabsContent value="basic">
+              <ProfileBasicInfo
+                isEditing={isEditing}
+                editedData={editedData}
+                updateField={updateField}
+                getDetailValue={getDetailValue}
+                updateDetailField={updateDetailField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="address">
+              <ProfileAddressInfo
+                isEditing={isEditing}
+                editedData={editedData}
+                updateAddressField={updateAddressField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="pricing">
+              <ProfilePricingInfo
+                isEditing={isEditing}
+                editedData={editedData}
+                updatePricingRangeField={updatePricingRangeField}
+                getDetailValue={getDetailValue}
+                updateDetailField={updateDetailField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="amenities">
+              <ProfileAmenitiesInfo
+                isEditing={isEditing}
+                getDetailValue={getDetailValue}
+                updateDetailField={updateDetailField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="policies">
+              <ProfilePolicies
+                isEditing={isEditing}
+                getDetailValue={getDetailValue}
+                updateDetailField={updateDetailField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="ritual_ai">
+              <ProfileRitualAiInfo
+                isEditing={isEditing}
+                getDetailValue={getDetailValue}
+                updateDetailField={updateDetailField}
+                venueData={venueData}
+              />
+            </TabsContent>
+            <TabsContent value="photos">
+              <Card>
+                <CardHeader><CardTitle>Photos</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <h3 className="font-semibold mb-2 text-lg">Venue Photos & Videos (Main Portfolio)</h3>
+                    <ImageUploader
+                      title="Upload High-Quality Photos & Videos of Venue"
+                      existingImages={editedData.portfolio_image_urls || []}
+                      onFileSelect={handlePortfolioFileSelect}
+                      uploading={uploadingPortfolio}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-2 text-lg">Past Event Photos (Themes/Setup Styles)</h3>
+                    <ImageUploader
+                      title="Upload Photos of Past Events"
+                      existingImages={getDetailValue('pastEventPhotoUrls', [])}
+                      onFileSelect={handlePastEventFileSelect}
+                      uploading={uploadingPastEvents}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="services">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Venue Spaces / Halls (Services)</CardTitle>
+                  <CardDescription>
+                    Manage individual halls or distinct service spaces. Each hall/space is a 'service' entry.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {services.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">No venue spaces/halls (services) defined yet.</p>
+                      <Button onClick={() => navigate('/services/add')}>
+                        <Plus className="h-4 w-4 mr-2" /> Add Hall/Space
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {services.map((service) => (
+                        <div key={service.service_id} className="border rounded-lg p-4 shadow-sm">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-semibold text-md">{service.service_name} (e.g., Main Hall, Lawn 1)</h4>
+                              <Badge variant="outline" className="text-xs">
+                                Category: {service.service_category}
+                              </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground mb-1">Description: {service.description || 'N/A'}</p>
-                            <p className="text-sm"><span className="font-medium">Capacity:</span> {service.min_capacity} - {service.max_capacity} guests</p>
-                            {service.base_price && (
-                                <p className="text-sm"><span className="font-medium">Base Price:</span> {service.base_price} {service.price_unit || ''}</p>
-                            )}
-                            {service.customizability_details && typeof service.customizability_details === 'string' && (
-                                <div className="mt-2 text-xs bg-slate-50 p-2 rounded">
-                                <p className="font-semibold">Additional Space Details (from service record):</p>
-                                <pre className="whitespace-pre-wrap text-xs">{
-                                    (() => {
-                                    try {
-                                        const parsed = JSON.parse(service.customizability_details);
-                                        return `Type: ${parsed.typeOfSpace || 'N/A'} ${parsed.otherTypeOfSpace ? `(${parsed.otherTypeOfSpace})` : ''}\n` +
-                                        `Area: ${parsed.areaSqFt || 'N/A'} sq.ft.\n` +
-                                        `AC: ${parsed.airConditioning || 'N/A'}\n` +
-                                        `Stage: ${parsed.stageAvailable ? `Yes (${parsed.stageDimensions || 'N/A'})` : 'No'}\n` +
-                                        `Dance Floor: ${parsed.danceFloorAvailable ? `Yes (${parsed.danceFloorSizeSqFt || 'N/A'} sq.ft.)` : 'No'}\n` +
-                                        `Seating - Theatre: ${parsed.seatingTheatre || 'N/A'}, Banquet: ${parsed.seatingBanquet || 'N/A'}, Floating: ${parsed.seatingFloating || 'N/A'}\n`+
-                                        `Dining: ${parsed.separateDiningHall ? `Separate (Capacity: ${parsed.diningCapacity || 'N/A'})` : 'Integrated/No Separate'}\n` +
-                                        `Ambience: ${parsed.ambienceDescription || 'N/A'}`;
-                                    } catch {
-                                        return service.customizability_details;
-                                    }
-                                    })()
-                                }</pre>
-                                </div>
-                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => navigate(`/services/edit/${service.service_id}`)}
+                            >
+                              <Edit2 className="h-4 w-4 mr-1" /> Edit Details
+                            </Button>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">Description: {service.description || 'N/A'}</p>
+                          <p className="text-sm"><span className="font-medium">Capacity:</span> {service.min_capacity} - {service.max_capacity} guests</p>
+                          {service.base_price && (
+                            <p className="text-sm"><span className="font-medium">Base Price:</span> {service.base_price} {service.price_unit || ''}</p>
+                          )}
+                          {service.customizability_details && typeof service.customizability_details === 'string' && (
+                            <div className="mt-2 text-xs bg-slate-50 p-2 rounded">
+                              <p className="font-semibold">Additional Space Details (from service record):</p>
+                              <pre className="whitespace-pre-wrap text-xs">{
+                                (() => {
+                                  try {
+                                    const parsed = JSON.parse(service.customizability_details);
+                                    return `Type: ${parsed.typeOfSpace || 'N/A'} ${parsed.otherTypeOfSpace ? `(${parsed.otherTypeOfSpace})` : ''}\n` +
+                                      `Area: ${parsed.areaSqFt || 'N/A'} sq.ft.\n` +
+                                      `AC: ${parsed.airConditioning || 'N/A'}\n` +
+                                      `Stage: ${parsed.stageAvailable ? `Yes (${parsed.stageDimensions || 'N/A'})` : 'No'}\n` +
+                                      `Dance Floor: ${parsed.danceFloorAvailable ? `Yes (${parsed.danceFloorSizeSqFt || 'N/A'} sq.ft.)` : 'No'}\n` +
+                                      `Seating - Theatre: ${parsed.seatingTheatre || 'N/A'}, Banquet: ${parsed.seatingBanquet || 'N/A'}, Floating: ${parsed.seatingFloating || 'N/A'}\n` +
+                                      `Dining: ${parsed.separateDiningHall ? `Separate (Capacity: ${parsed.diningCapacity || 'N/A'})` : 'Integrated/No Separate'}\n` +
+                                      `Ambience: ${parsed.ambienceDescription || 'N/A'}`;
+                                  } catch {
+                                    return service.customizability_details;
+                                  }
+                                })()
+                              }</pre>
                             </div>
-                        ))}
-                        <Button onClick={() => navigate('/services/add')} className="w-full mt-4">
-                            <Plus className="h-4 w-4 mr-2" /> Add Another Hall/Space
-                        </Button>
+                          )}
                         </div>
-                    )}
-                    </CardContent>
-                </Card>
-                </TabsContent>
-            </Tabs>
-            <div className="mt-8 pt-6 border-t flex justify-end space-x-3 sticky bottom-0 bg-background py-4 z-10">
-                <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
-                    <X className="h-4 w-4 mr-2" /> Cancel
-                </Button>
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Changes
-                </Button>
-            </div>
+                      ))}
+                      <Button onClick={() => navigate('/services/add')} className="w-full mt-4">
+                        <Plus className="h-4 w-4 mr-2" /> Add Another Hall/Space
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+          <div className="mt-8 pt-6 border-t flex justify-end space-x-3 sticky bottom-0 bg-background py-4 z-10">
+            <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
+              <X className="h-4 w-4 mr-2" /> Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </div>
         </>
       )}
     </div>

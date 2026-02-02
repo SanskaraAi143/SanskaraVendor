@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../integrations/supabase/client';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  doc,
+  getDoc
+} from 'firebase/firestore';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
-import { Loader2, ExternalLink, Calendar, MapPin, Phone, Mail, User, FileText } from 'lucide-react';
+import { Loader2, ExternalLink, Calendar, User, FileText, Mail } from 'lucide-react';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Badge } from '@/components/ui/badge';
@@ -68,30 +77,74 @@ const StaffBookings: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch bookings that have tasks assigned to this staff member
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select(`
-          booking_id, 
-          event_date, 
-          booking_status, 
-          total_amount, 
-          notes_for_vendor,
-          created_at,
-          users ( display_name, email ),
-          vendor_tasks!inner (
-            vendor_task_id,
-            title,
-            description,
-            status,
-            priority
-          )
-        `)
-        .eq('vendor_tasks.assigned_staff_id', staffProfile.staff_id)
-        .order('event_date', { ascending: false });
+      // 1. Fetch vendor_tasks assigned to this staff member
+      const tasksQuery = query(
+        collection(db, 'vendor_tasks'),
+        where('assigned_staff_id', '==', staffProfile.staff_id)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
 
-      if (bookingsError) throw bookingsError;
-      setBookings(bookingsData as TaskBooking[] || []);
+      const tasksByBooking: Record<string, any[]> = {};
+      tasksSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.booking_id) {
+          if (!tasksByBooking[data.booking_id]) {
+            tasksByBooking[data.booking_id] = [];
+          }
+          tasksByBooking[data.booking_id].push({
+            vendor_task_id: doc.id,
+            title: data.title,
+            description: data.description,
+            status: data.status,
+            priority: data.priority
+          });
+        }
+      });
+
+      const bookingIds = Object.keys(tasksByBooking);
+
+      if (bookingIds.length === 0) {
+        setBookings([]);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fetch bookings for these task IDs
+      const bookingsData: TaskBooking[] = [];
+
+      for (const bookingId of bookingIds) {
+        const bookingDoc = await getDoc(doc(db, 'bookings', bookingId));
+        if (bookingDoc.exists()) {
+          const bData = bookingDoc.data();
+
+          let userData: BookingUser | null = null;
+          if (bData.user_id) {
+            const userSnap = await getDoc(doc(db, 'users', bData.user_id));
+            if (userSnap.exists()) {
+              userData = {
+                display_name: userSnap.data().display_name || null,
+                email: userSnap.data().email || null
+              };
+            }
+          }
+
+          bookingsData.push({
+            booking_id: bookingDoc.id,
+            event_date: bData.event_date,
+            booking_status: bData.booking_status,
+            total_amount: bData.total_amount,
+            notes_for_vendor: bData.notes_for_vendor,
+            created_at: bData.created_at,
+            users: userData,
+            vendor_tasks: tasksByBooking[bookingId]
+          });
+        }
+      }
+
+      // Sort by event date descending
+      bookingsData.sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
+
+      setBookings(bookingsData);
 
     } catch (fetchError: any) {
       console.error('Error fetching staff bookings:', fetchError);
@@ -104,23 +157,27 @@ const StaffBookings: React.FC = () => {
   const fetchBookingDetails = async (bookingId: string) => {
     setDetailsLoading(true);
     try {
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('booking_services')
-        .select(`
-          vendor_services (
-            service_name,
-            base_price
-          )
-        `)
-        .eq('booking_id', bookingId);
+      const servicesQuery = query(
+        collection(db, 'booking_services'),
+        where('booking_id', '==', bookingId)
+      );
+      const servicesSnapshot = await getDocs(servicesQuery);
 
-      if (servicesError) throw servicesError;
-      
-      const services = servicesData?.map(item => ({
-        service_name: item.vendor_services?.service_name || 'Unknown Service',
-        price: item.vendor_services?.base_price || 0
-      })).filter(Boolean) as BookingService[] || [];
-      setBookingServices(services);
+      const services = await Promise.all(servicesSnapshot.docs.map(async (sDoc) => {
+        const data = sDoc.data();
+        if (data.service_id) {
+          const serviceSnap = await getDoc(doc(db, 'vendor_services', data.service_id));
+          if (serviceSnap.exists()) {
+            return {
+              service_name: serviceSnap.data().service_name || 'Unknown Service',
+              price: serviceSnap.data().base_price || 0
+            };
+          }
+        }
+        return null;
+      }));
+
+      setBookingServices(services.filter(Boolean) as BookingService[]);
     } catch (err: any) {
       console.error('Error fetching booking services:', err);
     } finally {
@@ -240,9 +297,9 @@ const StaffBookings: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="link" 
-                              size="sm" 
+                            <Button
+                              variant="link"
+                              size="sm"
                               onClick={() => handleViewDetails(booking)}
                             >
                               Details <ExternalLink className="ml-1 h-3 w-3" />
@@ -379,7 +436,7 @@ const StaffBookings: React.FC = () => {
       </Card>
     );
   };
-  
+
   return (
     <StaffDashboardLayout>
       {renderContent()}

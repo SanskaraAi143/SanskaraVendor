@@ -4,18 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Upload, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import TaggedImageUploadModal from '@/components/modals/TaggedImageUploadModal';
 import TaggedImageViewer from '@/components/TaggedImageViewer';
-import { 
-  TaggedImages, 
-  convertToTaggedImages, 
-  convertForDatabase, 
-  addImagesToTag, 
-  removeImageFromTag, 
+import {
+  TaggedImages,
+  convertToTaggedImages,
+  convertForDatabase,
+  addImagesToTag,
+  removeImageFromTag,
   deleteImageFromStorage,
-  getAvailableTags 
+  getAvailableTags
 } from '@/utils/taggedUploadHelpers';
 
 interface ServiceImageManagerProps {
@@ -44,20 +45,18 @@ const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
   const loadServiceImages = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('vendor_services')
-        .select('portfolio_image_urls')
-        .eq('service_id', serviceId)
-        .single();
+      const serviceRef = doc(db, 'vendor_services', serviceId);
+      const serviceSnap = await getDoc(serviceRef);
 
-      if (error) throw error;
+      if (serviceSnap.exists()) {
+        const data = serviceSnap.data();
+        const images = convertToTaggedImages(data.portfolio_image_urls);
+        setTaggedImages(images);
 
-      const images = convertToTaggedImages(data.portfolio_image_urls);
-      setTaggedImages(images);
-      
-      // Set initial selected tag
-      if (images && Object.keys(images).length > 0 && !selectedTag) {
-        setSelectedTag(Object.keys(images)[0]);
+        // Set initial selected tag
+        if (images && Object.keys(images).length > 0 && !selectedTag) {
+          setSelectedTag(Object.keys(images)[0]);
+        }
       }
     } catch (error) {
       console.error('Error loading service images:', error);
@@ -74,13 +73,12 @@ const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
   const handleImageUpload = async (tag: string, urls: string[]) => {
     try {
       const updatedImages = addImagesToTag(taggedImages, tag, urls);
-      
-      const { error } = await supabase
-        .from('vendor_services')
-        .update({ portfolio_image_urls: convertForDatabase(updatedImages) })
-        .eq('service_id', serviceId);
 
-      if (error) throw error;
+      const serviceRef = doc(db, 'vendor_services', serviceId);
+      await updateDoc(serviceRef, {
+        portfolio_image_urls: convertForDatabase(updatedImages),
+        updated_at: new Date().toISOString()
+      });
 
       setTaggedImages(updatedImages);
       toast({
@@ -100,17 +98,14 @@ const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
   const handleImageRemove = async (tag: string, url: string) => {
     try {
       await deleteImageFromStorage('vendors', url);
-      
-      const updatedImages = removeImageFromTag(taggedImages || {}, tag, url);
-      
-      const { error } = await supabase
-        .from('vendor_services')
-        .update({ 
-          portfolio_image_urls: convertForDatabase(Object.keys(updatedImages).length > 0 ? updatedImages : null) 
-        })
-        .eq('service_id', serviceId);
 
-      if (error) throw error;
+      const updatedImages = removeImageFromTag(taggedImages || {}, tag, url);
+
+      const serviceRef = doc(db, 'vendor_services', serviceId);
+      await updateDoc(serviceRef, {
+        portfolio_image_urls: convertForDatabase(Object.keys(updatedImages).length > 0 ? updatedImages : null),
+        updated_at: new Date().toISOString()
+      });
 
       setTaggedImages(Object.keys(updatedImages).length > 0 ? updatedImages : null);
       toast({

@@ -6,7 +6,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { supabase } from '@/integrations/supabase/client';
+import { db, storage } from '@/lib/firebase';
+import {
+  doc,
+  updateDoc,
+  query,
+  collection,
+  where,
+  getDocs,
+  addDoc
+} from 'firebase/firestore';
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 import { toast } from '@/components/ui/use-toast';
 import { Edit, Save, X, User, Mail, Phone, Tag, Loader2, Upload, MapPin, Calendar } from 'lucide-react';
 
@@ -56,17 +70,11 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
 
   const loadProfileImage = async () => {
     try {
-      const { data } = supabase.storage
-        .from('vendor-staff')
-        .getPublicUrl(`${profile.staff_id}/profile.jpg`);
-      
-      // Check if the image exists by trying to fetch it
-      const response = await fetch(data.publicUrl, { method: 'HEAD' });
-      if (response.ok) {
-        setProfileImageUrl(data.publicUrl);
-      }
+      const storageRef = ref(storage, `vendor-staff/${profile.staff_id}/profile.jpg`);
+      const url = await getDownloadURL(storageRef);
+      setProfileImageUrl(url);
     } catch (error) {
-      console.log('No profile image found');
+      // console.log('No profile image found');
     }
   };
 
@@ -79,16 +87,10 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.staff_id}/profile.${fileExt}`;
+      const storageRef = ref(storage, `vendor-staff/${fileName}`);
 
-      const { error: uploadError } = await supabase.storage
-        .from('vendor-staff')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('vendor-staff')
-        .getPublicUrl(fileName);
+      await uploadBytes(storageRef, file);
+      const publicUrl = await getDownloadURL(storageRef);
 
       setProfileImageUrl(publicUrl);
 
@@ -117,16 +119,13 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
         ? editData.skills.split(',').map(s => s.trim()).filter(s => s)
         : [];
 
-      // Update basic staff data in vendor_staff table
-      const { error: staffError } = await supabase
-        .from('vendor_staff')
-        .update({
-          display_name: editData.display_name,
-          phone_number: editData.phone_number || null
-        })
-        .eq('staff_id', profile.staff_id);
-
-      if (staffError) throw staffError;
+      // Update basic staff data in vendor_staff collection
+      const staffRef = doc(db, 'vendor_staff', profile.staff_id);
+      await updateDoc(staffRef, {
+        display_name: editData.display_name,
+        phone_number: editData.phone_number || null,
+        updated_at: new Date().toISOString()
+      });
 
       // Prepare additional profile data
       const additionalData = {
@@ -140,37 +139,31 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
       };
 
       // Check if profile data entry exists
-      const { data: existingData } = await supabase
-        .from('staff_portfolios')
-        .select('portfolio_id')
-        .eq('staff_id', profile.staff_id)
-        .eq('portfolio_type', 'profile_data')
-        .maybeSingle();
+      const portfolioQuery = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', profile.staff_id),
+        where('portfolio_type', '==', 'profile_data')
+      );
+      const portfolioSnapshot = await getDocs(portfolioQuery);
 
-      if (existingData) {
+      if (!portfolioSnapshot.empty) {
         // Update existing profile data
-        const { error: updateError } = await supabase
-          .from('staff_portfolios')
-          .update({
-            generic_attributes: additionalData
-          })
-          .eq('portfolio_id', existingData.portfolio_id);
-
-        if (updateError) throw updateError;
+        const portfolioDoc = portfolioSnapshot.docs[0];
+        await updateDoc(doc(db, 'staff_portfolios', portfolioDoc.id), {
+          generic_attributes: additionalData,
+          updated_at: new Date().toISOString()
+        });
       } else {
         // Create new profile data entry
-        const { error: insertError } = await supabase
-          .from('staff_portfolios')
-          .insert({
-            staff_id: profile.staff_id,
-            vendor_id: profile.vendor_id,
-            portfolio_type: 'profile_data',
-            title: 'Profile Data',
-            description: 'Additional profile information',
-            generic_attributes: additionalData
-          });
-
-        if (insertError) throw insertError;
+        await addDoc(collection(db, 'staff_portfolios'), {
+          staff_id: profile.staff_id,
+          vendor_id: profile.vendor_id,
+          portfolio_type: 'profile_data',
+          title: 'Profile Data',
+          description: 'Additional profile information',
+          generic_attributes: additionalData,
+          created_at: new Date().toISOString()
+        });
       }
 
       toast({
@@ -371,72 +364,72 @@ const StaffProfileCard: React.FC<StaffProfileCardProps> = ({ profile, onUpdate }
         ) : (
           <div className="space-y-6">
             {profile.bio && (
-                <div className="pt-4 border-t">
-                    <h3 className="text-lg font-semibold mb-2 text-gray-800">About Me</h3>
-                    <p className="text-gray-600 leading-relaxed">{profile.bio}</p>
-                </div>
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold mb-2 text-gray-800">About Me</h3>
+                <p className="text-gray-600 leading-relaxed">{profile.bio}</p>
+              </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-                {/* Contact Information */}
-                <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-gray-800">Contact & Personal</h3>
-                    <div className="flex items-center text-sm text-gray-600">
-                        <Mail className="h-4 w-4 mr-3 text-gray-400" />
-                        <span>{profile.email}</span>
-                    </div>
-                    {profile.phone_number && (
-                        <div className="flex items-center text-sm text-gray-600">
-                            <Phone className="h-4 w-4 mr-3 text-gray-400" />
-                            <span>{profile.phone_number}</span>
-                        </div>
-                    )}
-                    {profile.address && (
-                        <div className="flex items-start text-sm text-gray-600">
-                            <MapPin className="h-4 w-4 mr-3 mt-1 text-gray-400" />
-                            <span>{profile.address}</span>
-                        </div>
-                    )}
-                    {profile.date_of_birth && (
-                        <div className="flex items-center text-sm text-gray-600">
-                            <Calendar className="h-4 w-4 mr-3 text-gray-400" />
-                            <span>Born on {new Date(profile.date_of_birth).toLocaleDateString()}</span>
-                        </div>
-                    )}
+              {/* Contact Information */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-800">Contact & Personal</h3>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Mail className="h-4 w-4 mr-3 text-gray-400" />
+                  <span>{profile.email}</span>
                 </div>
+                {profile.phone_number && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Phone className="h-4 w-4 mr-3 text-gray-400" />
+                    <span>{profile.phone_number}</span>
+                  </div>
+                )}
+                {profile.address && (
+                  <div className="flex items-start text-sm text-gray-600">
+                    <MapPin className="h-4 w-4 mr-3 mt-1 text-gray-400" />
+                    <span>{profile.address}</span>
+                  </div>
+                )}
+                {profile.date_of_birth && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="h-4 w-4 mr-3 text-gray-400" />
+                    <span>Born on {new Date(profile.date_of_birth).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
 
-                {/* Professional Information */}
-                <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-gray-800">Professional Details</h3>
-                    {profile.experience_years && (
-                        <div className="flex items-center text-sm text-gray-600">
-                            <Tag className="h-4 w-4 mr-3 text-gray-400" />
-                            <span>{profile.experience_years} years of experience</span>
-                        </div>
-                    )}
-                    {profile.skills && profile.skills.length > 0 && (
-                        <div className="space-y-2">
-                            <h4 className="font-medium text-sm text-gray-700">Skills</h4>
-                            <div className="flex flex-wrap gap-2">
-                            {profile.skills.map((skill, index) => (
-                                <Badge key={index} variant="secondary">
-                                {skill}
-                                </Badge>
-                            ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
+              {/* Professional Information */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-800">Professional Details</h3>
+                {profile.experience_years && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Tag className="h-4 w-4 mr-3 text-gray-400" />
+                    <span>{profile.experience_years} years of experience</span>
+                  </div>
+                )}
+                {profile.skills && profile.skills.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm text-gray-700">Skills</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {profile.skills.map((skill, index) => (
+                        <Badge key={index} variant="secondary">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {profile.emergency_contact && (
-                <div className="pt-4 border-t">
-                    <h3 className="text-lg font-semibold text-red-600">Emergency Contact</h3>
-                    <div className="text-sm text-gray-600 mt-2">
-                        <p><strong>Name:</strong> {profile.emergency_contact}</p>
-                        {profile.emergency_phone && <p><strong>Phone:</strong> {profile.emergency_phone}</p>}
-                    </div>
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold text-red-600">Emergency Contact</h3>
+                <div className="text-sm text-gray-600 mt-2">
+                  <p><strong>Name:</strong> {profile.emergency_contact}</p>
+                  {profile.emergency_phone && <p><strong>Phone:</strong> {profile.emergency_phone}</p>}
                 </div>
+              </div>
             )}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from './useAuthContext';
 
 export const useFileUpload = () => {
@@ -19,21 +20,13 @@ export const useFileUpload = () => {
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${user.id}/${folder}/${fileName}`;
+      const filePath = `${user.uid}/${folder}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
+      const storageRef = ref(storage, `${bucket}/${filePath}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const publicUrl = await getDownloadURL(snapshot.ref);
 
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
-
-      return publicUrlData.publicUrl;
+      return publicUrl;
     } catch (error: any) {
       setUploadError(error.message);
       return null;

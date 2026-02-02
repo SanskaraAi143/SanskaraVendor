@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,11 +60,11 @@ export const ManualBookingForm: React.FC<ManualBookingFormProps> = ({
   } = useForm<ManualBookingFormValues>({
     resolver: zodResolver(manualBookingSchema),
     defaultValues: {
-        customerName: '',
-        customerEmail: '',
-        customerPhone: '',
-        totalAmount: 0,
-        notes: ''
+      customerName: '',
+      customerEmail: '',
+      customerPhone: '',
+      totalAmount: 0,
+      notes: ''
     }
   });
 
@@ -77,7 +78,7 @@ export const ManualBookingForm: React.FC<ManualBookingFormProps> = ({
       return;
     }
 
-    if (!user?.id) { // Ensure there's a logged-in user for created_by_staff_id
+    if (!user?.uid) { // Ensure there's a logged-in user (Firebase uses uid)
       toast({
         title: 'Error',
         description: 'User not authenticated.',
@@ -88,8 +89,8 @@ export const ManualBookingForm: React.FC<ManualBookingFormProps> = ({
 
     setIsSubmitting(true);
 
-    const { error } = await supabase.from('bookings').insert([
-      {
+    try {
+      await addDoc(collection(db, 'bookings'), {
         vendor_id: vendorProfile.vendor_id,
         event_date: data.eventDate.toISOString().split('T')[0],
         total_amount: data.totalAmount,
@@ -101,19 +102,10 @@ export const ManualBookingForm: React.FC<ManualBookingFormProps> = ({
           email: data.customerEmail,
           phone: data.customerPhone,
         },
-        created_by_staff_id: staffProfile?.staff_id, // Use staff_id if available, otherwise it will be NULL
-      },
-    ]);
-
-    setIsSubmitting(false);
-
-    if (error) {
-      toast({
-        title: 'Error creating booking',
-        description: error.message,
-        variant: 'destructive',
+        created_by_staff_id: staffProfile?.staff_id || null, // Use staff_id if available, otherwise it will be NULL
+        created_at: new Date().toISOString()
       });
-    } else {
+
       toast({
         title: 'Booking Created',
         description: 'The manual booking has been added successfully.',
@@ -121,6 +113,15 @@ export const ManualBookingForm: React.FC<ManualBookingFormProps> = ({
       reset();
       onBookingCreated();
       onOpenChange(false);
+    } catch (error: any) {
+      console.error('Error creating booking:', error);
+      toast({
+        title: 'Error creating booking',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

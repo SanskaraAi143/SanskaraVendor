@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { CalendarDays, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const StaffAvailabilityWidget: React.FC = () => {
   const [availabilityCount, setAvailabilityCount] = useState<number | null>(null);
@@ -26,33 +27,41 @@ const StaffAvailabilityWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('vendor_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile || !staffProfile.vendor_id) {
-          setError('Staff profile or vendor association not found.');
+        if (staffSnapshot.empty) {
+          setError('Staff profile not found.');
           return;
         }
-        
+
+        const staffData = staffSnapshot.docs[0].data();
+        const vendorId = staffData.vendor_id;
+
+        if (!vendorId) {
+          setError('Vendor association not found.');
+          return;
+        }
+
         const today = new Date();
         const nextWeek = new Date();
         nextWeek.setDate(today.getDate() + 7);
+        const todayStr = today.toISOString().split('T')[0];
+        const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
-        const { count, error: availabilityError } = await supabase
-          .from('vendor_availability')
-          .select('*', { count: 'exact', head: true })
-          .eq('vendor_id', staffProfile.vendor_id)
-          .eq('status', 'available')
-          .gte('available_date', today.toISOString().split('T')[0])
-          .lte('available_date', nextWeek.toISOString().split('T')[0]);
+        const availabilityQuery = query(
+          collection(db, 'vendor_availability'),
+          where('vendor_id', '==', vendorId),
+          where('status', '==', 'available'),
+          where('available_date', '>=', todayStr),
+          where('available_date', '<=', nextWeekStr)
+        );
+        const availabilitySnapshot = await getDocs(availabilityQuery);
 
-        if (availabilityError) throw availabilityError;
-        
-        setAvailabilityCount(count ?? 0);
+        setAvailabilityCount(availabilitySnapshot.size);
 
       } catch (err: any) {
         console.error('Error fetching availability count:', err);

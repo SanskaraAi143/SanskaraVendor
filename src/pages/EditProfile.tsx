@@ -7,23 +7,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Loader, ImageIcon } from 'lucide-react';
 import TaggedImageUploader from '@/components/TaggedImageUploader';
 import { TaggedImages, convertToTaggedImages, convertForDatabase } from '@/utils/taggedUploadHelpers';
 import { useNavigate } from 'react-router-dom';
 
 const vendorCategories = [
-  "Venue", "Catering", "Photography", "Videography", "Decor", 
+  "Venue", "Catering", "Photography", "Videography", "Decor",
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
 
 const EditProfile: React.FC = () => {
   const { vendorProfile, user, refreshVendorProfile } = useAuth();
   const navigate = useNavigate();
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Form state
   const [profile, setProfile] = useState({
     vendor_name: '',
@@ -36,29 +37,25 @@ const EditProfile: React.FC = () => {
     pricing_range: { min: undefined, max: undefined, currency: 'INR' } as PricingRangeData,
     status: '',
   });
-  
+
   // Tagged images state
   const [taggedImages, setTaggedImages] = useState<TaggedImages | null>(null);
-  
+
   useEffect(() => {
     const loadVendorData = async () => {
-      if (!user) return;
-      
+      if (!user?.uid) return;
+
       try {
         setIsLoading(true);
-        const { data, error } = await supabase
-          .from('vendors')
-          .select('*')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const vendorRef = doc(db, 'vendors', user.uid);
+        const vendorSnap = await getDoc(vendorRef);
 
-        if (error) throw error;
-        
-        if (data) {
+        if (vendorSnap.exists()) {
+          const data = vendorSnap.data();
           const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India' };
           const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: undefined, max: undefined, currency: 'INR' };
           const portfolio_images = convertToTaggedImages(data.portfolio_image_urls);
-          
+
           setProfile({
             vendor_name: data.vendor_name || '',
             vendor_category: data.vendor_category || '',
@@ -70,7 +67,7 @@ const EditProfile: React.FC = () => {
             pricing_range,
             status: data.status || '',
           });
-          
+
           setTaggedImages(portfolio_images);
         }
       } catch (error) {
@@ -86,13 +83,13 @@ const EditProfile: React.FC = () => {
     };
 
     loadVendorData();
-  }, [user, vendorProfile]);
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
-  
+
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({
@@ -103,7 +100,7 @@ const EditProfile: React.FC = () => {
       }
     }));
   };
-  
+
   const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({
@@ -121,39 +118,35 @@ const EditProfile: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user?.uid) return;
 
     try {
       setIsLoading(true);
-      
-      const { error } = await supabase
-        .from('vendors')
-        .update({
-          vendor_name: profile.vendor_name,
-          vendor_category: profile.vendor_category,
-          contact_email: profile.contact_email,
-          phone_number: profile.phone_number,
-          website_url: profile.website_url,
-          description: profile.description,
-          address: profile.address as any,
-          pricing_range: profile.pricing_range as any,
-          portfolio_image_urls: convertForDatabase(taggedImages) as any,
-          updated_at: new Date().toISOString(),
-          status: profile.status,
-        })
-        .eq('supabase_auth_uid', user.id);
 
-      if (error) throw error;
-      
+      const vendorRef = doc(db, 'vendors', user.uid);
+      await updateDoc(vendorRef, {
+        vendor_name: profile.vendor_name,
+        vendor_category: profile.vendor_category,
+        contact_email: profile.contact_email,
+        phone_number: profile.phone_number,
+        website_url: profile.website_url,
+        description: profile.description,
+        address: profile.address as any,
+        pricing_range: profile.pricing_range as any,
+        portfolio_image_urls: convertForDatabase(taggedImages) as any,
+        updated_at: new Date().toISOString(),
+        status: profile.status,
+      });
+
       await refreshVendorProfile();
 
       toast({
         title: 'Success',
         description: 'Your profile has been updated',
       });
-      
+
       navigate('/dashboard/profile');
-      
+
     } catch (error: any) {
       console.error('Error updating profile:', error);
       toast({
@@ -175,7 +168,7 @@ const EditProfile: React.FC = () => {
             Update your vendor profile information
           </p>
         </div>
-                    <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>Cancel</Button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -199,8 +192,8 @@ const EditProfile: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="vendor_category">Business Category</Label>
-                  <Select 
-                    value={profile.vendor_category} 
+                  <Select
+                    value={profile.vendor_category}
                     onValueChange={handleCategoryChange}
                   >
                     <SelectTrigger>
@@ -243,7 +236,7 @@ const EditProfile: React.FC = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Business Description</Label>
                 <Textarea
@@ -254,7 +247,7 @@ const EditProfile: React.FC = () => {
                   rows={5}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="min">Minimum Price Range</Label>
@@ -267,7 +260,7 @@ const EditProfile: React.FC = () => {
                     type="number"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="max">Maximum Price Range</Label>
                   <Input
@@ -280,7 +273,7 @@ const EditProfile: React.FC = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="full_address">Business Address</Label>
                 <Textarea
@@ -292,7 +285,7 @@ const EditProfile: React.FC = () => {
                   rows={2}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
@@ -304,7 +297,7 @@ const EditProfile: React.FC = () => {
                     placeholder="City"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="state">State</Label>
                   <Input
@@ -318,7 +311,7 @@ const EditProfile: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">

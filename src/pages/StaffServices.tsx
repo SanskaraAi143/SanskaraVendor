@@ -1,11 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Image as ImageIcon, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  doc
+} from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuthContext';
 import { toast } from '@/components/ui/use-toast';
 import ServiceImageManager from '@/components/service/ServiceImageManager';
@@ -37,56 +44,67 @@ const StaffServices: React.FC = () => {
 
     try {
       setIsLoading(true);
-      
-      // First get the staff ID
-      const { data: staffData, error: staffError } = await supabase
-        .from('vendor_staff')
-        .select('staff_id, vendor_id, vendors(vendor_name)')
-        .eq('supabase_auth_uid', user.id)
-        .single();
 
-      if (staffError) throw staffError;
-      if (!staffData) {
+      // 1. Get staff profile to get staff_id and vendor_id
+      const staffQuery = query(
+        collection(db, 'vendor_staff'),
+        where('supabase_auth_uid', '==', user.uid)
+      );
+      const staffSnapshot = await getDocs(staffQuery);
+
+      if (staffSnapshot.empty) {
         toast({
           title: 'Error',
           description: 'Staff profile not found',
           variant: 'destructive',
         });
+        setIsLoading(false);
         return;
       }
 
-      // Get assigned services with full details
-      const { data: serviceAssignments, error: assignmentError } = await supabase
-        .from('vendor_service_staff')
-        .select(`
-          service_id,
-          vendor_services(
-            service_name,
-            service_category,
-            description,
-            base_price,
-            price_unit,
-            is_negotiable,
-            vendor_id
-          )
-        `)
-        .eq('staff_id', staffData.staff_id);
-      console.log('Service Assignments:', serviceAssignments);
-      if (assignmentError) throw assignmentError;
+      const staffData = staffSnapshot.docs[0].data();
+      const staffId = staffSnapshot.docs[0].id;
+      const vendorId = staffData.vendor_id;
 
-      const services = (serviceAssignments || []).map(assignment => ({
-        service_id: assignment.service_id,
-        service_name: assignment.vendor_services?.service_name || 'Unknown Service',
-        service_category: assignment.vendor_services?.service_category || 'Unknown',
-        description: assignment.vendor_services?.description || '',
-        base_price: assignment.vendor_services?.base_price || 0,
-        price_unit: assignment.vendor_services?.price_unit || '',
-        is_negotiable: assignment.vendor_services?.is_negotiable || false,
-        vendor_id: assignment.vendor_services?.vendor_id || '',
-        vendor_name: (staffData.vendors as any)?.vendor_name || 'Unknown Vendor'
+      // Get vendor name
+      let vendorName = 'Unknown Vendor';
+      if (vendorId) {
+        const vendorSnap = await getDoc(doc(db, 'vendors', vendorId));
+        if (vendorSnap.exists()) {
+          vendorName = vendorSnap.data().vendor_name || 'Unknown Vendor';
+        }
+      }
+
+      // 2. Get assigned services
+      const assignmentsQuery = query(
+        collection(db, 'vendor_service_staff'),
+        where('staff_id', '==', staffId)
+      );
+      const assignmentsSnapshot = await getDocs(assignmentsQuery);
+
+      const services = await Promise.all(assignmentsSnapshot.docs.map(async (aDoc) => {
+        const data = aDoc.data();
+        if (data.service_id) {
+          const serviceSnap = await getDoc(doc(db, 'vendor_services', data.service_id));
+          if (serviceSnap.exists()) {
+            const sData = serviceSnap.data();
+            return {
+              service_id: serviceSnap.id,
+              service_name: sData.service_name || 'Unknown Service',
+              service_category: sData.service_category || 'Unknown',
+              description: sData.description || '',
+              base_price: sData.base_price || 0,
+              price_unit: sData.price_unit || '',
+              is_negotiable: sData.is_negotiable || false,
+              vendor_id: sData.vendor_id || '',
+              vendor_name: vendorName
+            } as AssignedService;
+          }
+        }
+        return null;
       }));
 
-      setAssignedServices(services);
+      setAssignedServices(services.filter(Boolean) as AssignedService[]);
     } catch (error) {
       console.error('Error fetching assigned services:', error);
       toast({
@@ -166,8 +184,8 @@ const StaffServices: React.FC = () => {
                 )}
               </CardContent>
               <CardContent className="border-t pt-4">
-                <Dialog 
-                  open={selectedService?.service_id === service.service_id} 
+                <Dialog
+                  open={selectedService?.service_id === service.service_id}
                   onOpenChange={(open) => setSelectedService(open ? service : null)}
                 >
                   <DialogTrigger asChild>

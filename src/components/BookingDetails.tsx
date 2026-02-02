@@ -1,19 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Tables } from '@/integrations/supabase/types';
+import { db } from '@/lib/firebase';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs
+} from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';
 import { Calendar, Clock, User, MapPin, Package, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -38,7 +31,7 @@ interface BookingData {
   eventDate: string;
   status: string;
   weddingId: string | null;
-  booking_source: Tables<'bookings'>['booking_source'];
+  booking_source: string;
   custom_customer_details?: CustomCustomerDetails; // Use the new CustomCustomerDetails type
   totalAmount?: number;
   paidAmount?: number;
@@ -64,25 +57,23 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
   const [booking, setBooking] = useState<BookingData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  
+
   useEffect(() => {
     if (open && bookingId) {
       fetchBookingDetails();
     }
   }, [bookingId, open]);
-  
+
   const fetchBookingDetails = async () => {
     setIsLoading(true);
-    
+
     try {
       // Fetch the booking
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select('*, custom_customer_details, booking_source')
-        .eq('booking_id', bookingId)
-        .single() as { data: Tables<'bookings'> | null, error: any };
-        
-      if (bookingError) throw bookingError;
+      const bookingDoc = await getDoc(doc(db, 'bookings', bookingId));
+      if (!bookingDoc.exists()) {
+        throw new Error('Booking not found');
+      }
+      const bookingData = bookingDoc.data();
 
       let clientName = 'Unknown Client';
       let clientEmail = 'N/A';
@@ -95,43 +86,64 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         clientEmail = customDetails.email;
         clientPhone = customDetails.phone || 'N/A';
       } else if (bookingData.user_id) {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('user_id', bookingData.user_id)
-          .single();
-          
-        if (userError) throw userError;
-
-        clientName = userData.display_name || 'Unknown Client';
-        clientEmail = userData.email || 'N/A';
+        const userDoc = await getDoc(doc(db, 'users', bookingData.user_id));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          clientName = userData.display_name || 'Unknown Client';
+          clientEmail = userData.email || 'N/A';
+        }
       }
-      
+
       // Fetch booking services
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('booking_services')
-        .select(`
-          negotiated_price,
-          quantity,
-          vendor_services (
-            service_name
-          )
-        `)
-        .eq('booking_id', bookingId);
-        
-      if (servicesError) throw servicesError;
-      
+      const servicesQuery = query(
+        collection(db, 'booking_services'),
+        where('booking_id', '==', bookingId)
+      );
+      const servicesSnapshot = await getDocs(servicesQuery);
+
+      const servicesPromises = servicesSnapshot.docs.map(async (serviceDoc) => {
+        const data = serviceDoc.data();
+        let serviceName = 'Unknown Service';
+
+        if (data.service_id) {
+          const vsDoc = await getDoc(doc(db, 'vendor_services', data.service_id));
+          if (vsDoc.exists()) {
+            serviceName = vsDoc.data().service_name || 'Unknown Service';
+          }
+        }
+
+        return {
+          serviceName,
+          price: data.negotiated_price || 0,
+          quantity: data.quantity || 1
+        };
+      });
+
+      const services = await Promise.all(servicesPromises);
+
       // Fetch related tasks
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('vendor_tasks')
-        .select('*')
-        .eq('booking_id', bookingId);
-        
-      if (tasksError) throw tasksError;
-      
+      const tasksQuery = query(
+        collection(db, 'vendor_tasks'),
+        where('booking_id', '==', bookingId)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+
+      const tasks = tasksSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          taskId: doc.id,
+          title: data.title,
+          description: data.description,
+          status: data.status,
+          priority: data.priority,
+          dueDate: data.due_date,
+          isComplete: data.is_complete
+        };
+      });
+
       // Format the data
       const formattedBooking: BookingData = {
-        bookingId: bookingData.booking_id,
+        bookingId: bookingDoc.id,
         clientName: clientName,
         clientEmail: clientEmail,
         clientPhone: clientPhone,
@@ -142,24 +154,12 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         custom_customer_details: bookingData.custom_customer_details as CustomCustomerDetails | undefined | null,
         totalAmount: bookingData.total_amount,
         paidAmount: bookingData.paid_amount,
-        services: servicesData.map((service: any) => ({
-          serviceName: service.vendor_services?.service_name || 'Unknown Service',
-          price: service.negotiated_price || 0,
-          quantity: service.quantity || 1
-        })),
-        tasks: tasksData.map((task: any) => ({
-          taskId: task.vendor_task_id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          priority: task.priority,
-          dueDate: task.due_date,
-          isComplete: task.is_complete
-        })),
+        services,
+        tasks,
         notes: bookingData.notes_for_vendor,
         location: bookingData.notes_for_user || 'No location specified' // Use notes_for_user as a fallback for location
       };
-      
+
       setBooking(formattedBooking);
     } catch (error) {
       console.error('Error fetching booking details:', error);
@@ -172,7 +172,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       setIsLoading(false);
     }
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'confirmed':
@@ -187,7 +187,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const formatDate = (dateString: string) => {
     if (!dateString) return 'No date';
     try {
@@ -196,7 +196,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       return 'Invalid date';
     }
   };
-  
+
   const getTaskStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'completed':
@@ -212,7 +212,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const getPriorityColor = (priority: string) => {
     switch (priority.toLowerCase()) {
       case 'low':
@@ -227,7 +227,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const getDisplayStatus = (status: string) => {
     // Convert snake_case to Title Case
     return status
@@ -245,7 +245,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
             Information about booking #{bookingId.substring(0, 8)}
           </DialogDescription>
         </DialogHeader>
-        
+
         {isLoading ? (
           <div className="py-8 flex justify-center">
             <div className="h-8 w-8 rounded-full border-4 border-sanskara-red/20 border-t-sanskara-red animate-spin"></div>
@@ -258,26 +258,26 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
               <TabsTrigger value="client">Client</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="overview">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-medium">Booking Summary</h3>
-                  <Badge 
+                  <Badge
                     variant="outline"
                     className={getStatusColor(booking.status)}
                   >
                     {getDisplayStatus(booking.status)}
                   </Badge>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center text-muted-foreground">
                       <Calendar className="h-4 w-4 mr-2" />
                       <span>Event Date: {formatDate(booking.eventDate)}</span>
                     </div>
-                    
+
                     {booking.location && (
                       <div className="flex items-center text-muted-foreground">
                         <MapPin className="h-4 w-4 mr-2" />
@@ -285,20 +285,20 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center text-muted-foreground">
                       <User className="h-4 w-4 mr-2" />
                       <span>Client: {booking.clientName}</span>
                     </div>
-                    
+
                     <div className="flex items-center text-muted-foreground">
                       <Package className="h-4 w-4 mr-2" />
                       <span>Services: {booking.services.length}</span>
                     </div>
                   </div>
                 </div>
-                
+
                 {booking.totalAmount !== undefined && (
                   <Card>
                     <CardHeader className="pb-2">
@@ -322,7 +322,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                     </CardContent>
                   </Card>
                 )}
-                
+
                 {booking.notes && (
                   <Card>
                     <CardHeader className="pb-2">
@@ -335,11 +335,11 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="services">
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Booked Services</h3>
-                
+
                 {booking.services.length > 0 ? (
                   <div className="space-y-3">
                     {booking.services.map((service, index) => (
@@ -349,7 +349,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                             <h4 className="font-medium">{service.serviceName}</h4>
                             <p className="font-medium">${service.price.toFixed(2)}</p>
                           </div>
-                          
+
                           <div className="flex justify-between text-sm text-muted-foreground mt-2">
                             <span>Quantity: {service.quantity || 1}</span>
                             <span>Total: ${((service.price || 0) * (service.quantity || 1)).toFixed(2)}</span>
@@ -363,11 +363,11 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="tasks">
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Related Tasks</h3>
-                
+
                 {booking.tasks.length > 0 ? (
                   <div className="space-y-3">
                     {booking.tasks.map((task) => (
@@ -375,8 +375,8 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start">
                             <div className="flex items-start space-x-3">
-                              {task.isComplete ? 
-                                <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5" /> : 
+                              {task.isComplete ?
+                                <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5" /> :
                                 <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                               }
                               <div>
@@ -386,16 +386,16 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center space-x-2">
-                              <Badge 
+                              <Badge
                                 variant="outline"
                                 className={getTaskStatusColor(task.status)}
                               >
                                 {task.status}
                               </Badge>
-                              
-                              <Badge 
+
+                              <Badge
                                 variant="outline"
                                 className={getPriorityColor(task.priority)}
                               >
@@ -403,7 +403,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                               </Badge>
                             </div>
                           </div>
-                          
+
                           {task.dueDate && (
                             <div className="flex items-center text-xs text-muted-foreground mt-3">
                               <Clock className="h-3 w-3 mr-1" />
@@ -419,11 +419,11 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="client">
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Client Information</h3>
-                
+
                 <Card>
                   <CardContent className="p-6">
                     <div className="space-y-4">
@@ -431,12 +431,12 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
                         <p className="text-sm text-muted-foreground">Name</p>
                         <p className="font-medium">{booking.clientName}</p>
                       </div>
-                      
+
                       <div>
                         <p className="text-sm text-muted-foreground">Email</p>
                         <p>{booking.clientEmail}</p>
                       </div>
-                      
+
                       {booking.clientPhone && booking.clientPhone !== 'N/A' && (
                         <div>
                           <p className="text-sm text-muted-foreground">Phone</p>
@@ -454,7 +454,7 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
             <p className="text-muted-foreground">Could not load booking information.</p>
           </div>
         )}
-        
+
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>

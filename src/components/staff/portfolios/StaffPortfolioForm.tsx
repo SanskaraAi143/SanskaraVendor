@@ -1,6 +1,14 @@
-
 import React, { useState, useEffect, FormEvent } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
+import { db, auth } from '../../../lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc
+} from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
@@ -40,24 +48,24 @@ const initialFormData: Partial<PortfolioItem> = {
 // Helper function to convert old string[] format to new TaggedImages format
 const convertToTaggedImages = (data: any): TaggedImages | null => {
   if (!data) return null;
-  
+
   // If it's already an object (new format), return as is
   if (typeof data === 'object' && !Array.isArray(data)) {
     return data as TaggedImages;
   }
-  
+
   // If it's an array (old format), convert to tagged format
   if (Array.isArray(data) && data.length > 0) {
     return { general: data };
   }
-  
+
   return null;
 };
 
 // Helper function to convert TaggedImages back to format expected by database
 const convertForDatabase = (taggedImages: TaggedImages | null): any => {
   if (!taggedImages) return null;
-  
+
   // For now, we'll convert back to string[] format until migration is applied
   // This ensures compatibility with current schema
   const allUrls: string[] = [];
@@ -66,7 +74,7 @@ const convertForDatabase = (taggedImages: TaggedImages | null): any => {
       allUrls.push(...urls);
     }
   });
-  
+
   return allUrls.length > 0 ? allUrls : null;
 };
 
@@ -89,47 +97,53 @@ const StaffPortfolioForm: React.FC = () => {
     return 'general';
   };
 
+  const fetchPortfolioItems = async (staffId: string) => {
+    const q = query(
+      collection(db, 'staff_portfolios'),
+      where('staff_id', '==', staffId)
+    );
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data() as any;
+      return {
+        ...data,
+        portfolio_id: doc.id,
+        image_urls: convertToTaggedImages(data.image_urls),
+        video_urls: convertToTaggedImages(data.video_urls),
+      };
+    }) as PortfolioItem[];
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
+        const user = auth.currentUser;
         if (!user) throw new Error('User not authenticated.');
 
-        const { data: staffData, error: staffError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id, vendor_id, role')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffError) throw staffError;
-        if (!staffData) throw new Error('Staff profile not found.');
+        if (staffSnapshot.empty) throw new Error('Staff profile not found.');
 
-        setStaffInfo(staffData as StaffInfo);
+        const staffData = staffSnapshot.docs[0].data();
+        const staffId = staffSnapshot.docs[0].id;
 
-        if (staffData.staff_id) {
-          const { data: portfolioData, error: portfolioError } = await supabase
-            .from('staff_portfolios')
-            .select('portfolio_id, portfolio_type, title, description, image_urls, video_urls, generic_attributes')
-            .eq('staff_id', staffData.staff_id);
+        const info = {
+          staff_id: staffId,
+          vendor_id: staffData.vendor_id,
+          role: staffData.role
+        };
+        setStaffInfo(info);
 
-          if (portfolioError) throw portfolioError;
-          
-          const transformedData: PortfolioItem[] = (portfolioData || []).map(item => ({
-            portfolio_id: item.portfolio_id,
-            portfolio_type: item.portfolio_type,
-            title: item.title,
-            description: item.description,
-            image_urls: convertToTaggedImages(item.image_urls),
-            video_urls: convertToTaggedImages(item.video_urls),
-            generic_attributes: item.generic_attributes as Record<string, any> | null
-          }));
-          
-          setPortfolioItems(transformedData);
-        }
+        const items = await fetchPortfolioItems(staffId);
+        setPortfolioItems(items);
       } catch (e: any) {
         console.error('Error fetching portfolio data:', e);
         setError(e.message || 'An unexpected error occurred while fetching data.');
@@ -171,7 +185,7 @@ const StaffPortfolioForm: React.FC = () => {
     setFormMode(null);
     setIsFormVisible(false);
   };
-  
+
   const handleAddNewItem = () => {
     if (!staffInfo) {
       setError("Staff information not available to add new item.");
@@ -216,45 +230,26 @@ const StaffPortfolioForm: React.FC = () => {
       vendor_id: staffInfo.vendor_id,
       portfolio_type: formData.portfolio_type || 'general',
       // Convert tagged images back to format expected by current database schema
-      image_urls: convertForDatabase(formData.image_urls),
-      video_urls: convertForDatabase(formData.video_urls),
+      image_urls: convertForDatabase(formData.image_urls || null),
+      video_urls: convertForDatabase(formData.video_urls || null),
+      updated_at: new Date().toISOString()
     };
 
     try {
       if (formMode === 'add') {
-        const { error: insertError } = await supabase
-          .from('staff_portfolios')
-          .insert(submissionData);
-        if (insertError) throw insertError;
+        await addDoc(collection(db, 'staff_portfolios'), {
+          ...submissionData,
+          created_at: new Date().toISOString()
+        });
       } else if (formMode === 'edit' && currentPortfolioItem?.portfolio_id) {
-        const { error: updateError } = await supabase
-          .from('staff_portfolios')
-          .update(submissionData)
-          .eq('portfolio_id', currentPortfolioItem.portfolio_id);
-        if (updateError) throw updateError;
+        const itemRef = doc(db, 'staff_portfolios', currentPortfolioItem.portfolio_id);
+        const { portfolio_id, ...updateData } = submissionData;
+        await updateDoc(itemRef, updateData);
       }
 
       // Refresh the portfolio items
-      if (staffInfo.staff_id) {
-        const { data: portfolioData, error: portfolioError } = await supabase
-          .from('staff_portfolios')
-          .select('portfolio_id, portfolio_type, title, description, image_urls, video_urls, generic_attributes')
-          .eq('staff_id', staffInfo.staff_id);
-        
-        if (portfolioError) throw portfolioError;
-        
-        const transformedData: PortfolioItem[] = (portfolioData || []).map(item => ({
-          portfolio_id: item.portfolio_id,
-          portfolio_type: item.portfolio_type,
-          title: item.title,
-          description: item.description,
-          image_urls: convertToTaggedImages(item.image_urls),
-          video_urls: convertToTaggedImages(item.video_urls),
-          generic_attributes: item.generic_attributes as Record<string, any> | null
-        }));
-        
-        setPortfolioItems(transformedData);
-      }
+      const items = await fetchPortfolioItems(staffInfo.staff_id);
+      setPortfolioItems(items);
       resetForm(staffInfo.role);
     } catch (e: any) {
       console.error(`Error in ${formMode} mode:`, e);
@@ -326,23 +321,23 @@ const StaffPortfolioForm: React.FC = () => {
                 <div className="space-y-6">
                   <div>
                     <Label htmlFor="title">Title</Label>
-                    <Input 
-                      id="title" 
-                      name="title" 
-                      value={formData.title || ''} 
-                      onChange={handleInputChange} 
-                      placeholder="e.g., Summer Wedding Collection, Signature Dish" 
+                    <Input
+                      id="title"
+                      name="title"
+                      value={formData.title || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Summer Wedding Collection, Signature Dish"
                       disabled={formLoading}
                     />
                   </div>
                   <div>
                     <Label htmlFor="description">Description</Label>
-                    <Textarea 
-                      id="description" 
-                      name="description" 
-                      value={formData.description || ''} 
-                      onChange={handleInputChange} 
-                      placeholder="Describe your work or service..." 
+                    <Textarea
+                      id="description"
+                      name="description"
+                      value={formData.description || ''}
+                      onChange={handleInputChange}
+                      placeholder="Describe your work or service..."
                       disabled={formLoading}
                     />
                   </div>
@@ -386,7 +381,7 @@ const StaffPortfolioForm: React.FC = () => {
                       />
                     </div>
                   )}
-                  
+
                   {/* Tagged Image Upload */}
                   <div>
                     <StaffPortfolioFileUpload
@@ -416,7 +411,7 @@ const StaffPortfolioForm: React.FC = () => {
                       bucketName="vendor-staff"
                     />
                   </div>
-                  
+
                   {error && (
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />

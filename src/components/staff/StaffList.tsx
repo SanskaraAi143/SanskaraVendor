@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { supabase } from '@/integrations/supabase/client';
-import { 
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -65,20 +65,18 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
   const handleToggleActive = async (staffId: string, isCurrentlyActive: boolean) => {
     try {
       setIsProcessing(true);
-      console.log("Toggling staff active status:", staffId, "Current status:", isCurrentlyActive);
-      
-      const { error } = await supabase
-        .from('vendor_staff')
-        .update({ is_active: !isCurrentlyActive })
-        .eq('staff_id', staffId);
-        
-      if (error) throw error;
-      
+
+      const staffRef = doc(db, 'vendor_staff', staffId);
+      await updateDoc(staffRef, {
+        is_active: !isCurrentlyActive,
+        updated_at: new Date().toISOString()
+      });
+
       toast({
         title: isCurrentlyActive ? 'Staff Deactivated' : 'Staff Activated',
         description: `Staff member has been ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully.`,
       });
-      
+
       // Refresh the list
       onRefresh();
     } catch (error) {
@@ -92,37 +90,36 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       setIsProcessing(false);
     }
   };
-  
+
   const handleDeleteStaff = (staff: Staff) => {
     setStaffToDelete(staff);
     setIsAlertOpen(true);
   };
-  
+
   const confirmDeleteStaff = async () => {
     if (!staffToDelete) return;
-    
+
     try {
       setIsProcessing(true);
-      console.log("Deleting staff member:", staffToDelete.staff_id);
-      
-      const { error } = await supabase
-        .from('vendor_staff')
-        .delete()
-        .eq('staff_id', staffToDelete.staff_id);
-        
-      if (error) throw error;
-      
+
+      const staffRef = doc(db, 'vendor_staff', staffToDelete.staff_id);
+      await deleteDoc(staffRef);
+
       toast({
         title: 'Staff Deleted',
         description: 'Staff member has been removed successfully.',
       });
-      
+
       // Also delete the invitation if it exists
-      await supabase
-        .from('vendor_staff_invite')
-        .delete()
-        .eq('email', staffToDelete.email);
-      
+      const inviteQuery = query(
+        collection(db, 'vendor_staff_invite'),
+        where('email', '==', staffToDelete.email)
+      );
+      const inviteSnapshot = await getDocs(inviteQuery);
+      inviteSnapshot.docs.forEach(async (doc) => {
+        await deleteDoc(doc.ref);
+      });
+
       // Refresh the list
       onRefresh();
     } catch (error) {
@@ -138,7 +135,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       setIsProcessing(false);
     }
   };
-  
+
   return (
     <>
       <Card>
@@ -178,7 +175,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Only show actions for other staff members */}
                   {staff.email !== user?.email && (
                     <DropdownMenu>
@@ -210,7 +207,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
           )}
         </CardContent>
       </Card>
-      
+
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -221,8 +218,8 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteStaff} 
+            <AlertDialogAction
+              onClick={confirmDeleteStaff}
               className="bg-red-600 hover:bg-red-700"
               disabled={isProcessing}
             >

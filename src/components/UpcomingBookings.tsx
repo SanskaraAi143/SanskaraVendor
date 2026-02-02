@@ -3,7 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, MapPin, Clock, ArrowUpRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 
@@ -32,48 +40,44 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
   useEffect(() => {
     const fetchBookings = async () => {
       if (!vendorId) return;
-      
+
       try {
         setIsLoading(true);
-        const currentDate = new Date().toISOString();
-        
-        // Fetch upcoming bookings
-        const { data, error } = await supabase
-          .from('bookings')
-          .select(`
-            booking_id,
-            user_id,
-            event_date,
-            booking_status,
-            notes_for_vendor
-          `)
-          .eq('vendor_id', vendorId)
-          .gte('event_date', currentDate)
-          .order('event_date', { ascending: true })
-          .limit(3);
-          
-        if (error) throw error;
-        
+        const currentDate = new Date().toISOString().split('T')[0];
+
+        // Fetch upcoming bookings from Firestore
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          where('vendor_id', '==', vendorId),
+          where('event_date', '>=', currentDate),
+          orderBy('event_date', 'asc'),
+          limit(3)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
+
         // Transform data to match component's expected format
-        const formattedBookings = data.map(booking => ({
-          booking_id: booking.booking_id,
-          client: booking.user_id ? `Client #${booking.user_id.substring(0, 8)}` : 'Unknown Client',
-          date: booking.event_date,
-          time: "TBD", // Time might not be available
-          location: "Location details unavailable",
-          service: "Various Services",
-          // Map booking_status to one of the allowed status values
-          status: (booking.booking_status === 'confirmed' 
-            ? 'confirmed' 
-            : booking.booking_status === 'completed'
-              ? 'completed'
-              : 'pending') as 'confirmed' | 'pending' | 'completed',
-          user_id: booking.user_id,
-          event_date: booking.event_date,
-          booking_status: booking.booking_status,
-          notes_for_vendor: booking.notes_for_vendor
-        }));
-        
+        const formattedBookings = bookingsSnapshot.docs.map(doc => {
+          const booking = doc.data();
+          return {
+            booking_id: doc.id,
+            client: booking.user_id ? `Client #${booking.user_id.substring(0, 8)}` : 'Unknown Client',
+            date: booking.event_date,
+            time: "TBD", // Time might not be available
+            location: "Location details unavailable",
+            service: "Various Services",
+            // Map booking_status to one of the allowed status values
+            status: (booking.booking_status === 'confirmed'
+              ? 'confirmed'
+              : booking.booking_status === 'completed'
+                ? 'completed'
+                : 'pending') as 'confirmed' | 'pending' | 'completed',
+            user_id: booking.user_id,
+            event_date: booking.event_date,
+            booking_status: booking.booking_status,
+            notes_for_vendor: booking.notes_for_vendor
+          };
+        });
+
         setBookings(formattedBookings);
       } catch (error) {
         console.error('Error fetching upcoming bookings:', error);
@@ -86,19 +90,19 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
         setIsLoading(false);
       }
     };
-    
+
     fetchBookings();
   }, [vendorId]);
-  
+
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800 border-green-200';
-      case 'pending': 
+      case 'pending':
       case 'pending_confirmation': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -112,7 +116,7 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
-  
+
   return (
     <Card className="sanskara-card">
       <CardHeader className="pb-2">
@@ -132,9 +136,9 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
                   <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"></div>
                   <div className="h-5 w-20 bg-gray-200 rounded animate-pulse"></div>
                 </div>
-                
+
                 <div className="h-4 w-32 mt-2 bg-gray-200 rounded animate-pulse"></div>
-                
+
                 <div className="space-y-2 mt-3">
                   <div className="h-3 w-36 bg-gray-200 rounded animate-pulse"></div>
                   <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
@@ -153,22 +157,22 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
                     {getDisplayStatus(booking.booking_status)}
                   </Badge>
                 </div>
-                
+
                 <p className="text-sm text-muted-foreground mb-2">
                   {booking.notes_for_vendor || 'No specific notes provided.'}
                 </p>
-                
+
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center text-xs text-muted-foreground">
                     <Calendar className="h-3.5 w-3.5 mr-1.5" />
                     <span>{formatDate(booking.date)}</span>
                   </div>
-                  
+
                   <div className="flex items-center text-xs text-muted-foreground">
                     <Clock className="h-3.5 w-3.5 mr-1.5" />
                     <span>{booking.time}</span>
                   </div>
-                  
+
                   <div className="flex items-center text-xs text-muted-foreground">
                     <MapPin className="h-3.5 w-3.5 mr-1.5" />
                     <span>{booking.location}</span>

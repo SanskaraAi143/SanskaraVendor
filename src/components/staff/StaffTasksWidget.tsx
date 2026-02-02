@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { ListTodo, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const StaffTasksWidget: React.FC = () => {
   const [taskCount, setTaskCount] = useState<number | null>(null);
@@ -26,27 +27,27 @@ const StaffTasksWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile) {
+        if (staffSnapshot.empty) {
           setError('Staff profile not found.');
           return;
         }
 
-        const { count, error: tasksError } = await supabase
-          .from('vendor_tasks')
-          .select('*', { count: 'exact', head: true })
-          .eq('assigned_staff_id', staffProfile.staff_id)
-          .not('status', 'eq', 'Completed');
+        const staffId = staffSnapshot.docs[0].id;
 
-        if (tasksError) throw tasksError;
-        
-        setTaskCount(count ?? 0);
+        const tasksQuery = query(
+          collection(db, 'vendor_tasks'),
+          where('assigned_staff_id', '==', staffId),
+          where('status', '!=', 'Completed')
+        );
+        const tasksSnapshot = await getDocs(tasksQuery);
+
+        setTaskCount(tasksSnapshot.size);
 
       } catch (err: any) {
         console.error('Error fetching task count:', err);

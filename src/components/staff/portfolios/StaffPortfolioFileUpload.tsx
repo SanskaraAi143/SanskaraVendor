@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { supabase } from '../../../integrations/supabase/client';
 import { Button } from '../../ui/button';
 import { Label } from '../../ui/label';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -62,7 +61,7 @@ const StaffPortfolioFileUpload: React.FC<StaffPortfolioFileUploadProps> = ({
       <Label className="text-base font-medium">
         Upload {fileType}s by Category (Max: {maxFiles}, {maxFileSizeMb}MB each)
       </Label>
-      
+
       <TaggedImageUploader
         vendorId={vendorId}
         staffId={staffId}

@@ -1,7 +1,20 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../integrations/supabase/client';
+import { auth, db } from '../lib/firebase';
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut
+} from 'firebase/auth';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from 'firebase/firestore';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -21,27 +34,21 @@ const StaffLoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-      if (signInError) {
-        setError(signInError.message);
-        return;
-      }
-
-      if (data.user) {
+      if (user) {
         // Check if user is staff
-        const { data: staffData, error: staffError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id, is_active')
-          .eq('supabase_auth_uid', data.user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffData) {
+        if (!staffSnapshot.empty) {
+          const staffData = staffSnapshot.docs[0].data();
           if (!staffData.is_active) {
-            await supabase.auth.signOut();
+            await signOut(auth);
             setError('Your staff account is inactive. Please contact your vendor.');
             return;
           }
@@ -50,15 +57,15 @@ const StaffLoginPage: React.FC = () => {
           navigate('/staff/dashboard');
         } else {
           // Check if user is a vendor (not staff)
-          const { data: vendorData, error: vendorError } = await supabase
-            .from('vendors')
-            .select('vendor_id')
-            .eq('supabase_auth_uid', data.user.id)
-            .single();
+          const vendorQuery = query(
+            collection(db, 'vendors'),
+            where('supabase_auth_uid', '==', user.uid)
+          );
+          const vendorSnapshot = await getDocs(vendorQuery);
 
-          if (!vendorError && vendorData) {
+          if (!vendorSnapshot.empty) {
             // User is a vendor, redirect them to vendor portal
-            await supabase.auth.signOut();
+            await signOut(auth);
             toast({
               title: "Wrong Portal",
               description: "You're a vendor. Please use the main vendor portal to log in.",
@@ -68,13 +75,14 @@ const StaffLoginPage: React.FC = () => {
             return;
           }
 
-          await supabase.auth.signOut();
+          await signOut(auth);
           setError('Staff profile not found. Please contact your vendor to add you as staff.');
         }
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
     } catch (catchError: any) {
+      console.error('Login error:', catchError);
       setError(catchError.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -90,18 +98,13 @@ const StaffLoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/staff/reset-password`,
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: "Please check your inbox for password reset instructions.",
       });
-      if (resetError) {
-        setError(resetError.message);
-      } else {
-        toast({
-          title: "Password Reset Email Sent",
-          description: "Please check your inbox for password reset instructions.",
-        });
-      }
     } catch (catchError: any) {
+      console.error('Password reset error:', catchError);
       setError(catchError.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);

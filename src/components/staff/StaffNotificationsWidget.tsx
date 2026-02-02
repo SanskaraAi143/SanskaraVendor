@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { BellRing, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const StaffNotificationsWidget: React.FC = () => {
   const [notificationCount, setNotificationCount] = useState<number | null>(null);
@@ -14,7 +15,7 @@ const StaffNotificationsWidget: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (authLoading) return; 
+    if (authLoading) return;
 
     if (!user) {
       setIsLoading(false);
@@ -26,27 +27,27 @@ const StaffNotificationsWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('staff_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffQuery = query(
+          collection(db, 'vendor_staff'),
+          where('supabase_auth_uid', '==', user.uid)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile) {
+        if (staffSnapshot.empty) {
           setError('Staff profile not found.');
           return;
         }
 
-        const { count, error: notificationsError } = await supabase
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('recipient_staff_id', staffProfile.staff_id)
-          .eq('is_read', false);
+        const staffId = staffSnapshot.docs[0].id;
 
-        if (notificationsError) throw notificationsError;
-        
-        setNotificationCount(count ?? 0);
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('recipient_staff_id', '==', staffId),
+          where('is_read', '==', false)
+        );
+        const notificationsSnapshot = await getDocs(notificationsQuery);
+
+        setNotificationCount(notificationsSnapshot.size);
 
       } catch (err: any) {
         console.error('Error fetching notification count:', err);

@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Calendar, MapPin, User, FileText, MessageSquare } from 'lucide-react';
 
@@ -37,18 +38,17 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
   const handleSaveNotes = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ notes_for_vendor: vendorNotes })
-        .eq('booking_id', booking.booking_id);
-
-      if (error) throw error;
+      const bookingRef = doc(db, 'bookings', booking.booking_id);
+      await updateDoc(bookingRef, {
+        notes_for_vendor: vendorNotes,
+        updated_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
         description: 'Vendor notes updated successfully',
       });
-      
+
       setIsNotesDialogOpen(false);
       onUpdate();
     } catch (error) {
@@ -87,7 +87,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
                 <p className="font-semibold">{booking.vendor_services.service_name}</p>
               )}
             </div>
-            
+
             {showVendorNotes && (
               <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
                 <DialogTrigger asChild>
@@ -108,7 +108,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
                         {booking.vendor_services && <p>Service: {booking.vendor_services.service_name}</p>}
                       </div>
                     </div>
-                    
+
                     {booking.custom_instructions && (
                       <div>
                         <p className="font-medium mb-1">Client Instructions</p>
@@ -117,7 +117,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
                         </div>
                       </div>
                     )}
-                    
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Vendor Notes</label>
                       <Textarea
@@ -127,7 +127,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
                         rows={4}
                       />
                     </div>
-                    
+
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" onClick={() => setIsNotesDialogOpen(false)}>
                         Cancel
@@ -141,34 +141,34 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onUpdate, showVendor
               </Dialog>
             )}
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             <Badge className={getStatusColor(booking.booking_status)}>
               {booking.booking_status}
             </Badge>
           </div>
-          
+
           {booking.users && (
             <div className="flex items-center text-sm text-gray-600">
               <User className="h-4 w-4 mr-1" />
               {booking.users.display_name}
             </div>
           )}
-          
+
           {booking.event_location && (
             <div className="flex items-center text-sm text-gray-600">
               <MapPin className="h-4 w-4 mr-1" />
               {booking.event_location}
             </div>
           )}
-          
+
           {booking.custom_instructions && (
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-sm font-medium mb-1">Client Instructions:</p>
               <p className="text-sm text-gray-700">{booking.custom_instructions}</p>
             </div>
           )}
-          
+
           {booking.notes_for_vendor && (
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium mb-1">Vendor Notes:</p>
