@@ -54,8 +54,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const recipientId = vendorProfile?.vendor_id || staffProfile?.staff_id;
       const q = query(
         collection(db, 'notifications'),
-        where('recipient_staff_id', '==', recipientId),
-        orderBy('created_at', 'desc')
+        where('recipient_staff_id', '==', recipientId)
       );
 
       const querySnapshot = await getDocs(q);
@@ -63,6 +62,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ...doc.data(),
         notification_id: doc.id,
       })) as Notification[];
+
+      // Sort client-side to avoid index requirement
+      notificationData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setNotifications(notificationData);
       setUnreadCount(notificationData.filter(n => !n.is_read).length);
@@ -128,8 +130,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       const q = query(
         collection(db, 'notifications'),
-        where('recipient_staff_id', '==', recipientId),
-        orderBy('created_at', 'desc')
+        where('recipient_staff_id', '==', recipientId)
       );
 
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -137,6 +138,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           ...doc.data(),
           notification_id: doc.id,
         })) as Notification[];
+
+        // Sort client-side as well to ensure order if index is missing or being built
+        notificationData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         setNotifications(notificationData);
         setUnreadCount(notificationData.filter(n => !n.is_read).length);

@@ -8,12 +8,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: './src/test/setup.tsx',
+    setupFiles: './src/test/setup.ts',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    pool: 'threads',
-    threads: {
-      singleThread: true,
-    },
+    pool: 'forks',
   },
   resolve: {
     alias: {

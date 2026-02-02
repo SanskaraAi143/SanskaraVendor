@@ -137,9 +137,11 @@ function toast({ title, description, variant, action }: Toast) {
 
   // Apply styling based on variant
   if (variant === "destructive") {
-    options.style = { backgroundColor: "var(--destructive)", color: "white" }
+    options.style = { backgroundColor: "hsl(var(--destructive))", color: "white" }
   } else if (variant === "success") {
     options.style = { backgroundColor: "#f0fdf4", color: "#166534", borderColor: "#86efac" }
+  } else {
+    options.style = { backgroundColor: "hsl(var(--primary))", color: "white" }
   }
 
   sonnerToast(title as string, options)

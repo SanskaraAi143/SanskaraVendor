@@ -4,7 +4,7 @@ import { VendorOnboarding } from './AiVendorOnboarding.tsx';
 import { StaffOnboarding } from './AiStaffOnboarding';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -49,7 +49,7 @@ interface AiOnboardingAppProps {
 
 const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }) => {
     const [onboardingType, setOnboardingType] = useState<OnboardingType>(null);
-    const { user, userType, refreshVendorProfile, refreshStaffProfile } = useAuth();
+    const { user, userType, refreshVendorProfile, refreshStaffProfile, refreshUserType } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
 
@@ -57,28 +57,37 @@ const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }
         if (!user) return;
 
         try {
-            if (userType === 'vendor') {
+            if (userType === 'vendor' || !userType) {
                 const vendorRef = doc(db, 'vendors', user.uid);
                 await updateDoc(vendorRef, {
                     status: 'onboarding_complete',
                     updated_at: new Date().toISOString()
                 });
                 await refreshVendorProfile();
-            } else if (userType === 'staff') {
-                const staffRef = doc(db, 'vendor_staff', user.uid);
-                await updateDoc(staffRef, {
-                    is_active: true,
-                    updated_at: new Date().toISOString()
-                });
-                await refreshStaffProfile();
             }
+            
+            if (userType === 'staff' || !userType) {
+                const staffRef = doc(db, 'vendor_staff', user.uid);
+                const staffSnap = await getDoc(staffRef);
+                if (staffSnap.exists()) {
+                  await updateDoc(staffRef, {
+                      is_active: true,
+                      updated_at: new Date().toISOString()
+                  });
+                  await refreshStaffProfile();
+                }
+            }
+
+            // Finally refresh the combined user role
+            await refreshUserType();
 
             toast({
                 title: "Onboarding skipped",
                 description: "You can complete your profile later from settings.",
             });
 
-            navigate('/dashboard');
+            console.log("AiOnboardingApp: Navigating to dashboard after skip");
+            navigate('/dashboard', { replace: true });
         } catch (error: any) {
             console.error('Error skipping onboarding:', error);
             toast({

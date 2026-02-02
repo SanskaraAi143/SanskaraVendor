@@ -154,3 +154,9 @@
     @apply flex flex-col p-4 rounded-lg border transition-all hover:shadow-md;
   }
 }
+
+/* Hide Recaptcha Badge globally as requested */
+.grecaptcha-badge {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

@@ -252,23 +252,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Set language to device default
       auth.useDeviceLanguage();
 
-      if (!(window as any).recaptchaVerifier) {
-        console.log("Initializing persistent RecaptchaVerifier");
-        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, container, {
-          'size': 'invisible',
-          'callback': () => console.log("reCAPTCHA solved"),
-          'expired-callback': () => console.log("reCAPTCHA expired"),
-          'error-callback': (error: any) => console.error("reCAPTCHA error:", error)
-        });
-        
-        // Store widget ID for future resets
+      // Aggressively clear existing verifier and recreated the container element
+      // This is the most reliable way to avoid "reCAPTCHA already rendered" errors
+      if ((window as any).recaptchaVerifier) {
         try {
-          const widgetId = await (window as any).recaptchaVerifier.render();
-          (window as any).recaptchaWidgetId = widgetId;
+          (window as any).recaptchaVerifier.clear();
         } catch (e) {
-          console.error("Initial reCAPTCHA render failed:", e);
+          console.warn("Recaptcha clear failed, proceeding anyway:", e);
         }
+        (window as any).recaptchaVerifier = null;
       }
+      
+      // Remove and recreate the container element to settle the SDK's internal node registry
+      const existingContainer = document.getElementById(containerId);
+      if (existingContainer) {
+        existingContainer.remove();
+      }
+      const newContainer = document.createElement('div');
+      newContainer.id = containerId;
+      document.body.appendChild(newContainer);
+
+      console.log("Initializing fresh RecaptchaVerifier with new DOM node");
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, newContainer, {
+        'size': 'invisible',
+        'callback': () => console.log("reCAPTCHA solved"),
+        'expired-callback': () => {
+          console.log("reCAPTCHA expired");
+          const v = (window as any).recaptchaVerifier;
+          if (v) {
+            try { v.clear(); } catch (e) {}
+            (window as any).recaptchaVerifier = null;
+          }
+        },
+        'error-callback': (error: any) => {
+          console.error("reCAPTCHA error callback:", error);
+          const v = (window as any).recaptchaVerifier;
+          if (v) {
+            try { v.clear(); } catch (e) {}
+            (window as any).recaptchaVerifier = null;
+          }
+        }
+      });
       
       const appVerifier = (window as any).recaptchaVerifier;
       
@@ -294,6 +318,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           message = "Throttled. If on localhost, please ensure you are using a TEST phone number added in the Firebase console.";
         } else if (smsError.code === 'auth/invalid-phone-number') {
           message = "Invalid phone number setup. Use E.164 format (e.g., +16505553434).";
+        } else if (smsError.code === 'auth/invalid-app-credential') {
+          message = "Invalid App Credential. Please check Firebase Console: 1. Add '10.255.255.254' to Authorized Domains. 2. Verify API Key restrictions.";
         }
         
         toast({ title: "Phone auth failed", description: message, variant: "destructive" });

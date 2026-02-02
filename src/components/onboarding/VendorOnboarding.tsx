@@ -8,6 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 import { VendorOnboardingForm } from './types';
 import { useLiveSession } from './hooks/useLiveSession';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/components/ui/use-toast';
 import { updateVendorFormDeclaration, fullVendorFormSchema } from './schemas/vendorSchema';
 import { downloadHtml } from './lib/downloadUtils';
 import { uploadFile } from '@/utils/upload';
@@ -46,7 +47,8 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const [isProcessingFile, setIsProcessingFile] = useState(false);
     const [vadThreshold, setVadThreshold] = useState(0.01);
     const [isSkipping, setIsSkipping] = useState(false);
-    const { user, refreshVendorProfile } = useAuth();
+    const { user, refreshVendorProfile, refreshUserType } = useAuth();
+    const { toast } = useToast();
     const navigate = useNavigate();
 
     const updateFormFromAI = useCallback((args: Partial<VendorOnboardingForm>) => {
@@ -304,11 +306,18 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
             }, { merge: true });
 
             await refreshVendorProfile();
+            await refreshUserType();
+
+            toast({
+              title: "Onboarding Skipped",
+              description: "You can complete your profile later.",
+            });
 
             if (onComplete) {
                 onComplete({});
             } else {
               // Direct navigation fallback if no onComplete handler
+              console.log("Navigating to dashboard after skip");
               navigate('/dashboard');
             }
         } catch (error: any) {
