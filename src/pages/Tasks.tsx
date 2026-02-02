@@ -26,7 +26,7 @@ import {
   orderBy,
   getDoc
 } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { useDataCache } from '@/hooks/useDataCache';
 

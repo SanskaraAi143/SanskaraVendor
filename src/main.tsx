@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
-import { AuthProvider } from './hooks/useAuthContext.tsx'
+import { AuthProvider } from './providers/AuthProvider'
 import { Toaster } from './components/ui/toaster'
 import { DirectionProvider } from '@radix-ui/react-direction'
 

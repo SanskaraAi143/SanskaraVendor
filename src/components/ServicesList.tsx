@@ -107,7 +107,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
         <CardTitle className="flex items-center justify-between">
           <span>{showAll ? 'All Vendor Services' : 'Your Services'}</span>
           {!showAll && (
-            <Link to="/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
+            <Link to="/dashboard/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
               View All <ArrowUpRight className="ml-1 h-4 w-4" />
             </Link>
           )}
@@ -151,7 +151,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
               </div>
             ))}
             {!showAll && (
-              <Link to="/services/add"> {/* This link might need to be dynamic for staff if they can add services */}
+              <Link to="/dashboard/services/add"> {/* This link might need to be dynamic for staff if they can add services */}
                 <Button variant="outline" className="w-full mt-2 flex items-center justify-center">
                   <Plus className="mr-1 h-4 w-4" /> Add Service
                 </Button>
@@ -164,7 +164,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
               {showAll ? 'This vendor has not added any services yet.' : "You haven't added any services yet"}
             </p>
             {!showAll && (
-              <Link to="/services/add"> {/* This link might need to be dynamic for staff */}
+              <Link to="/dashboard/services/add"> {/* This link might need to be dynamic for staff */}
                 <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Your First Service

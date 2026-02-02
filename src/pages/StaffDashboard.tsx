@@ -3,7 +3,7 @@ import StaffDashboardLayout from '@/components/staff/StaffDashboardLayout';
 import DashboardCard from '@/components/DashboardCard';
 import { Calendar, CheckCircle2, Clock, Users, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import {
   collection,

@@ -3,7 +3,7 @@ import React from 'react';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import VendorSidebar from './VendorSidebar';
 import VendorHeader from './VendorHeader';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useLocation, Navigate } from 'react-router-dom';
 
 interface VendorLayoutProps {
@@ -37,10 +37,10 @@ const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
   }
 
   // If user is vendor, check onboarding
-  if (!vendorProfile && location.pathname !== '/onboarding') {
+  if (!vendorProfile && location.pathname !== '/onboard') {
     const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
     if (!onboardingSkipped) {
-      return <Navigate to="/onboarding" state={{ from: location }} replace />;
+      return <Navigate to="/onboard" state={{ from: location }} replace />;
     }
   }
 

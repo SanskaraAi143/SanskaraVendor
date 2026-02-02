@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { db, storage } from '@/lib/firebase';
 import {
   collection,
   addDoc,
+  setDoc,
   updateDoc,
   doc,
   query,
@@ -560,7 +561,7 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
 
       // Prepare vendor data
       const vendorData = {
-        supabase_auth_uid: user.uid,
+        uid: user.uid,
         vendor_name: formData.venueName,
         vendor_category: 'Venue',
         contact_email: formData.emailAddress,
@@ -663,17 +664,18 @@ const ManualVendorOnboarding: React.FC<ManualVendorOnboardingProps> = ({ onboard
         }
       };
 
-      // Insert vendor
-      const vendorRef = await addDoc(collection(db, 'vendors'), {
+      // Insert vendor using user.uid as document ID for easier lookup
+      await setDoc(doc(db, 'vendors', user.uid), {
         ...vendorData,
         created_at: new Date().toISOString()
       });
-      const vendorId = vendorRef.id;
+      const vendorId = user.uid;
 
       // Create vendor staff entry for contact person
-      await addDoc(collection(db, 'vendor_staff'), {
+      // Also use user.uid as doc ID for the owner staff record
+      await setDoc(doc(db, 'vendor_staff', user.uid), {
         vendor_id: vendorId,
-        supabase_auth_uid: user.uid,
+        uid: user.uid,
         email: formData.emailAddress,
         phone_number: formData.directPhoneNumbers,
         display_name: formData.contactPersonName,

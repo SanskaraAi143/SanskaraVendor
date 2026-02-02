@@ -4,11 +4,11 @@ import React from 'react';
 const Logo: React.FC = () => {
   return (
     <div className="flex items-center gap-3">
-      <div className="relative w-10 h-10">
+      <div className="relative w-12 h-12">
         <img 
-          src="/lovable-uploads/e0659ecc-af25-430d-a0d0-f80dcf110b33.png" 
+          src="/sanskara-logo.jpg" 
           alt="Sanskara AI Logo" 
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain rounded-lg"
         />
       </div>
       <div className="font-bold text-xl">

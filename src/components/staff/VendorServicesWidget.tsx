@@ -1,4 +1,9 @@
 import { db } from '@/lib/firebase';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { Loader2, CheckCircle2 } from 'lucide-react';
+import DashboardCard from '@/components/DashboardCard';
 import {
   collection,
   query,
@@ -19,15 +24,16 @@ const VendorServicesWidget: React.FC = () => {
   const [assignedServices, setAssignedServices] = useState<AssignedService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, isLoading: authLoading } = useAuth();
+        const { user, staffProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user) {
-      setIsLoading(false);
-      console.warn("VendorServicesWidget: User not authenticated.");
+    if (!user || !staffProfile) {
+      if (!authLoading && !staffProfile) {
+          setIsLoading(false);
+      }
       return;
     }
 
@@ -35,21 +41,8 @@ const VendorServicesWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // First get the staff ID
-        const staffQuery = query(
-          collection(db, 'vendor_staff'),
-          where('supabase_auth_uid', '==', user.uid)
-        );
-        const staffSnapshot = await getDocs(staffQuery);
-
-        if (staffSnapshot.empty) {
-          setError('Staff profile not found.');
-          return;
-        }
-
-        const staffData = staffSnapshot.docs[0].data();
-        const staffId = staffSnapshot.docs[0].id;
-        const vendorId = staffData.vendor_id;
+        const staffId = staffProfile.staff_id;
+        const vendorId = staffProfile.vendor_id;
 
         // Fetch vendor name
         let vendorName = 'Unknown Vendor';

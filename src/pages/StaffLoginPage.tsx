@@ -38,15 +38,30 @@ const StaffLoginPage: React.FC = () => {
       const user = userCredential.user;
 
       if (user) {
-        // Check if user is staff
-        const staffQuery = query(
-          collection(db, 'vendor_staff'),
-          where('supabase_auth_uid', '==', user.uid)
-        );
-        const staffSnapshot = await getDocs(staffQuery);
+        // Staff details are now handled by the AuthProvider fetching staffProfile automatically
+        // after successful login. The navigate call will trigger a reload of the layout
+        // which uses useAuth to check profiles and redirect.
+        
+        // However, for immediate verification during login:
+        const staffDocRef = doc(db, 'vendor_staff', user.uid);
+        const staffDocSnap = await getDoc(staffDocRef);
+        
+        let staffData = null;
+        if (staffDocSnap.exists()) {
+          staffData = staffDocSnap.data();
+        } else {
+            // Check by legacy UID
+            const staffQuery = query(
+              collection(db, 'vendor_staff'),
+              where('supabase_auth_uid', '==', user.uid)
+            );
+            const staffSnapshot = await getDocs(staffQuery);
+            if (!staffSnapshot.empty) {
+                staffData = staffSnapshot.docs[0].data();
+            }
+        }
 
-        if (!staffSnapshot.empty) {
-          const staffData = staffSnapshot.docs[0].data();
+        if (staffData) {
           if (!staffData.is_active) {
             await signOut(auth);
             setError('Your staff account is inactive. Please contact your vendor.');
@@ -57,13 +72,24 @@ const StaffLoginPage: React.FC = () => {
           navigate('/staff/dashboard');
         } else {
           // Check if user is a vendor (not staff)
-          const vendorQuery = query(
-            collection(db, 'vendors'),
-            where('supabase_auth_uid', '==', user.uid)
-          );
-          const vendorSnapshot = await getDocs(vendorQuery);
+          let vendorData = null;
+          const vendorDocRef = doc(db, 'vendors', user.uid);
+          const vendorDocSnap = await getDoc(vendorDocRef);
+          
+          if (vendorDocSnap.exists()) {
+              vendorData = vendorDocSnap.data();
+          } else {
+              const vendorQuery = query(
+                collection(db, 'vendors'),
+                where('supabase_auth_uid', '==', user.uid)
+              );
+              const vendorSnapshot = await getDocs(vendorQuery);
+              if (!vendorSnapshot.empty) {
+                  vendorData = vendorSnapshot.docs[0].data();
+              }
+          }
 
-          if (!vendorSnapshot.empty) {
+          if (vendorData) {
             // User is a vendor, redirect them to vendor portal
             await signOut(auth);
             toast({

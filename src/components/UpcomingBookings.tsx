@@ -122,7 +122,7 @@ const UpcomingBookings: React.FC<UpcomingBookingsProps> = ({ vendorId }) => {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between">
           <span>Upcoming Bookings</span>
-          <Link to="/bookings" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
+          <Link to="/dashboard/bookings" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
             View All <ArrowUpRight className="ml-1 h-4 w-4" />
           </Link>
         </CardTitle>

@@ -3,7 +3,7 @@ import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { BellRing, Loader2, Bell } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 const StaffNotifications: React.FC = () => {

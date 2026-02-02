@@ -12,7 +12,7 @@ import {
   getDocs,
   Timestamp
 } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Notification {
   notification_id: string;

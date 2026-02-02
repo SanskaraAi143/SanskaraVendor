@@ -29,7 +29,7 @@ import {
   updateDoc,
   orderBy
 } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 
 interface Review {

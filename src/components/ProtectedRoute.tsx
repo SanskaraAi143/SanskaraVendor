@@ -1,15 +1,29 @@
 
 import React from 'react';
-import { useAuth } from '../hooks/useAuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading, isLoadingUserType, userType, signOut } = useAuth();
+  const { user, isInitializing, isLoadingUserType, userType, signOut } = useAuth();
   const location = useLocation();
 
+  // If authenticated but no user type, they need to onboard
+  const needsOnboarding = user && !isInitializing && !isLoadingUserType && !userType;
+
+  // Sign out ONLY if they have a type but it's not vendor
+  const shouldSignOut =
+    user && !isInitializing && !isLoadingUserType && userType && userType !== 'vendor';
+
+  React.useEffect(() => {
+    if (shouldSignOut) {
+      console.warn('ProtectedRoute: Redirecting to login because userType is invalid for vendor portal:', userType);
+      signOut();
+    }
+  }, [shouldSignOut, signOut]);
+
   // Show loading state while checking auth and user type
-  if (isLoading || isLoadingUserType) {
+  if (isInitializing || isLoadingUserType) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -23,18 +37,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Compute if we need to sign out due to missing or wrong userType
-  const shouldSignOut =
-    user && !isLoading && !isLoadingUserType && (!userType || userType !== 'vendor');
-
-  React.useEffect(() => {
-    if (shouldSignOut) {
-      signOut();
-    }
-  }, [shouldSignOut, signOut]);
+  // Authenticated but no profile yet -> Onboard
+  if (needsOnboarding) {
+    return <Navigate to="/onboard" replace />;
+  }
 
   if (shouldSignOut) {
-    return null; // Let AuthContext handle the redirect after signOut
+    return null;
   }
 
   return <>{children}</>;

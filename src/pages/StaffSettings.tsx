@@ -6,7 +6,7 @@ import { Settings, Loader2, User, Bell, Shield, Trash2 } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

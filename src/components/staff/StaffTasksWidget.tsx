@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { ListTodo, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -11,15 +11,16 @@ const StaffTasksWidget: React.FC = () => {
   const [taskCount, setTaskCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, staffProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user) {
-      setIsLoading(false);
-      console.warn("StaffTasksWidget: User not authenticated.");
+    if (!user || !staffProfile) {
+      if (!authLoading && !staffProfile) {
+          setIsLoading(false);
+      }
       return;
     }
 
@@ -27,22 +28,9 @@ const StaffTasksWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const staffQuery = query(
-          collection(db, 'vendor_staff'),
-          where('supabase_auth_uid', '==', user.uid)
-        );
-        const staffSnapshot = await getDocs(staffQuery);
-
-        if (staffSnapshot.empty) {
-          setError('Staff profile not found.');
-          return;
-        }
-
-        const staffId = staffSnapshot.docs[0].id;
-
         const tasksQuery = query(
           collection(db, 'vendor_tasks'),
-          where('assigned_staff_id', '==', staffId),
+          where('assigned_staff_id', '==', staffProfile.staff_id),
           where('status', '!=', 'Completed')
         );
         const tasksSnapshot = await getDocs(tasksQuery);
@@ -58,7 +46,7 @@ const StaffTasksWidget: React.FC = () => {
     };
 
     fetchTaskCount();
-  }, [user, authLoading, navigate]);
+  }, [user, staffProfile, authLoading]);
 
   const handleClick = () => {
     navigate('/staff/tasks');

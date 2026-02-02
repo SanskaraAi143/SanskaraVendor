@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuthContext';
+import { useAuth } from './hooks/useAuth';
 import { DataCacheProvider } from './hooks/useDataCache';
 import { Loader2 } from 'lucide-react';
 import Index from './pages/Index';
@@ -43,16 +43,18 @@ import AutofillVendorOnboarding from './components/onboarding/AutofillVendorOnbo
 import { VendorOnboarding } from './components/onboarding/VendorOnboarding';
 // Removed empty vendor-onboarding step imports
 
+import { NotificationProvider } from './contexts/NotificationContext';
+
 function App() {
-  const { user, isLoading, userType } = useAuth();
+  const { user, isInitializing, userType } = useAuth();
 
   console.log('App Route State:', {
-    isLoading,
+    isInitializing,
     userType,
     isAuthenticated: !!user
   });
 
-  if (isLoading) {
+  if (isInitializing) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -62,7 +64,8 @@ function App() {
 
   return (
     <DataCacheProvider>
-      <Routes>
+      <NotificationProvider>
+        <Routes>
         {/* Public routes */}
         <Route path="/" element={<Index />} />
         <Route
@@ -129,6 +132,7 @@ function App() {
         {/* 404 route */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </NotificationProvider>
     </DataCacheProvider>
   );
 }

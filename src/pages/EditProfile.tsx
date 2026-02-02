@@ -5,7 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { AddressData, PricingRangeData } from '@/types/auth';
 import { toast } from '@/components/ui/use-toast';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -325,7 +326,7 @@ const EditProfile: React.FC = () => {
                 taggedImages={taggedImages}
                 onImagesChange={setTaggedImages}
                 bucket="vendors"
-                folder={user?.id}
+                folder={user?.uid}
                 category={profile.vendor_category || 'general'}
                 maxFilesPerTag={15}
                 maxTotalFiles={50}
@@ -334,7 +335,7 @@ const EditProfile: React.FC = () => {
           </Card>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate('/profile')}>
+            <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>

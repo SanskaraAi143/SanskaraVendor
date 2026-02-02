@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
+import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc, setDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { GoogleGenAI } from "@google/genai";
 import { VendorOnboardingForm } from './types';
 import { useLiveSession } from './hooks/useLiveSession';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { updateVendorFormDeclaration, fullVendorFormSchema } from './schemas/vendorSchema';
 import { downloadHtml } from './lib/downloadUtils';
 import { uploadFile } from '@/utils/upload';
@@ -43,7 +45,9 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const [venueImage, setVenueImage] = useState<string | null>(null);
     const [isProcessingFile, setIsProcessingFile] = useState(false);
     const [vadThreshold, setVadThreshold] = useState(0.01);
+    const [isSkipping, setIsSkipping] = useState(false);
     const { user, refreshVendorProfile } = useAuth();
+    const navigate = useNavigate();
 
     const updateFormFromAI = useCallback((args: Partial<VendorOnboardingForm>) => {
         const deepMerge = (target: any, source: any): any => {
@@ -292,24 +296,29 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
     const handleSkip = useCallback(async () => {
         if (!user) return;
         try {
+            setIsSkipping(true);
             const vendorRef = doc(db, 'vendors', user.uid);
-            await updateDoc(vendorRef, {
+            await setDoc(vendorRef, {
                 status: 'onboarding_complete',
                 updated_at: new Date().toISOString()
-            });
+            }, { merge: true });
 
             await refreshVendorProfile();
 
             if (onComplete) {
                 onComplete({});
+            } else {
+              // Direct navigation fallback if no onComplete handler
+              navigate('/dashboard');
             }
         } catch (error: any) {
             console.error('Error skipping onboarding:', error);
             if (onError) {
                 onError("Skip Error", error.message || "Failed to skip onboarding.");
             }
+            setIsSkipping(false);
         }
-    }, [user, refreshVendorProfile, onComplete, onError]);
+    }, [user, refreshVendorProfile, onComplete, onError, navigate]);
 
     const renderStepContent = () => {
         const props = {
@@ -362,8 +371,10 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
                 </button>
                 <button
                     onClick={handleSkip}
-                    className="text-gray-500 hover:text-gray-800 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
+                    disabled={isSkipping}
+                    className="flex items-center text-gray-500 hover:text-gray-800 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
                 >
+                    {isSkipping && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Skip Onboarding for now
                 </button>
             </div>

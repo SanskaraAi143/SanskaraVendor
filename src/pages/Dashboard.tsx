@@ -8,7 +8,7 @@ import UpcomingBookings from '@/components/UpcomingBookings';
 import UpcomingTasks from '@/components/UpcomingTasks';
 import ServicesList from '@/components/ServicesList';
 import { BookOpen, CalendarCheck, Star, DollarSign, User } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';

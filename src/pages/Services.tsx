@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { PlusCircle, Edit, Trash2, Users, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import ServiceStaffAssignment from '@/components/vendor/ServiceStaffAssignment';
@@ -120,7 +120,7 @@ const Services: React.FC = () => {
         </div>
         <Button
           className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
-          onClick={() => navigate('/services/add')}
+          onClick={() => navigate('/dashboard/services/add')}
         >
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Service
@@ -145,7 +145,7 @@ const Services: React.FC = () => {
             </p>
             <Button
               className="bg-sanskara-red hover:bg-sanskara-maroon text-white"
-              onClick={() => navigate('/services/add')}
+              onClick={() => navigate('/dashboard/services/add')}
             >
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Your First Service
@@ -184,7 +184,7 @@ const Services: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => navigate(`/services/edit/${service.service_id}`)}
+                    onClick={() => navigate(`/dashboard/services/edit/${service.service_id}`)}
                   >
                     <Edit className="h-4 w-4 mr-1" /> Edit
                   </Button>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { FileUp, Phone, Loader2 } from 'lucide-react';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Dialog,
   DialogContent,

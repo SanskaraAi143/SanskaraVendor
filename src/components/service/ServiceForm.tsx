@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { Loader } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -103,7 +103,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate('/services');
+        navigate('/dashboard/services');
       }
 
     } catch (error: any) {
@@ -278,7 +278,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate('/services')}
+            onClick={() => navigate('/dashboard/services')}
           >
             Cancel
           </Button>

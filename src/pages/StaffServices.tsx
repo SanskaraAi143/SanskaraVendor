@@ -13,7 +13,7 @@ import {
   getDoc,
   doc
 } from 'firebase/firestore';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import ServiceImageManager from '@/components/service/ServiceImageManager';
 
@@ -33,11 +33,13 @@ const StaffServices: React.FC = () => {
   const [assignedServices, setAssignedServices] = useState<AssignedService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedService, setSelectedService] = useState<AssignedService | null>(null);
-  const { user } = useAuth();
+  const { user, staffProfile, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    fetchAssignedServices();
-  }, [user]);
+    if (!authLoading && staffProfile) {
+      fetchAssignedServices();
+    }
+  }, [user, staffProfile, authLoading]);
 
   const fetchAssignedServices = async () => {
     if (!user) return;
@@ -45,14 +47,7 @@ const StaffServices: React.FC = () => {
     try {
       setIsLoading(true);
 
-      // 1. Get staff profile to get staff_id and vendor_id
-      const staffQuery = query(
-        collection(db, 'vendor_staff'),
-        where('supabase_auth_uid', '==', user.uid)
-      );
-      const staffSnapshot = await getDocs(staffQuery);
-
-      if (staffSnapshot.empty) {
+      if (!staffProfile) {
         toast({
           title: 'Error',
           description: 'Staff profile not found',
@@ -62,9 +57,8 @@ const StaffServices: React.FC = () => {
         return;
       }
 
-      const staffData = staffSnapshot.docs[0].data();
-      const staffId = staffSnapshot.docs[0].id;
-      const vendorId = staffData.vendor_id;
+      const staffId = staffProfile.staff_id;
+      const vendorId = staffProfile.vendor_id;
 
       // Get vendor name
       let vendorName = 'Unknown Vendor';

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import StaffHeader from './StaffHeader'; // Import the new StaffHeader
 import Logo from '../Logo'; // Assuming a shared Logo component exists
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
   HomeIcon,
   BookOpen,

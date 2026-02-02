@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuthContext'; // Assuming this hook provides user role
+import { useAuth } from '@/hooks/useAuth'; // Assuming this hook provides user role
 
 interface CompletionStepProps {
   onCompletion: (data?: any) => void;

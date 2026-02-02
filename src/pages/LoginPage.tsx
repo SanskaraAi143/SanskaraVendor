@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EyeIcon, EyeOffIcon, UserIcon, KeyIcon, Loader, CheckCircle } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, UserIcon, KeyIcon, Loader, CheckCircle, Phone, MessageSquare } from 'lucide-react';
 import Logo from '@/components/Logo';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/components/ui/use-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Form, FormField, FormItem, FormControl, FormMessage, FormLabel, FormDescription } from '@/components/ui/form';
@@ -37,9 +38,35 @@ const categories = [
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
 
+const GoogleIcon = () => (
+  <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
+    <path
+      fill="#4285F4"
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+    />
+    <path
+      fill="#EA4335"
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+    />
+    <path fill="none" d="M0 0h24v24H0z" />
+  </svg>
+);
+
 const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const { isLoading, user, signIn, signUp } = useAuth();
+  const { isLoading, user, signIn, signUp, resetPassword, signInWithGoogle, signInWithPhone, verifyOtp } = useAuth();
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(
     location.pathname === '/signup' ? 'signup' : 'login'
@@ -99,6 +126,39 @@ const LoginPage: React.FC = () => {
     }
   };
   
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber) {
+      toast({
+        title: "Error",
+        description: "Please enter your phone number",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      await signInWithPhone(phoneNumber);
+      setShowOtpInput(true);
+    } catch (error) {
+      // Error is already toasted in useAuth
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp) {
+      toast({
+        title: "Error",
+        description: "Please enter the verification code",
+        variant: "destructive"
+      });
+      return;
+    }
+    const userType = activeTab === 'signup' ? 'vendor' : 'vendor'; // Default to vendor for this portal
+    await verifyOtp(otp, userType);
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-4"
@@ -122,100 +182,215 @@ const LoginPage: React.FC = () => {
         
         <Tabs defaultValue="login" value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'signup')} className="mb-4">
           <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="login">Login</TabsTrigger>
+            <TabsTrigger value="login">Sign In</TabsTrigger>
             <TabsTrigger value="signup">Create Account</TabsTrigger>
           </TabsList>
           
           <TabsContent value="login">
-            <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                <FormField
-                  control={loginForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
+            <div className="flex justify-center gap-4 mb-6 mt-4">
+              <Button 
+                variant={authMethod === 'email' ? 'default' : 'outline'}
+                onClick={() => setAuthMethod('email')}
+                className="flex-1"
+                size="sm"
+              >
+                <UserIcon className="w-4 h-4 mr-2" /> Email
+              </Button>
+              <Button 
+                variant={authMethod === 'phone' ? 'default' : 'outline'}
+                onClick={() => setAuthMethod('phone')}
+                className="flex-1"
+                size="sm"
+              >
+                <Phone className="w-4 h-4 mr-2" /> Phone
+              </Button>
+            </div>
+
+            {authMethod === 'email' ? (
+              <Form {...loginForm}>
+                <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                  <FormField
+                    control={loginForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <div className="relative">
+                          <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              type="email" 
+                              placeholder="vendor@example.com" 
+                              className="pl-10 sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={loginForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel className="text-sanskara-maroon/80">Password</FormLabel>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const email = loginForm.getValues('email');
+                              if (!email) {
+                                toast({
+                                  title: "Email Required",
+                                  description: "Please enter your email address to reset your password.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              resetPassword(email);
+                            }}
+                            className="text-xs text-sanskara-maroon hover:underline font-semibold"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <KeyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              type={showPassword ? "text" : "password"} 
+                              className="pl-10 pr-10 sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                          <button 
+                            type="button" 
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2" 
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOffIcon className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <EyeIcon className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-sanskara-red hover:bg-sanskara-maroon text-white" 
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center">
+                        <Loader className="h-4 w-4 animate-spin mr-2" />
+                        Signing In...
+                      </div>
+                    ) : (
+                      'Sign In with Email'
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            ) : (
+              <div className="space-y-4">
+                {showOtpInput ? (
+                  <form onSubmit={handleOtpSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="otp">Verification Code</Label>
                       <div className="relative">
-                        <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl>
-                          <Input 
-                            type="email" 
-                            placeholder="vendor@example.com" 
-                            className="pl-10 sanskara-input"
-                            {...field}
-                          />
-                        </FormControl>
+                        <MessageSquare className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          id="otp"
+                          value={otp} 
+                          onChange={(e) => setOtp(e.target.value)} 
+                          placeholder="Enter 6-digit code" 
+                          className="pl-10 sanskara-input"
+                        />
                       </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={loginForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel>Password</FormLabel>
-                        <a href="#" className="text-xs text-sanskara-maroon hover:text-sanskara-red">
-                          Forgot password?
-                        </a>
-                      </div>
-                      <div className="relative">
-                        <KeyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <FormControl>
-                          <Input 
-                            type={showPassword ? "text" : "password"} 
-                            className="pl-10 pr-10 sanskara-input"
-                            {...field}
-                          />
-                        </FormControl>
-                        <button 
-                          type="button" 
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2" 
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <EyeOffIcon className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <EyeIcon className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </button>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <Button 
-                  type="submit" 
-                  className="w-full bg-sanskara-red hover:bg-sanskara-maroon text-white" 
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center justify-center">
-                      <Loader className="h-4 w-4 animate-spin mr-2" />
-                      Signing In...
                     </div>
-                  ) : (
-                    'Sign In'
-                  )}
-                </Button>
-              </form>
-            </Form>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-sanskara-red hover:bg-sanskara-maroon text-white"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader className="animate-spin mr-2 h-4 w-4" /> : 'Verify & Continue'}
+                    </Button>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowOtpInput(false)}
+                      className="w-full text-sm text-sanskara-maroon hover:underline text-center"
+                    >
+                      Use a different number
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handlePhoneSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          id="phone"
+                          value={phoneNumber} 
+                          onChange={(e) => setPhoneNumber(e.target.value)} 
+                          placeholder="+91 98765 43210" 
+                          className="pl-10 sanskara-input"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">We'll send you a verification code</p>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-sanskara-red hover:bg-sanskara-maroon text-white"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader className="animate-spin mr-2 h-4 w-4" /> : 'Get OTP Code'}
+                    </Button>
+                  </form>
+                )}
+              </div>
+            )}
           </TabsContent>
+
+
           
           <TabsContent value="signup">
+            <div className="flex justify-center gap-4 mb-6 mt-4">
+              <Button 
+                variant={authMethod === 'email' ? 'default' : 'outline'}
+                onClick={() => setAuthMethod('email')}
+                className="flex-1"
+                size="sm"
+              >
+                <UserIcon className="w-4 h-4 mr-2" /> Email
+              </Button>
+              <Button 
+                variant={authMethod === 'phone' ? 'default' : 'outline'}
+                onClick={() => setAuthMethod('phone')}
+                className="flex-1"
+                size="sm"
+              >
+                <Phone className="w-4 h-4 mr-2" /> Phone
+              </Button>
+            </div>
+
             {signupSuccess ? (
               <Alert className="mb-6 bg-green-50 border-green-200">
                 <CheckCircle className="h-5 w-5 text-green-600" />
                 <AlertTitle className="text-green-800">Registration Successful!</AlertTitle>
                 <AlertDescription className="text-green-700">
-                  Your account has been created. You can now sign in with your credentials.
+                  Your account has been created. You can now sign in.
                 </AlertDescription>
               </Alert>
-            ) : (
+            ) : authMethod === 'email' ? (
               <Form {...signupForm}>
                 <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
                   <FormField
@@ -230,6 +405,27 @@ const LoginPage: React.FC = () => {
                             <Input 
                               type="email" 
                               placeholder="vendor@example.com" 
+                              className="pl-10 sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={signupForm.control}
+                    name="displayName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Name</FormLabel>
+                        <div className="relative">
+                          <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              placeholder="Your Full Name" 
                               className="pl-10 sanskara-input"
                               {...field}
                             />
@@ -267,109 +463,133 @@ const LoginPage: React.FC = () => {
                             )}
                           </button>
                         </div>
-                        <FormDescription className="text-xs">
-                          Password must be at least 6 characters long
-                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   
-                  <FormField
-                    control={signupForm.control}
-                    name="vendorName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Business Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Your Business Name" 
-                            className="sanskara-input"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={signupForm.control}
-                    name="vendorCategory"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Business Category</FormLabel>
-                        <FormControl>
-                          <select 
-                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                            {...field}
-                          >
-                            <option value="">Select a category</option>
-                            {categories.map(category => (
-                              <option key={category} value={category}>{category}</option>
-                            ))}
-                          </select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={signupForm.control}
-                    name="displayName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Your Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Your Name" 
-                            className="sanskara-input"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={signupForm.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone Number (Optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="+91 98765 43210" 
-                            className="sanskara-input"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={signupForm.control}
+                      name="vendorName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Business Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Business" 
+                              className="sanskara-input"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={signupForm.control}
+                      name="vendorCategory"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category</FormLabel>
+                          <FormControl>
+                            <select 
+                              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                              {...field}
+                            >
+                              <option value="">Select</option>
+                              {categories.map(category => (
+                                <option key={category} value={category}>{category}</option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   
                   <Button 
                     type="submit" 
                     className="w-full bg-sanskara-gold hover:bg-sanskara-amber text-sanskara-maroon" 
                     disabled={isLoading}
                   >
-                    {isLoading ? (
-                      <div className="flex items-center justify-center">
-                        <Loader className="h-4 w-4 animate-spin mr-2" />
-                        Creating Account...
-                      </div>
-                    ) : (
-                      'Create Account'
-                    )}
+                    {isLoading ? <Loader className="animate-spin mr-2 h-4 w-4" /> : 'Create Account'}
                   </Button>
                 </form>
               </Form>
+            ) : (
+              <div className="space-y-4">
+                {showOtpInput ? (
+                  <form onSubmit={handleOtpSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="otp-signup">Verification Code</Label>
+                      <Input 
+                        id="otp-signup"
+                        value={otp} 
+                        onChange={(e) => setOtp(e.target.value)} 
+                        placeholder="Enter 6-digit code" 
+                        className="sanskara-input"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-sanskara-gold hover:bg-sanskara-amber text-sanskara-maroon"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader className="animate-spin mr-2 h-4 w-4" /> : 'Verify & Continue'}
+                    </Button>
+                  </form>
+                ) : (
+                  <form onSubmit={handlePhoneSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone-signup">Phone Number</Label>
+                      <Input 
+                        id="phone-signup"
+                        value={phoneNumber} 
+                        onChange={(e) => setPhoneNumber(e.target.value)} 
+                        placeholder="+91 98765 43210" 
+                        className="sanskara-input"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-sanskara-gold hover:bg-sanskara-amber text-sanskara-maroon"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader className="animate-spin mr-2 h-4 w-4" /> : 'Send Verification OTP'}
+                    </Button>
+                  </form>
+                )}
+              </div>
             )}
           </TabsContent>
         </Tabs>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-muted-foreground font-serif">Or continue with</span>
+          </div>
+        </div>
+
+        <Button 
+          variant="outline" 
+          type="button" 
+          className="w-full border-sanskara-gold/30 hover:bg-sanskara-beige/30"
+          onClick={() => signInWithGoogle()}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <Loader className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <GoogleIcon />
+          )}
+          Google
+        </Button>
         
         <div className="mt-6">
           <p className="text-center text-sm text-muted-foreground">

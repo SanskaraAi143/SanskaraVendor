@@ -1,7 +1,7 @@
 import React from 'react';
 import { StaffOnboarding as NewStaffOnboarding } from './features/staff/StaffOnboarding';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { useToast } from '@/components/ui/use-toast';

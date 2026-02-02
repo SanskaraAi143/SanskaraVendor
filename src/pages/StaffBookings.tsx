@@ -14,7 +14,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
 import { Loader2, ExternalLink, Calendar, User, FileText, Mail } from 'lucide-react';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 

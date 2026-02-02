@@ -19,6 +19,7 @@ import { Label } from '../../ui/label';
 import { Loader2, AlertTriangle, PlusCircle, Edit, Trash2 } from 'lucide-react';
 import StaffPortfolioFileUpload from './StaffPortfolioFileUpload';
 import { TaggedImages } from '../../../utils/taggedUploadHelpers';
+import { useAuth } from '@/hooks/useAuth';
 
 interface StaffInfo {
   staff_id: string;
@@ -79,6 +80,7 @@ const convertForDatabase = (taggedImages: TaggedImages | null): any => {
 };
 
 const StaffPortfolioForm: React.FC = () => {
+  const { user, staffProfile, isLoading: authLoading } = useAuth();
   const [staffInfo, setStaffInfo] = useState<StaffInfo | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,32 +119,24 @@ const StaffPortfolioForm: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (authLoading) return;
+      if (!user || !staffProfile) {
+          if (!authLoading && !staffProfile) setLoading(false);
+          return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        const user = auth.currentUser;
-        if (!user) throw new Error('User not authenticated.');
-
-        const staffQuery = query(
-          collection(db, 'vendor_staff'),
-          where('supabase_auth_uid', '==', user.uid)
-        );
-        const staffSnapshot = await getDocs(staffQuery);
-
-        if (staffSnapshot.empty) throw new Error('Staff profile not found.');
-
-        const staffData = staffSnapshot.docs[0].data();
-        const staffId = staffSnapshot.docs[0].id;
-
         const info = {
-          staff_id: staffId,
-          vendor_id: staffData.vendor_id,
-          role: staffData.role
+          staff_id: staffProfile.staff_id,
+          vendor_id: staffProfile.vendor_id,
+          role: staffProfile.role
         };
         setStaffInfo(info);
 
-        const items = await fetchPortfolioItems(staffId);
+        const items = await fetchPortfolioItems(staffProfile.staff_id);
         setPortfolioItems(items);
       } catch (e: any) {
         console.error('Error fetching portfolio data:', e);
@@ -153,7 +147,7 @@ const StaffPortfolioForm: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [user, staffProfile, authLoading]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

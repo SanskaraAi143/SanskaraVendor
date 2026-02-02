@@ -130,7 +130,7 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between">
           <span>Upcoming Tasks</span>
-          <Link to="/tasks" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
+          <Link to="/dashboard/tasks" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
             View All <ArrowUpRight className="ml-1 h-4 w-4" />
           </Link>
         </CardTitle>
@@ -194,7 +194,7 @@ const UpcomingTasks: React.FC<UpcomingTasksProps> = ({ vendorId }) => {
             <p className="text-muted-foreground text-sm max-w-sm">
               You don't have any tasks scheduled. Create tasks to keep track of your work.
             </p>
-            <Link to="/tasks">
+            <Link to="/dashboard/tasks">
               <button className="mt-4 px-4 py-2 bg-sanskara-red text-white rounded hover:bg-sanskara-maroon">
                 Create Tasks
               </button>

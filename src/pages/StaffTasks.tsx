@@ -15,7 +15,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
 import { Loader2, CheckSquare, Square, AlertTriangle, Edit, Save, X } from 'lucide-react';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
