@@ -21,10 +21,11 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
     if (!user) return;
     try {
       const staffRef = doc(db, 'vendor_staff', user.uid);
-      await updateDoc(staffRef, {
+      // Use setDoc with merge: true to handle cases where the document doesn't exist yet
+      await setDoc(staffRef, {
         is_active: true,
         updated_at: new Date().toISOString()
-      });
+      }, { merge: true });
 
       await refreshStaffProfile();
       navigate('/staff/dashboard');
@@ -87,19 +88,23 @@ export const StaffOnboarding: React.FC<AiStaffOnboardingProps> = ({ onBack, onCo
 
       // Create staff portfolio
       const portfolioRef = collection(db, 'staff_portfolios');
+      
+      // Sanitize undefined values for Firestore
+      const genericAttributes = {
+          name: data.name || null,
+          role: data.role || null,
+          food_options: data.food_options || null,
+          pricing_details: data.pricing_details || null,
+          service_type: data.service_type || null
+      };
+
       await addDoc(portfolioRef, {
         staff_id: user.uid,
         vendor_id: vendorId,
         portfolio_type: data.portfolioType || 'individual',
         title: data.portfolioTitle || `${data.name || 'Staff'} Portfolio`,
         description: data.portfolioDescription || '',
-        generic_attributes: {
-          name: data.name,
-          role: data.role,
-          food_options: data.food_options,
-          pricing_details: data.pricing_details,
-          service_type: data.service_type
-        },
+        generic_attributes: genericAttributes,
         created_at: new Date().toISOString()
       });
 

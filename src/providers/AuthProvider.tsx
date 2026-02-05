@@ -18,7 +18,11 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { toast } from '../components/ui/use-toast';
 import { 
@@ -141,6 +145,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (userSnap.exists()) {
         const profile = userSnap.data();
+        
+        // Auto-detect staff role if email matches a vendor_staff record
+        // This handles the case where staff sign up via the generic form (defaulting to vendor/customer)
+        if (profile.user_type !== 'staff' && profile.user_type !== 'vendor_staff' && user.email) {
+            const staffQuery = query(
+                collection(db, 'vendor_staff'), 
+                where('email', '==', user.email)
+            );
+            const staffSnapshot = await getDocs(staffQuery);
+            
+            if (!staffSnapshot.empty) {
+                console.log("Auto-detected staff account based on email. Updating user_type.");
+                // Update user to staff
+                await updateDoc(userRef, { user_type: 'staff' });
+                // Update local profile variable for immediate use
+                profile.user_type = 'staff';
+                
+                // Link firebase_uid to staff record if missing
+                const staffDoc = staffSnapshot.docs[0];
+                if (!staffDoc.data().firebase_uid) {
+                    await updateDoc(staffDoc.ref, { firebase_uid: user.uid });
+                }
+            }
+        }
+
         if (profile.user_type === 'vendor_staff' || profile.user_type === 'staff') {
           setUserType('staff');
           await fetchStaffProfile(user.uid);
@@ -226,6 +255,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           created_at: new Date().toISOString(),
         });
       }
+
+      // Explicitly fetch user role immediately after document creation to prevent race conditions
+      // where onAuthStateChanged runs before the document exists
+      await fetchUserRole();
 
       toast({ title: "Registration successful", description: "Welcome!" });
     } catch (error: any) {
@@ -413,13 +446,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
+        // Check if this email belongs to a staff member
+        let userType = 'vendor';
+        if (user.email) {
+            const staffQuery = query(
+                collection(db, 'vendor_staff'), 
+                where('email', '==', user.email)
+            );
+            const staffSnapshot = await getDocs(staffQuery);
+            if (!staffSnapshot.empty) {
+                console.log("Google Sign-In: Auto-detected staff account. Setting user_type to 'staff'.");
+                userType = 'staff';
+                
+                // Link firebase_uid
+                const staffDoc = staffSnapshot.docs[0];
+                 if (!staffDoc.data().firebase_uid) {
+                    await updateDoc(staffDoc.ref, { firebase_uid: user.uid });
+                }
+            }
+        }
+
         await setDoc(userRef, {
           email: user.email,
-          user_type: 'vendor',
+          user_type: userType,
           firebase_uid: user.uid,
           created_at: new Date().toISOString(),
         });
+        
+        // If it's a new vendor (not staff), we might want to initialize their vendor record?
+        // But AuthProvider.fetchUserRole will run next and handle profiles.
       }
+      
+      // Explicitly fetch role to update state
+      await fetchUserRole();
+      
     } catch (error: any) {
       toast({ title: "Google Login failed", description: error.message, variant: "destructive" });
     } finally {

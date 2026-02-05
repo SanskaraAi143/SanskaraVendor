@@ -24,8 +24,8 @@ const loginSchema = z.object({
 const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  vendorName: z.string().min(2, 'Business name must be at least 2 characters'),
-  vendorCategory: z.string().min(1, 'Please select a category'),
+  vendorName: z.string().optional(),
+  vendorCategory: z.string().optional(),
   displayName: z.string().min(2, 'Your name must be at least 2 characters'),
   phone: z.string().optional(),
 });
@@ -105,11 +105,17 @@ const LoginPage: React.FC = () => {
   };
   
   const onSignup = async (data: SignupFormValues) => {
+    const isStaffSignup = activeTab === 'signup' && location.search.includes('type=staff');
+    
     try {
-      const userType = activeTab === 'signup' ? 'vendor' : 'vendor_staff';
+      // Logic for user type assignment
+      // If signing up via staff link, mark as vendor_staff initially so they don't get created as full vendors
+      // AuthProvider's auto-detect will also double check and link them
+      const userType = isStaffSignup ? 'vendor_staff' : (activeTab === 'signup' ? 'vendor' : 'vendor_staff');
+      
       await signUp(data.email, data.password, {
-        vendor_name: data.vendorName,
-        vendor_category: data.vendorCategory,
+        vendor_name: isStaffSignup ? 'Staff Member' : data.vendorName,
+        vendor_category: isStaffSignup ? 'Staff' : data.vendorCategory,
         display_name: data.displayName,
         phone_number: data.phone || null
       }, userType);
@@ -471,47 +477,49 @@ const LoginPage: React.FC = () => {
                     )}
                   />
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={signupForm.control}
-                      name="vendorName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Business Name</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="Business" 
-                              className="sanskara-input"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={signupForm.control}
-                      name="vendorCategory"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <FormControl>
-                            <select 
-                              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                              {...field}
-                            >
-                              <option value="">Select</option>
-                              {categories.map(category => (
-                                <option key={category} value={category}>{category}</option>
-                              ))}
-                            </select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  {!location.search.includes('type=staff') && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={signupForm.control}
+                        name="vendorName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Business Name</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Business" 
+                                className="sanskara-input"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={signupForm.control}
+                        name="vendorCategory"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <FormControl>
+                              <select 
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                {...field}
+                              >
+                                <option value="">Select</option>
+                                {categories.map(category => (
+                                  <option key={category} value={category}>{category}</option>
+                                ))}
+                              </select>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                   
                   <Button 
                     type="submit" 

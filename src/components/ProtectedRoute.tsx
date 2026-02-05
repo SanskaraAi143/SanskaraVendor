@@ -11,9 +11,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   // If authenticated but no user type, they need to onboard
   const needsOnboarding = user && !isInitializing && !isLoadingUserType && !userType;
 
-  // Sign out ONLY if they have a type but it's not vendor
+  // Sign out ONLY if they have a type but it's not vendor OR staff
   const shouldSignOut =
-    user && !isInitializing && !isLoadingUserType && userType && userType !== 'vendor';
+    user && !isInitializing && !isLoadingUserType && userType && userType !== 'vendor' && userType !== 'staff';
 
   React.useEffect(() => {
     if (shouldSignOut) {

@@ -63,7 +63,7 @@ const VendorProfileView: React.FC<VendorProfileViewProps> = ({ profile }) => {
       {profile.portfolio_image_urls && profile.portfolio_image_urls.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Gallery</CardTitle>
+            <CardTitle>Main Portfolio</CardTitle>
           </CardHeader>
           <CardContent>
             <Carousel>
@@ -71,6 +71,28 @@ const VendorProfileView: React.FC<VendorProfileViewProps> = ({ profile }) => {
                 {profile.portfolio_image_urls.map((url, index) => (
                   <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
                     <img src={url} alt={`Portfolio image ${index + 1}`} className="rounded-lg object-cover h-64 w-full" />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious />
+              <CarouselNext />
+            </Carousel>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Past Event Photos */}
+      {profile.details?.pastEventPhotoUrls && profile.details.pastEventPhotoUrls.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Past Events</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Carousel>
+              <CarouselContent>
+                {profile.details.pastEventPhotoUrls.map((url: string, index: number) => (
+                  <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+                    <img src={url} alt={`Past event image ${index + 1}`} className="rounded-lg object-cover h-64 w-full" />
                   </CarouselItem>
                 ))}
               </CarouselContent>

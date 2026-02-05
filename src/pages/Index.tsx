@@ -8,45 +8,58 @@ import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile } = useAuth();
+  const { user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile, userType } = useAuth();
 
   useEffect(() => {
     if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) return;
 
     if (user) {
-      // If staffProfile exists and role is 'owner', treat as vendor
-      if (staffProfile && staffProfile.role === 'owner') {
+      // Priority 1: Check Staff Profile
+      if (staffProfile) {
         // User is vendor owner, check vendor onboarding
-        const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
-        const needsVendorOnboarding = !vendorProfile && !onboardingSkipped;
-        if (needsVendorOnboarding) {
-          navigate("/onboard");
-        } else {
-          navigate("/dashboard");
+        if (staffProfile.role === 'owner') {
+             const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+             const needsVendorOnboarding = !vendorProfile && !onboardingSkipped;
+             if (needsVendorOnboarding) navigate("/onboard");
+             else navigate("/dashboard");
+             return;
         }
-      } else if (staffProfile) {
+        
         // User is staff (not owner), check staff onboarding
         const needsStaffOnboarding = !staffProfile.display_name || !staffProfile.role || staffProfile.invitation_status === 'pending';
-        if (needsStaffOnboarding) {
-          navigate("/staff/onboarding");
-        } else {
-          navigate("/staff/dashboard");
-        }
-      } else if (vendorProfile) {
-        // User is vendor, check vendor onboarding
+        if (needsStaffOnboarding) navigate("/staff/onboarding");
+        else navigate("/staff/dashboard");
+        return;
+      } 
+      
+      // Priority 2: Check Vendor Profile
+      if (vendorProfile) {
         const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
         const needsVendorOnboarding = !vendorProfile && !onboardingSkipped;
-        if (needsVendorOnboarding) {
-          navigate("/onboard");
-        } else {
-          navigate("/dashboard");
-        }
+        if (needsVendorOnboarding) navigate("/onboard");
+        else navigate("/dashboard");
+        return;
+      }
+
+      // Priority 3: No profiles loaded yet, but user exists. Check user_type via Auth hook if available?
+      // But Index receives valid user... 
+      // If we are here, profiles are null but isLoading is false. This implies "New User" or "Broken State"
+      
+      // If the user_type logic in AuthProvider decided they are 'staff', but staffProfile failed to load?
+      // We should probably rely on userType from useAuth if available
+      // The useAuth hook exposes userType. Let's start using it in Index.tsx
+      // Priority 3: Fallback based on User Type if profiles are missing
+      // This catches new users who haven't completed onboarding or created profiles yet
+      if (userType === 'staff') {
+        navigate("/staff/onboarding");
+      } else if (userType === 'vendor') {
+        navigate("/onboard");
       } else {
-        // User exists but no profile found, redirect to login
-        navigate("/login");
+         // Default catch-all
+         navigate("/login");
       }
     }
-  }, [user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile, navigate]);
+  }, [user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile, navigate, userType]);
 
   // Show loading while checking authentication
   if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) {

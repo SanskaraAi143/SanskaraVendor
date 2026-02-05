@@ -152,12 +152,8 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       );
       const userSnapshot = await getDocs(userQuery);
 
-      let supabase_auth_uid = null;
-
       if (!userSnapshot.empty) {
-        // User exists, directly add to staff
-        supabase_auth_uid = userSnapshot.docs[0].data().supabase_auth_uid;
-
+        // User exists
         toast({
           title: 'User Found',
           description: 'User already exists in system. Adding to your staff directly.',
@@ -181,7 +177,6 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
         phone_number: formData.phone_number || null,
         role: formData.role,
         is_active: true,
-        supabase_auth_uid,
         created_at: new Date().toISOString()
       });
 

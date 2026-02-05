@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import {
   doc,
@@ -82,9 +83,9 @@ const BookingDetails: React.FC<BookingDetailsProps> = ({ bookingId, open, onOpen
       if (bookingData.booking_source === 'vendor_manual' && bookingData.custom_customer_details) {
         // Assert the type of custom_customer_details for direct access
         const customDetails = bookingData.custom_customer_details as CustomCustomerDetails;
-        clientName = customDetails.name;
-        clientEmail = customDetails.email;
-        clientPhone = customDetails.phone || 'N/A';
+        clientName = customDetails?.name || 'Unknown Client';
+        clientEmail = customDetails?.email || 'N/A';
+        clientPhone = customDetails?.phone || 'N/A';
       } else if (bookingData.user_id) {
         const userDoc = await getDoc(doc(db, 'users', bookingData.user_id));
         if (userDoc.exists()) {
