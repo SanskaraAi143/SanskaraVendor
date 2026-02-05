@@ -4,7 +4,7 @@ import { VendorOnboarding } from './AiVendorOnboarding.tsx';
 import { StaffOnboarding } from './AiStaffOnboarding';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -57,12 +57,16 @@ const AiOnboardingApp: React.FC<AiOnboardingAppProps> = ({ onComplete, onError }
         if (!user) return;
 
         try {
+            // Force update user_type in users collection to ensure ProtectedRoute works
+            const userRef = doc(db, 'users', user.uid);
+            await setDoc(userRef, { user_type: 'vendor' }, { merge: true });
+
             if (userType === 'vendor' || !userType) {
                 const vendorRef = doc(db, 'vendors', user.uid);
-                await updateDoc(vendorRef, {
+                await setDoc(vendorRef, {
                     status: 'onboarding_complete',
                     updated_at: new Date().toISOString()
-                });
+                }, { merge: true });
                 await refreshVendorProfile();
             }
             

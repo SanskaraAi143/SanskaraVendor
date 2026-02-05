@@ -327,6 +327,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error: any) {
       console.error("Phone Auth Wrapper Error:", error);
+      throw error;
     } finally {
       setIsLoading(false);
     }

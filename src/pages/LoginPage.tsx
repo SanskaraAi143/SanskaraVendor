@@ -141,7 +141,8 @@ const LoginPage: React.FC = () => {
       await signInWithPhone(phoneNumber);
       setShowOtpInput(true);
     } catch (error) {
-      // Error is already toasted in useAuth
+      // Error is already toasted in useAuth, but we catch here to prevent switching to OTP view
+      console.error("Phone sign-in failed:", error);
     }
   };
 
@@ -313,6 +314,7 @@ const LoginPage: React.FC = () => {
                           onChange={(e) => setOtp(e.target.value)} 
                           placeholder="Enter 6-digit code" 
                           className="pl-10 sanskara-input"
+                          autoComplete="one-time-code"
                         />
                       </div>
                     </div>
@@ -343,6 +345,7 @@ const LoginPage: React.FC = () => {
                           onChange={(e) => setPhoneNumber(e.target.value)} 
                           placeholder="+91 98765 43210" 
                           className="pl-10 sanskara-input"
+                          autoComplete="tel"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">We'll send you a verification code</p>
@@ -531,6 +534,7 @@ const LoginPage: React.FC = () => {
                         onChange={(e) => setOtp(e.target.value)} 
                         placeholder="Enter 6-digit code" 
                         className="sanskara-input"
+                        autoComplete="one-time-code"
                       />
                     </div>
                     <Button 
@@ -551,6 +555,7 @@ const LoginPage: React.FC = () => {
                         onChange={(e) => setPhoneNumber(e.target.value)} 
                         placeholder="+91 98765 43210" 
                         className="sanskara-input"
+                        autoComplete="tel"
                       />
                     </div>
                     <Button 

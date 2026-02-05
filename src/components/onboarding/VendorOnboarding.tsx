@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2 } from 'lucide-react';
@@ -240,9 +240,9 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
                 updated_at: new Date().toISOString()
             };
 
-            // Update the existing vendor record in Firestore
+            // Update or create the vendor record in Firestore
             const vendorRef = doc(db, 'vendors', user.uid);
-            await updateDoc(vendorRef, vendorUpdateData);
+            await setDoc(vendorRef, vendorUpdateData, { merge: true });
 
             // Fetch current vendor data to get vendor_id (which might be the doc ID or a field)
             const vendorSnap = await getDoc(vendorRef);
@@ -275,8 +275,14 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
             if (onComplete) {
                 onComplete({ vendorId: vendorId });
             }
+
+            // Force update user_type in users collection to ensure ProtectedRoute works
+            const userRef = doc(db, 'users', user.uid);
+            await setDoc(userRef, { user_type: 'vendor' }, { merge: true });
+
             // Refresh the vendor profile in AuthContext
-            refreshVendorProfile();
+            await refreshVendorProfile();
+            await refreshUserType();
             setStep(8);
         } catch (error: any) {
             console.error("Submission Error:", error);
@@ -284,7 +290,7 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
                 onError("Submission Error", error.message || "Failed to submit form.");
             }
         }
-    }, [user, formData, onError, onComplete, refreshVendorProfile]);
+    }, [user, formData, onError, onComplete, refreshVendorProfile, refreshUserType]);
 
     const handleNext = useCallback(async () => {
         if (step < 6) {
@@ -294,11 +300,26 @@ export const VendorOnboarding: React.FC<VendorOnboardingProps> = ({ onBack, onCo
             await handleSubmit();
         }
     }, [step, handleSubmit]);
+    
+    // Auto-redirect after completion
+    useEffect(() => {
+        if (step === 8) {
+            const timer = setTimeout(() => {
+                navigate('/dashboard');
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [step, navigate]);
 
     const handleSkip = useCallback(async () => {
         if (!user) return;
         try {
             setIsSkipping(true);
+            
+            // Force update user_type in users collection to ensure ProtectedRoute works
+            const userRef = doc(db, 'users', user.uid);
+            await setDoc(userRef, { user_type: 'vendor' }, { merge: true });
+
             const vendorRef = doc(db, 'vendors', user.uid);
             await setDoc(vendorRef, {
                 status: 'onboarding_complete',
