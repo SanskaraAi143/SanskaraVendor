@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../integrations/supabase/client';
+import { auth } from '../lib/firebase';
+import { updatePassword } from 'firebase/auth';
 import './StaffResetPassword.css';
 
 const StaffResetPassword: React.FC = () => {
@@ -16,16 +17,18 @@ const StaffResetPassword: React.FC = () => {
       return;
     }
 
+    if (!auth.currentUser) {
+      setError('No user is currently signed in. Please log in again.');
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccess(true);
-        setTimeout(() => navigate('/staff/login'), 3000);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+      await updatePassword(auth.currentUser, password);
+      setSuccess(true);
+      setTimeout(() => navigate('/staff/login'), 3000);
+    } catch (err: any) {
+      console.error('Password update error:', err);
+      setError(err.message || 'An unexpected error occurred');
     }
   };
 

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { supabase } from '@/integrations/supabase/client';
-import { 
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface Staff {
   staff_id: string;
@@ -33,7 +33,6 @@ export interface Staff {
   phone_number: string | null;
   role: string;
   is_active: boolean;
-  invitation_status?: string;
 }
 
 interface StaffListProps {
@@ -57,26 +56,6 @@ const getRoleBadgeColor = (role: string) => {
   }
 };
 
-// Helper function to get invitation status badge
-const getInvitationStatus = (status: string | undefined, isActive: boolean) => {
-  if (!status) return null;
-  
-  if (!isActive) {
-    return <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">Deactivated</Badge>;
-  }
-  
-  switch (status.toLowerCase()) {
-    case 'pending':
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">Invited</Badge>;
-    case 'accepted':
-      return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">Active</Badge>;
-    case 'declined':
-      return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Declined</Badge>;
-    default:
-      return null;
-  }
-};
-
 const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
   const { user } = useAuth();
   const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
@@ -86,20 +65,18 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
   const handleToggleActive = async (staffId: string, isCurrentlyActive: boolean) => {
     try {
       setIsProcessing(true);
-      console.log("Toggling staff active status:", staffId, "Current status:", isCurrentlyActive);
-      
-      const { error } = await supabase
-        .from('vendor_staff')
-        .update({ is_active: !isCurrentlyActive })
-        .eq('staff_id', staffId);
-        
-      if (error) throw error;
-      
+
+      const staffRef = doc(db, 'vendor_staff', staffId);
+      await updateDoc(staffRef, {
+        is_active: !isCurrentlyActive,
+        updated_at: new Date().toISOString()
+      });
+
       toast({
         title: isCurrentlyActive ? 'Staff Deactivated' : 'Staff Activated',
         description: `Staff member has been ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully.`,
       });
-      
+
       // Refresh the list
       onRefresh();
     } catch (error) {
@@ -113,71 +90,36 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       setIsProcessing(false);
     }
   };
-  
-  const handleResendInvitation = async (staffId: string, email: string) => {
-    try {
-      setIsProcessing(true);
-      console.log("Resending invitation for staff:", staffId, email);
-      
-      // Update the invitation status to trigger a new email
-      const { error } = await supabase
-        .from('vendor_staff_invite')
-        .update({ invitation_status: 'pending', updated_at: new Date().toISOString() })
-        .eq('email', email);
-      
-      if (error) {
-        console.error('Error updating invitation:', error);
-        throw error;
-      }
-      
-      toast({
-        title: 'Invitation Resent',
-        description: `Invitation has been resent to ${email}`,
-      });
-      
-      onRefresh();
-    } catch (error) {
-      console.error('Error resending invitation:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to resend invitation',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
+
   const handleDeleteStaff = (staff: Staff) => {
     setStaffToDelete(staff);
     setIsAlertOpen(true);
   };
-  
+
   const confirmDeleteStaff = async () => {
     if (!staffToDelete) return;
-    
+
     try {
       setIsProcessing(true);
-      console.log("Deleting staff member:", staffToDelete.staff_id);
-      
-      const { error } = await supabase
-        .from('vendor_staff')
-        .delete()
-        .eq('staff_id', staffToDelete.staff_id);
-        
-      if (error) throw error;
-      
+
+      const staffRef = doc(db, 'vendor_staff', staffToDelete.staff_id);
+      await deleteDoc(staffRef);
+
       toast({
         title: 'Staff Deleted',
         description: 'Staff member has been removed successfully.',
       });
-      
+
       // Also delete the invitation if it exists
-      await supabase
-        .from('vendor_staff_invite')
-        .delete()
-        .eq('email', staffToDelete.email);
-      
+      const inviteQuery = query(
+        collection(db, 'vendor_staff_invite'),
+        where('email', '==', staffToDelete.email)
+      );
+      const inviteSnapshot = await getDocs(inviteQuery);
+      inviteSnapshot.docs.forEach(async (doc) => {
+        await deleteDoc(doc.ref);
+      });
+
       // Refresh the list
       onRefresh();
     } catch (error) {
@@ -193,7 +135,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
       setIsProcessing(false);
     }
   };
-  
+
   return (
     <>
       <Card>
@@ -216,7 +158,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       <Badge className={getRoleBadgeColor(staff.role)}>
                         {staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}
                       </Badge>
-                      {getInvitationStatus(staff.invitation_status, staff.is_active)}
                       {staff.email === user?.email && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">You</Badge>
                       )}
@@ -234,7 +175,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Only show actions for other staff members */}
                   {staff.email !== user?.email && (
                     <DropdownMenu>
@@ -246,11 +187,6 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        {staff.invitation_status === 'pending' && (
-                          <DropdownMenuItem onClick={() => handleResendInvitation(staff.staff_id, staff.email)}>
-                            <Mail className="mr-2 h-4 w-4" /> Resend Invitation
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onClick={() => handleToggleActive(staff.staff_id, staff.is_active)}>
                           {staff.is_active ? (
                             <><UserX className="mr-2 h-4 w-4" /> Deactivate</>
@@ -271,7 +207,7 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
           )}
         </CardContent>
       </Card>
-      
+
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -282,8 +218,8 @@ const StaffList: React.FC<StaffListProps> = ({ staffMembers, onRefresh }) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteStaff} 
+            <AlertDialogAction
+              onClick={confirmDeleteStaff}
               className="bg-red-600 hover:bg-red-700"
               disabled={isProcessing}
             >

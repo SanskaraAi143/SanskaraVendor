@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 
 interface RevenueChartProps {
@@ -19,11 +20,11 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
   const [chartData, setChartData] = useState<RevenueData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear());
-  
+
   useEffect(() => {
     const fetchRevenueData = async () => {
       if (!vendorId) return;
-      
+
       try {
         setIsLoading(true);
         const lastSixMonths = Array.from({ length: 6 }, (_, i) => {
@@ -35,30 +36,31 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
             revenue: 0
           };
         }).reverse();
-        
-        // Fetch payments data
-        const { data, error } = await supabase
-          .from('payments')
-          .select('amount, paid_at')
-          .eq('payment_status', 'completed');
-          
-        if (error) throw error;
-        
+
+        // Fetch payments data from Firestore
+        const paymentsQuery = query(
+          collection(db, 'payments'),
+          where('payment_status', '==', 'completed')
+        );
+        const paymentsSnapshot = await getDocs(paymentsQuery);
+        const paymentsData = paymentsSnapshot.docs.map(doc => doc.data());
+
         // Process data into monthly revenue
         const monthlyData = lastSixMonths.map((monthData) => {
-          const monthRevenue = data
+          const monthRevenue = paymentsData
             ?.filter((payment) => {
+              if (!payment.paid_at) return false;
               const paidDate = new Date(payment.paid_at);
               return paidDate >= monthData.startDate && paidDate <= monthData.endDate;
             })
             .reduce((sum, payment) => sum + (payment.amount || 0), 0);
-            
+
           return {
             name: monthData.month,
             revenue: monthRevenue || 0
           };
         });
-        
+
         setChartData(monthlyData);
       } catch (error) {
         console.error('Error fetching revenue data:', error);
@@ -67,7 +69,7 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
           description: "Could not load revenue data",
           variant: "destructive",
         });
-        
+
         // Set sample data if real data fetch fails
         setChartData([
           { name: 'Jan', revenue: 25000 },
@@ -81,10 +83,10 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
         setIsLoading(false);
       }
     };
-    
+
     fetchRevenueData();
   }, [vendorId]);
-  
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -92,7 +94,7 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
       maximumFractionDigits: 0
     }).format(value);
   };
-  
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -106,7 +108,7 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ vendorId }) => {
     }
     return null;
   };
-  
+
   return (
     <Card className="sanskara-card">
       <CardHeader className="pb-2">

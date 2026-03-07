@@ -1,7 +1,13 @@
-
 import React, { useState } from 'react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,18 +60,19 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
 
   const checkEmailStatus = async (email: string) => {
     if (!email) return;
-    
+
     setEmailStatus('checking');
-    
+
     try {
       // Check if email exists in vendor_staff
-      const { data: staffData } = await supabase
-        .from('vendor_staff')
-        .select('staff_id, vendor_id')
-        .eq('email', email)
-        .single();
+      const staffQuery = query(
+        collection(db, 'vendor_staff'),
+        where('email', '==', email)
+      );
+      const staffSnapshot = await getDocs(staffQuery);
 
-      if (staffData) {
+      if (!staffSnapshot.empty) {
+        const staffData = staffSnapshot.docs[0].data();
         if (staffData.vendor_id === vendorProfile?.vendor_id) {
           setEmailStatus('exists');
           return;
@@ -73,13 +80,13 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       }
 
       // Check if email is a vendor
-      const { data: vendorData } = await supabase
-        .from('vendors')
-        .select('vendor_id')
-        .eq('contact_email', email)
-        .single();
+      const vendorQuery = query(
+        collection(db, 'vendors'),
+        where('contact_email', '==', email)
+      );
+      const vendorSnapshot = await getDocs(vendorQuery);
 
-      if (vendorData) {
+      if (!vendorSnapshot.empty) {
         setEmailStatus('vendor');
         return;
       }
@@ -139,58 +146,39 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       }
 
       // Check if user already exists in users table
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('user_id, supabase_auth_uid')
-        .eq('email', formData.email)
-        .single();
-      
-      let supabase_auth_uid = null;
-      
-      if (existingUser) {
-        // User exists, directly add to staff
-        supabase_auth_uid = existingUser.supabase_auth_uid;
-        
+      const userQuery = query(
+        collection(db, 'users'),
+        where('email', '==', formData.email)
+      );
+      const userSnapshot = await getDocs(userQuery);
+
+      if (!userSnapshot.empty) {
+        // User exists
         toast({
           title: 'User Found',
           description: 'User already exists in system. Adding to your staff directly.',
           variant: 'default'
         });
       } else {
-        // Invite new user
-        const { data: inviteResponse, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-          formData.email
-        );
-
-        if (inviteError) {
-          throw new Error('Failed to invite user: ' + inviteError.message);
-        }
-
-        supabase_auth_uid = inviteResponse?.user?.id || null;
-        
+        // In Firebase client SDK, we cannot invite users by email directly like Supabase.
+        // We add them to vendor_staff, and they will be linked when they sign up with the same email.
         toast({
-          title: 'Invitation Sent',
-          description: 'The user has been invited and will need to verify their email.',
+          title: 'Staff Record Created',
+          description: 'Staff member added. They will need to sign up for an account to access the portal.',
           variant: 'default'
         });
       }
 
-      // Insert into vendor_staff table
-      const { error: staffInsertError } = await supabase
-        .from('vendor_staff')
-        .insert({
-          vendor_id: vendorProfile.vendor_id,
-          email: formData.email,
-          display_name: formData.display_name,
-          phone_number: formData.phone_number || null,
-          role: formData.role,
-          is_active: true,
-          supabase_auth_uid,
-        });
-
-      if (staffInsertError) {
-        throw new Error('Failed to add staff member: ' + staffInsertError.message);
-      }
+      // Insert into vendor_staff collection
+      await addDoc(collection(db, 'vendor_staff'), {
+        vendor_id: vendorProfile.vendor_id,
+        email: formData.email,
+        display_name: formData.display_name,
+        phone_number: formData.phone_number || null,
+        role: formData.role,
+        is_active: true,
+        created_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Staff Added',
@@ -209,7 +197,7 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
       if (onSuccess) {
         onSuccess();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding staff:', error);
       toast({
         title: 'Error',
@@ -285,7 +273,7 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
               placeholder="Full name"
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
             <Input
@@ -300,7 +288,7 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
             />
             {renderEmailStatusAlert()}
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="phone_number">Phone Number</Label>
             <Input
@@ -311,7 +299,7 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
               placeholder="Phone number (optional)"
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
             <Select
@@ -332,8 +320,8 @@ const EnhancedStaffForm: React.FC<StaffFormProps> = ({ onSuccess }) => {
           </div>
         </CardContent>
         <CardFooter>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={isSubmitting || emailStatus === 'exists' || emailStatus === 'vendor'}
           >
             {isSubmitting ? (

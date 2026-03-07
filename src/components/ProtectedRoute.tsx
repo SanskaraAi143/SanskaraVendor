@@ -1,52 +1,51 @@
 
 import React from 'react';
-import { useAuth } from '../hooks/useAuthContext';
-import { supabase } from '../integrations/supabase/client';
-import { useLocation, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { Navigate, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, vendorProfile } = useAuth();
+  const { user, isInitializing, isLoadingUserType, userType, signOut } = useAuth();
   const location = useLocation();
-  const [showPopup, setShowPopup] = useState(false);
-  const [redirect, setRedirect] = useState(false);
 
-  useEffect(() => {
-    const checkStaff = async () => {
-      if (user) {
-        // Check if user is a staff (not owner)
-        const { data: staffData } = await supabase
-          .from('vendor_staff')
-          .select('role')
-          .eq('supabase_auth_uid', user.id)
-          .single();
-        if (staffData && staffData.role && staffData.role !== 'owner') {
-          await supabase.auth.signOut();
-          setShowPopup(true);
-          setTimeout(() => setRedirect(true), 2000);
-        }
-      }
-    };
-    checkStaff();
-  }, [user]);
+  // If authenticated but no user type, they need to onboard
+  const needsOnboarding = user && !isInitializing && !isLoadingUserType && !userType;
 
-  if (showPopup) {
+  // Sign out ONLY if they have a type but it's not vendor OR staff
+  const shouldSignOut =
+    user && !isInitializing && !isLoadingUserType && userType && userType !== 'vendor' && userType !== 'staff';
+
+  React.useEffect(() => {
+    if (shouldSignOut) {
+      console.warn('ProtectedRoute: Redirecting to login because userType is invalid for vendor portal:', userType);
+      signOut();
+    }
+  }, [shouldSignOut, signOut]);
+
+  // Show loading state while checking auth and user type
+  if (isInitializing || isLoadingUserType) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-        <div className="bg-white p-6 rounded shadow text-center">
-          <p className="mb-4 text-lg font-semibold">Access Restricted</p>
-          <p className="mb-2">Staff members cannot access vendor portal. Please log in as a vendor.</p>
-          <p>Redirecting to vendor login...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-lg">Loading...</p>
       </div>
     );
   }
-  if (redirect) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+
+  // Not authenticated
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
+
+  // Authenticated but no profile yet -> Onboard
+  if (needsOnboarding) {
+    return <Navigate to="/onboard" replace />;
+  }
+
+  if (shouldSignOut) {
+    return null;
+  }
+
   return <>{children}</>;
 };
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { NotificationSection, NotificationSettings } from '@/components/settings/NotificationSection';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
-import { Json } from '@/integrations/supabase/types';
 
 const Settings: React.FC = () => {
   const { vendorProfile, user } = useAuth();
@@ -16,13 +16,13 @@ const Settings: React.FC = () => {
     booking_updates: true,
     marketing_notifications: false
   });
-  
+
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
+    if (user?.uid) {
       fetchSettings();
     }
-  }, [vendorProfile]);
-  
+  }, [user]);
+
   const isNotificationSettings = (data: any): data is NotificationSettings => {
     return (
       typeof data === 'object' &&
@@ -33,30 +33,27 @@ const Settings: React.FC = () => {
   };
 
   const fetchSettings = async () => {
+    if (!user?.uid) return;
     setIsLoading(true);
     try {
-      // Fetch user profile details
-      const { data, error } = await supabase
-        .from('users')
-        .select('preferences')
-        .eq('supabase_auth_uid', user?.id)
-        .single();
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
 
-      if (error) throw error;
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        let notifSettings: NotificationSettings = {
+          email_notifications: true,
+          booking_updates: true,
+          marketing_notifications: false
+        };
 
-      // Check for notification_settings in preferences
-      let notifSettings: NotificationSettings = {
-        email_notifications: true,
-        booking_updates: true,
-        marketing_notifications: false
-      };
+        const preferences = userData?.preferences as { notification_settings?: NotificationSettings } | null;
+        if (preferences?.notification_settings) {
+          notifSettings = preferences.notification_settings;
+        }
 
-      const preferences = data?.preferences as { notification_settings?: NotificationSettings } | null;
-      if (preferences?.notification_settings) {
-        notifSettings = preferences.notification_settings;
+        setNotificationSettings(notifSettings);
       }
-
-      setNotificationSettings(notifSettings);
     } catch (error) {
       console.error('Error fetching settings:', error);
       toast({
@@ -68,31 +65,26 @@ const Settings: React.FC = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleNotificationChange = (setting: keyof NotificationSettings) => {
     setNotificationSettings(prev => ({
       ...prev,
       [setting]: !prev[setting]
     }));
   };
-  
+
   const saveSettings = async () => {
-    if (!user?.id) return;
+    if (!user?.uid) return;
 
     setIsSaving(true);
 
     try {
-      // Update notification settings in preferences
-      const { error } = await supabase
-        .from('users')
-        .update({
-          preferences: {
-            notification_settings: { ...notificationSettings }
-          }
-        })
-        .eq('supabase_auth_uid', user.id);
-
-      if (error) throw error;
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        preferences: {
+          notification_settings: { ...notificationSettings }
+        }
+      });
 
       toast({
         title: 'Settings saved',
@@ -110,18 +102,17 @@ const Settings: React.FC = () => {
       setIsSaving(false);
     }
   };
-  
+
   const handleDeactivateAccount = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
+    if (!user?.uid) return;
+
     try {
-      const { error } = await supabase
-        .from('vendors')
-        .update({ is_active: false })
-        .eq('vendor_id', vendorProfile.vendor_id);
-        
-      if (error) throw error;
-      
+      const vendorRef = doc(db, 'vendors', user.uid);
+      await updateDoc(vendorRef, {
+        is_active: false,
+        updated_at: new Date().toISOString()
+      });
+
       toast({
         title: 'Account deactivated',
         description: 'Your account has been temporarily deactivated',
@@ -157,18 +148,18 @@ const Settings: React.FC = () => {
 
       <div className="grid gap-6">
         {/* Notifications */}
-        <NotificationSection 
+        <NotificationSection
           notificationSettings={notificationSettings}
           isSaving={isSaving}
           handleNotificationChange={handleNotificationChange}
           saveSettings={saveSettings}
         />
-        
+
         {/* Security */}
         <SecuritySection />
-        
+
         {/* Danger Zone */}
-        <DangerZoneSection 
+        <DangerZoneSection
           handleDeactivateAccount={handleDeactivateAccount}
         />
       </div>

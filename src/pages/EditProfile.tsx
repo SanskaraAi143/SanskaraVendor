@@ -1,31 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth, AddressData, PricingRangeData } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { AddressData, PricingRangeData } from '@/types/auth';
 import { toast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { Loader } from 'lucide-react';
-import ImageUploader from '@/components/ImageUploader';
-import { uploadMultipleFiles, deleteFile } from '@/utils/uploadHelpers';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Loader, ImageIcon } from 'lucide-react';
+import TaggedImageUploader from '@/components/TaggedImageUploader';
+import { TaggedImages, convertToTaggedImages, convertForDatabase } from '@/utils/taggedUploadHelpers';
+import { useNavigate } from 'react-router-dom';
 
-// Vendor categories from the schema
 const vendorCategories = [
-  "Venue", "Catering", "Photography", "Videography", "Decor", 
+  "Venue", "Catering", "Photography", "Videography", "Decor",
   "Makeup", "Clothing", "Music", "Transportation", "Invitation", "Other"
 ];
 
 const EditProfile: React.FC = () => {
   const { vendorProfile, user, refreshVendorProfile } = useAuth();
   const navigate = useNavigate();
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  
+
   // Form state
   const [profile, setProfile] = useState({
     vendor_name: '',
@@ -34,35 +34,29 @@ const EditProfile: React.FC = () => {
     phone_number: '',
     website_url: '',
     description: '',
-    address: { city: '', state: '', country: 'India', full_address: '' } as AddressData,
-    pricing_range: { min: '', max: '', currency: 'INR' } as PricingRangeData,
+    address: { city: '', state: '', country: 'India' } as AddressData,
+    pricing_range: { min: undefined, max: undefined, currency: 'INR' } as PricingRangeData,
+    status: '',
   });
-  
-  // Image upload state
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<string[]>([]);
-  
-  // Load full profile data on component mount if not already loaded
+
+  // Tagged images state
+  const [taggedImages, setTaggedImages] = useState<TaggedImages | null>(null);
+
   useEffect(() => {
     const loadVendorData = async () => {
-      if (!user) return;
-      
+      if (!user?.uid) return;
+
       try {
         setIsLoading(true);
-        const { data, error } = await supabase
-          .from('vendors')
-          .select('*')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const vendorRef = doc(db, 'vendors', user.uid);
+        const vendorSnap = await getDoc(vendorRef);
 
-        if (error) throw error;
-        
-        if (data) {
-          // Parse JSON fields with type safety
-          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India', full_address: '' };
-          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: '', max: '', currency: 'INR' };
-          const portfolio_images = (data.portfolio_image_urls as string[]) || [];
-          
+        if (vendorSnap.exists()) {
+          const data = vendorSnap.data();
+          const address = (data.address as unknown as AddressData) || { city: '', state: '', country: 'India' };
+          const pricing_range = (data.pricing_range as unknown as PricingRangeData) || { min: undefined, max: undefined, currency: 'INR' };
+          const portfolio_images = convertToTaggedImages(data.portfolio_image_urls);
+
           setProfile({
             vendor_name: data.vendor_name || '',
             vendor_category: data.vendor_category || '',
@@ -72,10 +66,10 @@ const EditProfile: React.FC = () => {
             description: data.description || '',
             address,
             pricing_range,
+            status: data.status || '',
           });
-          
-          // Set existing images
-          setExistingImages(portfolio_images);
+
+          setTaggedImages(portfolio_images);
         }
       } catch (error) {
         console.error('Error loading vendor data:', error);
@@ -90,13 +84,13 @@ const EditProfile: React.FC = () => {
     };
 
     loadVendorData();
-  }, [user, vendorProfile]);
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
-  
+
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({
@@ -107,14 +101,14 @@ const EditProfile: React.FC = () => {
       }
     }));
   };
-  
+
   const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({
       ...prev,
       pricing_range: {
         ...prev.pricing_range,
-        [name]: value
+        [name]: Number(value) || undefined
       }
     }));
   };
@@ -122,87 +116,38 @@ const EditProfile: React.FC = () => {
   const handleCategoryChange = (value: string) => {
     setProfile((prev) => ({ ...prev, vendor_category: value }));
   };
-  
-  const handleFileSelect = (files: File[]) => {
-    setSelectedFiles(prev => [...prev, ...files]);
-  };
-  
-  const handleRemoveExistingImage = async (url: string) => {
-    try {
-      // Remove the image from Supabase storage
-      const fileName = url.split('/').pop(); // Extract the file name from the URL
-      if (fileName && user?.id) {
-        const success = await deleteFile(url, 'vendors', user.id);
-        if (!success) throw new Error('Failed to delete file');
-      }
-
-      // Update the state to remove the image from the existing images array
-      setExistingImages(prev => prev.filter(image => image !== url));
-    } catch (error) {
-      console.error('Error removing image from storage:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to remove the image from storage',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user?.uid) return;
 
     try {
       setIsLoading(true);
-      
-      // First upload any new images
-      let uploadedImageUrls: string[] = [];
-      
-      if (selectedFiles.length > 0) {
-        setIsUploading(true);
-        uploadedImageUrls = await uploadMultipleFiles(
-          selectedFiles, 
-          'vendors', 
-          user.id
-        );
-        setIsUploading(false);
-        
-        // Clear selected files after upload
-        setSelectedFiles([]);
-      }
-      
-      // Combine existing and new images
-      const allImages = [...existingImages, ...uploadedImageUrls];
-      
-      const { error } = await supabase
-        .from('vendors')
-        .update({
-          vendor_name: profile.vendor_name,
-          vendor_category: profile.vendor_category,
-          contact_email: profile.contact_email,
-          phone_number: profile.phone_number,
-          website_url: profile.website_url,
-          description: profile.description,
-          address: profile.address as any,
-          pricing_range: profile.pricing_range as any,
-          portfolio_image_urls: allImages,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('supabase_auth_uid', user.id);
 
-      if (error) throw error;
-      
-      // Refresh profile data in context
+      const vendorRef = doc(db, 'vendors', user.uid);
+      await updateDoc(vendorRef, {
+        vendor_name: profile.vendor_name,
+        vendor_category: profile.vendor_category,
+        contact_email: profile.contact_email,
+        phone_number: profile.phone_number,
+        website_url: profile.website_url,
+        description: profile.description,
+        address: profile.address as any,
+        pricing_range: profile.pricing_range as any,
+        portfolio_image_urls: convertForDatabase(taggedImages) as any,
+        updated_at: new Date().toISOString(),
+        status: profile.status,
+      });
+
       await refreshVendorProfile();
 
       toast({
         title: 'Success',
         description: 'Your profile has been updated',
       });
-      
-      // Navigate back to profile view
-      navigate('/profile');
-      
+
+      navigate('/dashboard/profile');
+
     } catch (error: any) {
       console.error('Error updating profile:', error);
       toast({
@@ -224,7 +169,7 @@ const EditProfile: React.FC = () => {
             Update your vendor profile information
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate('/profile')}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>Cancel</Button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -248,8 +193,8 @@ const EditProfile: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="vendor_category">Business Category</Label>
-                  <Select 
-                    value={profile.vendor_category} 
+                  <Select
+                    value={profile.vendor_category}
                     onValueChange={handleCategoryChange}
                   >
                     <SelectTrigger>
@@ -292,7 +237,7 @@ const EditProfile: React.FC = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Business Description</Label>
                 <Textarea
@@ -303,7 +248,7 @@ const EditProfile: React.FC = () => {
                   rows={5}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="min">Minimum Price Range</Label>
@@ -316,7 +261,7 @@ const EditProfile: React.FC = () => {
                     type="number"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="max">Maximum Price Range</Label>
                   <Input
@@ -329,19 +274,19 @@ const EditProfile: React.FC = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="full_address">Business Address</Label>
                 <Textarea
-                  id="full_address"
-                  name="full_address"
-                  value={profile.address?.full_address || ''}
+                  id="street"
+                  name="street"
+                  value={profile.address?.street || ''}
                   onChange={handleAddressChange}
-                  placeholder="Full address of your business"
+                  placeholder="Street address of your business"
                   rows={2}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
@@ -353,7 +298,7 @@ const EditProfile: React.FC = () => {
                     placeholder="City"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="state">State</Label>
                   <Input
@@ -367,25 +312,30 @@ const EditProfile: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
-              <CardTitle>Portfolio Images</CardTitle>
-              <CardDescription>Upload images to showcase your services</CardDescription>
+              <CardTitle className="flex items-center">
+                <ImageIcon className="h-5 w-5 mr-2" />
+                Portfolio Images
+              </CardTitle>
+              <CardDescription>Upload and organize your portfolio images by categories</CardDescription>
             </CardHeader>
             <CardContent>
-              <ImageUploader
-                onFileSelect={handleFileSelect}
-                maxFiles={10}
-                existingImages={existingImages}
-                onRemoveExisting={handleRemoveExistingImage}
-                uploading={isUploading}
+              <TaggedImageUploader
+                taggedImages={taggedImages}
+                onImagesChange={setTaggedImages}
+                bucket="vendors"
+                folder={user?.uid}
+                category={profile.vendor_category || 'general'}
+                maxFilesPerTag={15}
+                maxTotalFiles={50}
               />
             </CardContent>
           </Card>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate('/profile')}>
+            <Button type="button" variant="outline" onClick={() => navigate('/dashboard/profile')}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>

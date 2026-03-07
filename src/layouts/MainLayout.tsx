@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import VendorSidebar from '@/components/VendorSidebar';
 import VendorHeader from '@/components/VendorHeader';
+import RouteContainer from '@/components/layout/RouteContainer';
 
 const MainLayout: React.FC = () => {
   return (
@@ -16,7 +17,9 @@ const MainLayout: React.FC = () => {
           <VendorHeader />
           
           <main className="p-4 md:p-6">
-            <Outlet />
+            <RouteContainer>
+              <Outlet />
+            </RouteContainer>
           </main>
         </div>
       </div>

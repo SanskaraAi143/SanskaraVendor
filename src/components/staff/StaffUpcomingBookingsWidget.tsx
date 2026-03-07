@@ -3,22 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardCard from '@/components/DashboardCard';
 import { BookOpen, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const StaffUpcomingBookingsWidget: React.FC = () => {
   const [bookingCount, setBookingCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, staffProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user) {
-      setIsLoading(false);
-      console.warn("StaffUpcomingBookingsWidget: User not authenticated.");
+    if (!user || !staffProfile) {
+      if (!authLoading && !staffProfile) {
+          setIsLoading(false);
+      }
       return;
     }
 
@@ -26,29 +28,23 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('vendor_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const vendorId = staffProfile.vendor_id;
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile || !staffProfile.vendor_id) {
-          setError('Staff profile or vendor association not found.');
+        if (!vendorId) {
+          setError('Vendor association not found.');
           return;
         }
-        
+
         const today = new Date().toISOString().split('T')[0];
 
-        const { count, error: bookingsError } = await supabase
-          .from('bookings')
-          .select('*', { count: 'exact', head: true })
-          .eq('vendor_id', staffProfile.vendor_id)
-          .gte('event_date', today);
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          where('vendor_id', '==', vendorId),
+          where('event_date', '>=', today)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
 
-        if (bookingsError) throw bookingsError;
-        
-        setBookingCount(count ?? 0);
+        setBookingCount(bookingsSnapshot.size);
 
       } catch (err: any) {
         console.error('Error fetching upcoming booking count:', err);
@@ -59,7 +55,7 @@ const StaffUpcomingBookingsWidget: React.FC = () => {
     };
 
     fetchBookingCount();
-  }, [user, authLoading, navigate]);
+  }, [user, staffProfile, authLoading]);
 
   const handleClick = () => {
     navigate('/staff/bookings');

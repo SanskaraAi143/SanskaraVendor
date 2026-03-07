@@ -5,7 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUpRight, Plus, CheckCircle, XCircle } from 'lucide-react'; // Added icons for active status
 import { toast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit
+} from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 interface Service {
@@ -30,24 +38,35 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
   useEffect(() => {
     const fetchServices = async () => {
       if (!vendorId) return;
-      
+
       try {
         setIsLoading(true);
-        let query = supabase
-          .from('vendor_services')
-          .select('*')
-          .eq('vendor_id', vendorId);
 
+        let servicesQuery;
         if (!showAll) { // For widget view, show only active and limited
-          query = query.eq('is_active', true).limit(4);
+          servicesQuery = query(
+            collection(db, 'vendor_services'),
+            where('vendor_id', '==', vendorId),
+            where('is_active', '==', true),
+            limit(4)
+          );
         } else { // For dedicated page, show all, order by active status then name
-           query = query.order('is_active', { ascending: false }).order('service_name', { ascending: true });
+          // Note: multiple orderBys in Firestore might require an index. 
+          // For now, I'll just do one orderBy or sort in memory if needed.
+          servicesQuery = query(
+            collection(db, 'vendor_services'),
+            where('vendor_id', '==', vendorId),
+            orderBy('service_name', 'asc')
+          );
         }
-          
-        const { data, error } = await query;
-        if (error) throw error;
-        
-        setServices(data as Service[] || []);
+
+        const querySnapshot = await getDocs(servicesQuery);
+        const data = querySnapshot.docs.map(doc => ({
+          ...(doc.data() as any),
+          service_id: doc.id
+        }));
+
+        setServices(data as Service[]);
       } catch (error) {
         console.error('Error fetching services:', error);
         toast({
@@ -59,23 +78,23 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
         setIsLoading(false);
       }
     };
-    
+
     fetchServices();
   }, [vendorId, showAll]);
 
   const formatPrice = (price?: number, unit?: string | null) => {
     if (price === undefined || price === null) return "Quote on request";
-    
+
     const formattedPrice = new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
     }).format(price);
-    
+
     if (unit) {
       return `${formattedPrice} / ${unit}`;
     }
-    
+
     return formattedPrice;
   };
 
@@ -88,7 +107,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
         <CardTitle className="flex items-center justify-between">
           <span>{showAll ? 'All Vendor Services' : 'Your Services'}</span>
           {!showAll && (
-            <Link to="/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
+            <Link to="/dashboard/services" className="text-sm font-normal text-sanskara-red flex items-center cursor-pointer hover:underline">
               View All <ArrowUpRight className="ml-1 h-4 w-4" />
             </Link>
           )}
@@ -117,7 +136,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
                     <h3 className="font-semibold text-lg text-sanskara-blue leading-tight mb-1">{service.service_name}</h3>
                     <Badge variant="outline" className="text-xs mb-1">{service.service_category}</Badge>
                     {showAll && (
-                       <Badge variant={service.is_active ? "default" : "destructive"} className={`text-xs ml-2 flex items-center w-fit ${service.is_active ? 'bg-sanskara-green hover:bg-sanskara-green/90 text-white' : 'bg-sanskara-red hover:bg-sanskara-red/90 text-white'}`}>
+                      <Badge variant={service.is_active ? "default" : "destructive"} className={`text-xs ml-2 flex items-center w-fit ${service.is_active ? 'bg-sanskara-green hover:bg-sanskara-green/90 text-white' : 'bg-sanskara-red hover:bg-sanskara-red/90 text-white'}`}>
                         {service.is_active ? <CheckCircle className="mr-1 h-3 w-3" /> : <XCircle className="mr-1 h-3 w-3" />}
                         {service.is_active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -132,7 +151,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
               </div>
             ))}
             {!showAll && (
-              <Link to="/services/add"> {/* This link might need to be dynamic for staff if they can add services */}
+              <Link to="/dashboard/services/add"> {/* This link might need to be dynamic for staff if they can add services */}
                 <Button variant="outline" className="w-full mt-2 flex items-center justify-center">
                   <Plus className="mr-1 h-4 w-4" /> Add Service
                 </Button>
@@ -145,7 +164,7 @@ const ServicesList: React.FC<ServicesListProps> = ({ vendorId, showAll = false }
               {showAll ? 'This vendor has not added any services yet.' : "You haven't added any services yet"}
             </p>
             {!showAll && (
-               <Link to="/services/add"> {/* This link might need to be dynamic for staff */}
+              <Link to="/dashboard/services/add"> {/* This link might need to be dynamic for staff */}
                 <Button className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Your First Service

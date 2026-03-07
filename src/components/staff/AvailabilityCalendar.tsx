@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
+const formatDateToYYYYMMDD = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface AvailabilityRecord {
   staff_availability_id: string;
   available_date: string;
@@ -42,7 +49,7 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
     
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
+      days.push(new Date(year, month, day, 12)); // Set time to noon to avoid timezone issues
     }
     
     return days;
@@ -120,7 +127,7 @@ const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
                   ${date ? 'hover:bg-gray-50' : ''}
                   ${isToday ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}
                 `}
-                onClick={() => date && onDateClick(date.toISOString().split('T')[0])}
+                onClick={() => date && onDateClick(formatDateToYYYYMMDD(date))}
               >
                 {date && (
                   <>

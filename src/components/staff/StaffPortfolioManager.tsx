@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,22 +5,47 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  doc,
+  getDoc,
+  query,
+  collection,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
-import { ImageIcon, Plus, Trash2, Upload, Loader2 } from 'lucide-react';
+import { ImageIcon, Plus, Trash2, Loader2, Upload } from 'lucide-react';
+import TaggedImageUploadModal from '@/components/modals/TaggedImageUploadModal';
+import TaggedImageViewer from '@/components/TaggedImageViewer';
+import { TaggedImages, convertToTaggedImages, convertForDatabase, addImagesToTag, removeImageFromTag, deleteImageFromStorage } from '@/utils/taggedUploadHelpers';
 
 interface Portfolio {
   portfolio_id: string;
   title: string;
   description: string;
   portfolio_type: string;
-  image_urls: string[];
+  image_urls: TaggedImages | null;
   created_at: string;
 }
 
 interface StaffPortfolioManagerProps {
   staffId: string;
 }
+
+const portfolioTypes = [
+  { value: 'event_photography', label: 'Event Photography' },
+  { value: 'portrait_photography', label: 'Portrait Photography' },
+  { value: 'event_planning', label: 'Event Planning' },
+  { value: 'catering', label: 'Catering' },
+  { value: 'decoration', label: 'Decoration' },
+  { value: 'music_entertainment', label: 'Music & Entertainment' },
+  { value: 'other', label: 'Other' }
+];
 
 const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }) => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
@@ -32,8 +56,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
   const [newPortfolio, setNewPortfolio] = useState({
     title: '',
     description: '',
-    portfolio_type: 'event_photography',
-    images: [] as File[]
+    portfolio_type: 'event_photography'
   });
 
   useEffect(() => {
@@ -48,14 +71,12 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
   const loadStaffInfo = async () => {
     try {
-      const { data, error } = await supabase
-        .from('vendor_staff')
-        .select('vendor_id')
-        .eq('staff_id', staffId)
-        .single();
+      const staffRef = doc(db, 'vendor_staff', staffId);
+      const staffSnap = await getDoc(staffRef);
 
-      if (error) throw error;
-      setVendorId(data.vendor_id);
+      if (staffSnap.exists()) {
+        setVendorId(staffSnap.data().vendor_id);
+      }
     } catch (error) {
       console.error('Error loading staff info:', error);
       toast({
@@ -70,14 +91,36 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
     if (!vendorId) return;
 
     try {
-      const { data, error } = await supabase
-        .from('staff_portfolios')
-        .select('*')
-        .eq('staff_id', staffId)
-        .order('created_at', { ascending: false });
+      const q = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', staffId),
+        where('portfolio_type', '!=', 'profile_data'),
+        orderBy('portfolio_type'), // Firestore requires specific ordering for inequality filters
+        orderBy('created_at', 'desc')
+      );
+      // Actually, Firestore doesn't allow != and orderBy on another field without an index.
+      // Let's simplify and filter in memory if needed, or just use simple query.
+      const q2 = query(
+        collection(db, 'staff_portfolios'),
+        where('staff_id', '==', staffId),
+        orderBy('created_at', 'desc')
+      );
 
-      if (error) throw error;
-      setPortfolios(data || []);
+      const querySnapshot = await getDocs(q2);
+
+      const data = querySnapshot.docs
+        .map(doc => ({
+          ...(doc.data() as any),
+          portfolio_id: doc.id
+        }))
+        .filter((p: any) => p.portfolio_type !== 'profile_data');
+
+      const convertedPortfolios = data.map((portfolio: any) => ({
+        ...portfolio,
+        image_urls: convertToTaggedImages(portfolio.image_urls)
+      })) as Portfolio[];
+
+      setPortfolios(convertedPortfolios);
     } catch (error) {
       console.error('Error loading portfolios:', error);
       toast({
@@ -87,34 +130,6 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const uploadImages = async (files: File[]): Promise<string[]> => {
-    const uploadPromises = files.map(async (file) => {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${staffId}/${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('vendor-staff')
-        .upload(fileName, file);
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('vendor-staff')
-        .getPublicUrl(fileName);
-
-      return publicUrl;
-    });
-
-    return Promise.all(uploadPromises);
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      setNewPortfolio(prev => ({ ...prev, images: files }));
     }
   };
 
@@ -139,35 +154,25 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
     setUploading(true);
     try {
-      let imageUrls: string[] = [];
-      
-      if (newPortfolio.images.length > 0) {
-        imageUrls = await uploadImages(newPortfolio.images);
-      }
-
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .insert({
-          staff_id: staffId,
-          vendor_id: vendorId,
-          title: newPortfolio.title,
-          description: newPortfolio.description,
-          portfolio_type: newPortfolio.portfolio_type,
-          image_urls: imageUrls
-        });
-
-      if (error) throw error;
+      await addDoc(collection(db, 'staff_portfolios'), {
+        staff_id: staffId,
+        vendor_id: vendorId,
+        title: newPortfolio.title,
+        description: newPortfolio.description,
+        portfolio_type: newPortfolio.portfolio_type,
+        image_urls: null,
+        created_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
-        description: 'Portfolio item added successfully',
+        description: 'Portfolio item created successfully',
       });
 
       setNewPortfolio({
         title: '',
         description: '',
-        portfolio_type: 'event_photography',
-        images: []
+        portfolio_type: 'event_photography'
       });
       setIsAdding(false);
       loadPortfolios();
@@ -175,7 +180,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
       console.error('Error adding portfolio:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add portfolio item',
+        description: 'Failed to create portfolio item',
         variant: 'destructive',
       });
     } finally {
@@ -185,12 +190,7 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
 
   const handleDeletePortfolio = async (portfolioId: string) => {
     try {
-      const { error } = await supabase
-        .from('staff_portfolios')
-        .delete()
-        .eq('portfolio_id', portfolioId);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'staff_portfolios', portfolioId));
 
       setPortfolios(portfolios.filter(p => p.portfolio_id !== portfolioId));
       toast({
@@ -202,6 +202,67 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
       toast({
         title: 'Error',
         description: 'Failed to delete portfolio item',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleImageUpload = async (portfolioId: string, tag: string, urls: string[]) => {
+    try {
+      const portfolio = portfolios.find(p => p.portfolio_id === portfolioId);
+      if (!portfolio) return;
+
+      const updatedImages = addImagesToTag(portfolio.image_urls, tag, urls);
+
+      await updateDoc(doc(db, 'staff_portfolios', portfolioId), {
+        image_urls: convertForDatabase(updatedImages),
+        updated_at: new Date().toISOString()
+      });
+
+      setPortfolios(prev => prev.map(p =>
+        p.portfolio_id === portfolioId
+          ? { ...p, image_urls: updatedImages }
+          : p
+      ));
+    } catch (error) {
+      console.error('Error updating portfolio images:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save images',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleImageRemove = async (portfolioId: string, tag: string, url: string) => {
+    try {
+      await deleteImageFromStorage('vendor-staff', url);
+
+      const portfolio = portfolios.find(p => p.portfolio_id === portfolioId);
+      if (!portfolio) return;
+
+      const updatedImages = removeImageFromTag(portfolio.image_urls || {}, tag, url);
+
+      await updateDoc(doc(db, 'staff_portfolios', portfolioId), {
+        image_urls: convertForDatabase(Object.keys(updatedImages).length > 0 ? updatedImages : null),
+        updated_at: new Date().toISOString()
+      });
+
+      setPortfolios(prev => prev.map(p =>
+        p.portfolio_id === portfolioId
+          ? { ...p, image_urls: Object.keys(updatedImages).length > 0 ? updatedImages : null }
+          : p
+      ));
+
+      toast({
+        title: 'Success',
+        description: 'Image removed successfully',
+      });
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove image',
         variant: 'destructive',
       });
     }
@@ -221,153 +282,157 @@ const StaffPortfolioManager: React.FC<StaffPortfolioManagerProps> = ({ staffId }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <ImageIcon className="h-5 w-5 mr-2" />
-            Portfolio
-          </CardTitle>
-          {!isAdding && (
-            <Button onClick={() => setIsAdding(true)} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isAdding && (
-          <Card className="mb-6">
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={newPortfolio.title}
-                    onChange={(e) => setNewPortfolio(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="Portfolio item title"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="type">Type</Label>
-                  <Select
-                    value={newPortfolio.portfolio_type}
-                    onValueChange={(value) => setNewPortfolio(prev => ({ ...prev, portfolio_type: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="event_photography">Event Photography</SelectItem>
-                      <SelectItem value="portrait_photography">Portrait Photography</SelectItem>
-                      <SelectItem value="event_planning">Event Planning</SelectItem>
-                      <SelectItem value="catering">Catering</SelectItem>
-                      <SelectItem value="decoration">Decoration</SelectItem>
-                      <SelectItem value="music_entertainment">Music & Entertainment</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newPortfolio.description}
-                    onChange={(e) => setNewPortfolio(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Describe this portfolio item..."
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="images">Images</Label>
-                  <Input
-                    id="images"
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageChange}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAdding(false)}
-                    disabled={uploading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddPortfolio}
-                    disabled={uploading}
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Add Item
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {portfolios.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {portfolios.map(portfolio => (
-              <Card key={portfolio.portfolio_id} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    {portfolio.image_urls && portfolio.image_urls.length > 0 && (
-                      <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
-                        <img
-                          src={portfolio.image_urls[0]}
-                          alt={portfolio.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="font-semibold text-lg">{portfolio.title}</h3>
-                      <p className="text-sm text-gray-600 capitalize mb-2">
-                        {portfolio.portfolio_type.replace('_', ' ')}
-                      </p>
-                      <p className="text-sm text-gray-700">{portfolio.description}</p>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      <p className="text-xs text-gray-500">
-                        {new Date(portfolio.created_at).toLocaleDateString()}
-                      </p>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeletePortfolio(portfolio.portfolio_id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center">
+              <ImageIcon className="h-5 w-5 mr-2" />
+              Portfolio Management
+            </CardTitle>
+            {!isAdding && (
+              <Button onClick={() => setIsAdding(true)} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Portfolio Item
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isAdding && (
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="title">Title</Label>
+                    <Input
+                      id="title"
+                      value={newPortfolio.title}
+                      onChange={(e) => setNewPortfolio(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="Portfolio item title"
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <ImageIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No portfolio items yet</p>
-            <p className="text-sm text-gray-400">Add your first portfolio item to showcase your work</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  <div>
+                    <Label htmlFor="type">Type</Label>
+                    <Select
+                      value={newPortfolio.portfolio_type}
+                      onValueChange={(value) => setNewPortfolio(prev => ({ ...prev, portfolio_type: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {portfolioTypes.map(type => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newPortfolio.description}
+                      onChange={(e) => setNewPortfolio(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Describe this portfolio item..."
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAdding(false)}
+                      disabled={uploading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleAddPortfolio}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Portfolio Item'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {portfolios.length > 0 ? (
+            <div className="space-y-6">
+              {portfolios.map(portfolio => (
+                <Card key={portfolio.portfolio_id} className="overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg">{portfolio.title}</h3>
+                          <p className="text-sm text-gray-600 capitalize">
+                            {portfolioTypes.find(t => t.value === portfolio.portfolio_type)?.label || portfolio.portfolio_type}
+                          </p>
+                          {portfolio.description && (
+                            <p className="text-sm text-gray-700 mt-2">{portfolio.description}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <TaggedImageUploadModal
+                            trigger={
+                              <Button size="sm" variant="outline">
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload Images
+                              </Button>
+                            }
+                            onUploadComplete={(tag, urls) => handleImageUpload(portfolio.portfolio_id, tag, urls)}
+                            bucket="vendor-staff"
+                            folder={vendorId ? `${vendorId}/${staffId}/portfolio/${portfolio.portfolio_id}` : staffId}
+                            category={portfolio.portfolio_type}
+                            existingTags={portfolio.image_urls ? Object.keys(portfolio.image_urls) : []}
+                            title={`Upload to ${portfolio.title}`}
+                          />
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeletePortfolio(portfolio.portfolio_id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <TaggedImageViewer
+                        taggedImages={portfolio.image_urls}
+                        onRemoveImage={(tag, url) => handleImageRemove(portfolio.portfolio_id, tag, url)}
+                        title="Portfolio Images"
+                        showRemoveButton={true}
+                      />
+
+                      <div className="text-xs text-gray-500 border-t pt-2">
+                        Created {new Date(portfolio.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <ImageIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No portfolio items yet</p>
+              <p className="text-sm text-gray-400">Create your first portfolio item to showcase your work</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

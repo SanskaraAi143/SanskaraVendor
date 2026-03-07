@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Settings, Loader2, User, Bell, Shield, Trash2 } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db, auth } from '../lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +28,7 @@ const StaffSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Profile settings
   const [profileSettings, setProfileSettings] = useState({
     display_name: '',
@@ -35,7 +36,7 @@ const StaffSettings: React.FC = () => {
     phone_number: '',
   });
 
-  // Notification settings - using local state since user_settings table doesn't exist
+  // Notification settings
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     email_notifications: true,
     sms_notifications: false,
@@ -52,17 +53,15 @@ const StaffSettings: React.FC = () => {
       return;
     }
 
-    if (staffProfile?.staff_id) {
-      loadSettings();
-    }
+    loadSettings();
   }, [user, authLoading, navigate, staffProfile]);
 
   const loadSettings = async () => {
-    if (!staffProfile) return;
+    if (!user || !staffProfile) return;
 
     setLoading(true);
     setError(null);
-    
+
     try {
       // Load profile data from vendor_staff table
       setProfileSettings({
@@ -71,12 +70,20 @@ const StaffSettings: React.FC = () => {
         phone_number: staffProfile.phone_number || '',
       });
 
-      // Load notification preferences from localStorage since user_settings table doesn't exist
-      const savedNotifications = localStorage.getItem(`staff_notifications_${staffProfile.staff_id}`);
-      if (savedNotifications) {
-        setNotificationSettings(JSON.parse(savedNotifications));
+      // Load settings from Firestore users collection
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.preferences) {
+          setNotificationSettings(prev => ({
+            ...prev,
+            ...userData.preferences
+          }));
+        }
       }
-      
+
     } catch (err: any) {
       console.error('Error loading settings:', err);
       setError(err.message || 'Failed to load settings.');
@@ -90,15 +97,12 @@ const StaffSettings: React.FC = () => {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('vendor_staff')
-        .update({
-          display_name: profileSettings.display_name,
-          phone_number: profileSettings.phone_number,
-        })
-        .eq('staff_id', staffProfile.staff_id);
-
-      if (error) throw error;
+      const staffRef = doc(db, 'vendor_staff', staffProfile.staff_id);
+      await updateDoc(staffRef, {
+        display_name: profileSettings.display_name,
+        phone_number: profileSettings.phone_number,
+        updated_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
@@ -117,11 +121,14 @@ const StaffSettings: React.FC = () => {
   };
 
   const handleSaveNotifications = async () => {
-    if (!staffProfile?.staff_id) return;
+    if (!user) return;
 
     try {
-      // Save to localStorage since user_settings table doesn't exist
-      localStorage.setItem(`staff_notifications_${staffProfile.staff_id}`, JSON.stringify(notificationSettings));
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        preferences: notificationSettings,
+        updated_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
@@ -145,14 +152,12 @@ const StaffSettings: React.FC = () => {
   };
 
   const handlePasswordReset = async () => {
-    if (!staffProfile?.email) return;
+    if (!user?.email) return;
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(staffProfile.email, {
-        redirectTo: `${window.location.origin}/staff/reset-password`,
+      await sendPasswordResetEmail(auth, user.email, {
+        url: `${window.location.origin}/staff/reset-password`,
       });
-
-      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -228,7 +233,7 @@ const StaffSettings: React.FC = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex justify-end pt-4 border-t">
               <Button onClick={handleSaveProfile} disabled={saving} className="w-full sm:w-auto">
                 {saving ? (
@@ -319,7 +324,7 @@ const StaffSettings: React.FC = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex justify-end pt-4 border-t">
               <Button onClick={handleSaveNotifications} className="w-full sm:w-auto">
                 Save Notification Settings

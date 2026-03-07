@@ -10,8 +10,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,7 +35,7 @@ interface ServiceFormProps {
 }
 
 const serviceCategories = [
-  "Venue", "Decor", "Catering", "Photography", "Videography", 
+  "Venue", "Decor", "Catering", "Photography", "Videography",
   "Makeup", "Clothing", "Music", "Transportation", "Other"
 ];
 
@@ -44,7 +45,7 @@ const priceUnits = [
 
 const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initialData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { vendorProfile } = useAuth();
+  const { vendorProfile, user } = useAuth();
   const navigate = useNavigate();
 
   const defaultValues = {
@@ -64,7 +65,8 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
   });
 
   const onSubmit = async (data: ServiceFormValues) => {
-    if (!vendorProfile?.vendor_id) {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) {
       toast({
         title: "Error",
         description: "Vendor profile not found",
@@ -77,41 +79,31 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
     try {
       const serviceData = {
         ...data,
-        vendor_id: vendorProfile.vendor_id,
-        // Ensure all required fields have values
-        service_name: data.service_name,
-        service_category: data.service_category,
+        vendor_id: vendorId,
+        is_active: true,
+        updated_at: new Date().toISOString()
       };
-      
-      let result;
+
       if (serviceId) {
-        // Update existing service
-        result = await supabase
-          .from('vendor_services')
-          .update(serviceData)
-          .eq('service_id', serviceId);
+        const serviceRef = doc(db, 'vendor_services', serviceId);
+        await updateDoc(serviceRef, serviceData);
       } else {
-        // Insert new service
-        result = await supabase
-          .from('vendor_services')
-          .insert(serviceData);
+        const servicesRef = collection(db, 'vendor_services');
+        await addDoc(servicesRef, {
+          ...serviceData,
+          created_at: new Date().toISOString()
+        });
       }
-      
-      const { error } = result;
-      
-      if (error) {
-        throw error;
-      }
-      
+
       toast({
         title: "Success",
         description: serviceId ? "Service updated successfully" : "Service added successfully",
       });
-      
+
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate('/services');
+        navigate('/dashboard/services');
       }
 
     } catch (error: any) {
@@ -140,7 +132,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                 name="service_name"
                 control={control}
                 render={({ field }) => (
-                  <Input 
+                  <Input
                     id="service_name"
                     placeholder="Enter service name"
                     {...field}
@@ -152,15 +144,15 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                 <p className="text-red-500 text-sm">{errors.service_name.message}</p>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="service_category">Category</Label>
               <Controller
                 name="service_category"
                 control={control}
                 render={({ field }) => (
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <SelectTrigger className={errors.service_category ? "border-red-500" : ""}>
@@ -179,14 +171,14 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
               )}
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Controller
               name="description"
               control={control}
               render={({ field }) => (
-                <Textarea 
+                <Textarea
                   id="description"
                   placeholder="Describe your service"
                   rows={4}
@@ -203,7 +195,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                 name="base_price"
                 control={control}
                 render={({ field }) => (
-                  <Input 
+                  <Input
                     id="base_price"
                     type="number"
                     placeholder="0"
@@ -217,15 +209,15 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                 <p className="text-red-500 text-sm">{errors.base_price.message}</p>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="price_unit">Price Unit</Label>
               <Controller
                 name="price_unit"
                 control={control}
                 render={({ field }) => (
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <SelectTrigger>
@@ -241,7 +233,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                 )}
               />
             </div>
-            
+
             <div className="space-y-2 flex items-center">
               <div className="flex flex-col space-y-1.5">
                 <Label htmlFor="is_negotiable">Negotiable Price</Label>
@@ -250,7 +242,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
                     name="is_negotiable"
                     control={control}
                     render={({ field }) => (
-                      <Switch 
+                      <Switch
                         id="is_negotiable"
                         checked={field.value}
                         onCheckedChange={field.onChange}
@@ -264,14 +256,14 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
               </div>
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="customizability_details">Customization Details (Optional)</Label>
             <Controller
               name="customizability_details"
               control={control}
               render={({ field }) => (
-                <Textarea 
+                <Textarea
                   id="customizability_details"
                   placeholder="Explain how this service can be customized for clients"
                   rows={3}
@@ -281,16 +273,16 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceId, onSuccess, initial
             />
           </div>
         </CardContent>
-        
+
         <CardFooter className="flex justify-between">
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             variant="outline"
-            onClick={() => navigate('/services')}
+            onClick={() => navigate('/dashboard/services')}
           >
             Cancel
           </Button>
-          <Button 
+          <Button
             type="submit"
             disabled={isSubmitting}
             className="bg-sanskara-red hover:bg-sanskara-maroon text-white"

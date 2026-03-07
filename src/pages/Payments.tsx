@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +20,7 @@ import { DollarSign, AlertCircle } from 'lucide-react';
 interface Payment {
   payment_id: string;
   booking_id: string;
+  vendor_id: string;
   amount: number;
   payment_method: string;
   payment_status: string;
@@ -44,42 +45,41 @@ const PaymentStatusBadge = ({ status }: { status: string }) => {
 };
 
 const PaymentsPage: React.FC = () => {
-  const { vendorProfile } = useAuth();
+  const { vendorProfile, user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
 
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (vendorId) {
       fetchPayments();
     }
-  }, [vendorProfile, activeTab]);
+  }, [vendorProfile, user, activeTab]);
 
   const fetchPayments = async () => {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     setIsLoading(true);
-    
+
     try {
-      let query = supabase
-        .from('payments')
-        .select(`
-          *,
-          bookings(*)
-        `)
-        .eq('bookings.vendor_id', vendorProfile?.vendor_id);
-      
+      let q = query(
+        collection(db, 'payments'),
+        where('vendor_id', '==', vendorId)
+      );
+
       if (activeTab !== 'all') {
-        query = query.eq('payment_status', activeTab);
+        q = query(q, where('payment_status', '==', activeTab));
       }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data) {
-        setPayments(data as unknown as Payment[]);
-      }
+
+      const querySnapshot = await getDocs(q);
+      const paymentData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        payment_id: doc.id
+      })) as Payment[];
+
+      setPayments(paymentData);
     } catch (error) {
       console.error('Error fetching payments:', error);
       toast({
@@ -100,7 +100,7 @@ const PaymentsPage: React.FC = () => {
           Manage and track all your payments
         </p>
       </div>
-      
+
       <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="all">All</TabsTrigger>
@@ -108,7 +108,7 @@ const PaymentsPage: React.FC = () => {
           <TabsTrigger value="pending">Pending</TabsTrigger>
           <TabsTrigger value="failed">Failed</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value={activeTab}>
           <Card>
             <CardHeader>
@@ -126,8 +126,8 @@ const PaymentsPage: React.FC = () => {
                   <DollarSign className="mx-auto h-12 w-12 text-muted-foreground opacity-30" />
                   <h3 className="mt-2 text-lg font-medium">No payments found</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {activeTab === 'all' 
-                      ? 'There are no payment records available yet.' 
+                    {activeTab === 'all'
+                      ? 'There are no payment records available yet.'
                       : `There are no ${activeTab} payments available.`}
                   </p>
                 </div>

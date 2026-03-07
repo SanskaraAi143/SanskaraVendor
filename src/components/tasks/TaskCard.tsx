@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Edit, Save, X, MessageSquare } from 'lucide-react';
 
@@ -32,18 +33,17 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdate, showStaffInfo = fal
   const handleSaveNotes = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('vendor_tasks')
-        .update({ description: notes })
-        .eq('vendor_task_id', task.vendor_task_id);
-
-      if (error) throw error;
+      const taskRef = doc(db, 'vendor_tasks', task.vendor_task_id);
+      await updateDoc(taskRef, {
+        description: notes,
+        updated_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',
         description: 'Notes updated successfully',
       });
-      
+
       setIsNotesDialogOpen(false);
       onUpdate();
     } catch (error) {
@@ -117,11 +117,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdate, showStaffInfo = fal
               </DialogContent>
             </Dialog>
           </div>
-          
+
           {task.description && (
             <p className="text-sm text-gray-600">{task.description}</p>
           )}
-          
+
           <div className="flex flex-wrap gap-2">
             <Badge className={getStatusColor(task.status)}>
               {task.status}
@@ -132,19 +132,19 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdate, showStaffInfo = fal
               </Badge>
             )}
           </div>
-          
+
           {showStaffInfo && task.assigned_staff && (
             <p className="text-sm text-gray-500">
               Assigned to: {task.assigned_staff.display_name}
             </p>
           )}
-          
+
           {task.due_date && (
             <p className="text-sm text-gray-500">
               Due: {new Date(task.due_date).toLocaleDateString()}
             </p>
           )}
-          
+
           {task.description && (
             <div className="bg-gray-50 p-3 rounded-lg">
               <p className="text-sm font-medium mb-1">Notes:</p>

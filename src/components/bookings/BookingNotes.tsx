@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Edit, Save, X, FileText, Loader2 } from 'lucide-react';
 
@@ -21,12 +22,11 @@ const BookingNotes: React.FC<BookingNotesProps> = ({ bookingId, initialNotes = '
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ notes_for_vendor: notes })
-        .eq('booking_id', bookingId);
-
-      if (error) throw error;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, {
+        notes_for_vendor: notes,
+        updated_at: new Date().toISOString()
+      });
 
       toast({
         title: 'Success',

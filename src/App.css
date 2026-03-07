@@ -40,3 +40,31 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Visualizer Styles from tmp/chat_redesign-2.html */
+.ai-visualizer-container { position: relative; width: 180px; height: 180px; margin-bottom: 1rem; transition: all 0.5s ease; }
+.ai-visualizer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; transition: all 0.5s ease-in-out; }
+#visualizer-orb { width: 120px; height: 120px; background: radial-gradient(circle, var(--gold-highlight), #ffd7004d); box-shadow: 0 0 20px var(--gold-highlight), 0 0 40px #ffd70080; animation: gentle-pulse 4s infinite ease-in-out; }
+#visualizer-ring-1 { width: 160px; height: 160px; border: 2px solid #ffd7004d; animation: gentle-pulse 4s infinite 0.5s ease-in-out; }
+#visualizer-ring-2 { width: 200px; height: 200px; border: 2px solid #ffd7004d; animation: gentle-pulse 4s infinite 1s ease-in-out; }
+.speaking #visualizer-orb { animation: speaking-pulse 1.2s infinite ease-in-out; }
+.speaking #visualizer-ring-1 { animation: speaking-ring-1 1.2s infinite ease-in-out; }
+.speaking #visualizer-ring-2 { animation: speaking-ring-2 1.2s infinite ease-in-out; }
+.listening #visualizer-orb { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 30px var(--primary-accent); }
+
+@keyframes gentle-pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; } 50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; } }
+@keyframes speaking-pulse { 0%, 100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.9; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } }
+@keyframes speaking-ring-1 { 0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; } }
+@keyframes speaking-ring-2 { 0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; } 50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.6; } }
+
+.tap-to-talk-btn.recording {
+  background-color: var(--secondary-accent); /* Example: change color when recording */
+  box-shadow: 0 0 0 5px rgba(0, 0, 128, 0.3); /* Example: subtle pulse */
+}
+
+/* Define CSS variables if not already defined elsewhere */
+:root {
+  --primary-accent: #8B0000; /* Dark Maroon */
+  --secondary-accent: #000080; /* Deep Blue */
+  --gold-highlight: #FFD700;
+}

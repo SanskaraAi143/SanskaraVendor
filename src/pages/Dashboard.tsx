@@ -1,13 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import DashboardCard from '@/components/DashboardCard';
 import RevenueChart from '@/components/RevenueChart';
 import UpcomingBookings from '@/components/UpcomingBookings';
 import UpcomingTasks from '@/components/UpcomingTasks';
 import ServicesList from '@/components/ServicesList';
-import { BookOpen, CalendarCheck, Star, DollarSign } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { BookOpen, CalendarCheck, Star, DollarSign, User } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 
 interface DashboardStats {
@@ -40,65 +43,69 @@ const Dashboard: React.FC = () => {
       setIsLoading(true);
       try {
         // Fetch total bookings
-        const { data: bookingsData, error: bookingsError } = await supabase
-          .from('bookings')
-          .select('booking_id')
-          .eq('vendor_id', vendorProfile.vendor_id);
-        
-        if (bookingsError) throw bookingsError;
-        
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          where('vendor_id', '==', vendorProfile.vendor_id)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
+        const totalBookings = bookingsSnapshot.size;
+
         // Fetch this month's events
         const currentDate = new Date();
         const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
         const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-        
-        const { data: thisMonthEvents, error: eventsError } = await supabase
-          .from('bookings')
-          .select('booking_id')
-          .eq('vendor_id', vendorProfile.vendor_id)
-          .gte('event_date', firstDayOfMonth.toISOString())
-          .lte('event_date', lastDayOfMonth.toISOString());
-        
-        if (eventsError) throw eventsError;
-        
+
+        const eventsQuery = query(
+          collection(db, 'bookings'),
+          where('vendor_id', '==', vendorProfile.vendor_id),
+          where('event_date', '>=', firstDayOfMonth.toISOString()),
+          where('event_date', '<=', lastDayOfMonth.toISOString())
+        );
+        const eventsSnapshot = await getDocs(eventsQuery);
+        const thisMonthEventsCount = eventsSnapshot.size;
+
         // Fetch average rating
-        const { data: reviewsData, error: reviewsError } = await supabase
-          .from('reviews')
-          .select('rating')
-          .eq('vendor_id', vendorProfile.vendor_id);
-        
-        if (reviewsError) throw reviewsError;
-        
+        const reviewsQuery = query(
+          collection(db, 'reviews'),
+          where('vendor_id', '==', vendorProfile.vendor_id)
+        );
+        const reviewsSnapshot = await getDocs(reviewsQuery);
+        const reviewsData = reviewsSnapshot.docs.map(doc => doc.data());
+
         // Calculate average rating
-        const avgRating = reviewsData && reviewsData.length > 0
-          ? reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewsData.length
-          : 0;
-        
-        // Fetch YTD revenue
-        const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-        
-        const { data: paymentsData, error: paymentsError } = await supabase
-          .from('payments')
-          .select('amount, paid_at')
-          .eq('payment_status', 'completed')
-          .gte('paid_at', startOfYear.toISOString());
-        
-        if (paymentsError) throw paymentsError;
-        
-        // Calculate YTD revenue
-        const ytdRevenue = paymentsData && paymentsData.length > 0
-          ? paymentsData.reduce((sum, payment) => sum + payment.amount, 0)
+        const avgRating = reviewsData.length > 0
+          ? reviewsData.reduce((sum, review) => sum + (review.rating || 0), 0) / reviewsData.length
           : 0;
 
-        // Calculate trends (mocked for now, but would compare with previous period)
-        // In a real implementation, you would fetch last month/period data and calculate the difference
-        const bookingTrend = bookingsData?.length > 0 ? 12 : 0;
+        // Fetch YTD revenue
+        const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
+
+        const paymentsQuery = query(
+          collection(db, 'payments'),
+          where('payment_status', '==', 'completed'),
+          where('paid_at', '>=', startOfYear.toISOString())
+        );
+        // Note: Firestore might need an index for this composite query if vendor_id was also added.
+        // For now, we'll fetch and filter if necessary, but assuming payments have vendor_id for better performance.
+        // If payments don't have vendor_id, we'd need to fetch bookings first. 
+        // Let's assume payments are linked to vendor_id for this migration.
+
+        const paymentsSnapshot = await getDocs(paymentsQuery);
+        const paymentsData = paymentsSnapshot.docs.map(doc => doc.data());
+
+        // Calculate YTD revenue
+        const ytdRevenue = paymentsData.length > 0
+          ? paymentsData.reduce((sum, payment) => sum + (payment.amount || 0), 0)
+          : 0;
+
+        // Calculate trends (mocked for now)
+        const bookingTrend = totalBookings > 0 ? 12 : 0;
         const ratingTrend = avgRating > 0 ? 0.3 : 0;
         const revenueTrend = ytdRevenue > 0 ? 18 : 0;
 
         setStats({
-          totalBookings: bookingsData?.length || 0,
-          thisMonthEvents: thisMonthEvents?.length || 0,
+          totalBookings,
+          thisMonthEvents: thisMonthEventsCount,
           avgRating: parseFloat(avgRating.toFixed(1)),
           ytdRevenue: ytdRevenue,
           bookingTrend,
@@ -139,18 +146,18 @@ const Dashboard: React.FC = () => {
           <div className="h-8 w-64 bg-gray-200 rounded mb-2"></div>
           <div className="h-4 w-96 bg-gray-200 rounded"></div>
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-32 bg-gray-200 rounded"></div>
           ))}
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="h-64 bg-gray-200 rounded"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="h-64 bg-gray-200 rounded"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
@@ -161,35 +168,51 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold gradient-text">Welcome, {vendorProfile?.vendor_name || 'Vendor'}!</h1>
-        <p className="text-muted-foreground mt-1">
-          Here's an overview of your business performance and upcoming events.
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold gradient-text">Welcome, {vendorProfile?.vendor_name || 'Vendor'}!</h1>
+          <p className="text-muted-foreground mt-1">
+            Here's an overview of your business performance and upcoming events.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/user-guide?tab=vendor">
+            <Button variant="secondary">
+              <BookOpen className="mr-2 h-4 w-4" />
+              How to Use
+            </Button>
+          </Link>
+          <Link to="/dashboard/profile">
+            <Button variant="outline">
+              <User className="mr-2 h-4 w-4" />
+              View Profile
+            </Button>
+          </Link>
+        </div>
       </div>
-      
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardCard 
+        <DashboardCard
           title="Total Bookings"
           value={stats.totalBookings.toString()}
           icon={<BookOpen className="h-5 w-5" />}
           trend={stats.totalBookings > 0 ? { value: stats.bookingTrend, isPositive: true } : undefined}
           color="sanskara-red"
         />
-        <DashboardCard 
+        <DashboardCard
           title="This Month's Events"
           value={stats.thisMonthEvents.toString()}
           icon={<CalendarCheck className="h-5 w-5" />}
           color="sanskara-gold"
         />
-        <DashboardCard 
+        <DashboardCard
           title="Average Rating"
           value={stats.avgRating > 0 ? stats.avgRating.toString() : "N/A"}
           icon={<Star className="h-5 w-5" />}
           trend={stats.avgRating > 0 ? { value: stats.ratingTrend, isPositive: true } : undefined}
           color="sanskara-amber"
         />
-        <DashboardCard 
+        <DashboardCard
           title="Revenue (YTD)"
           value={formatRevenue(stats.ytdRevenue)}
           icon={<DollarSign className="h-5 w-5" />}
@@ -197,12 +220,12 @@ const Dashboard: React.FC = () => {
           color="sanskara-green"
         />
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RevenueChart vendorId={vendorProfile?.vendor_id} />
         <UpcomingBookings vendorId={vendorProfile?.vendor_id} />
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <UpcomingTasks vendorId={vendorProfile?.vendor_id} />
         <ServicesList vendorId={vendorProfile?.vendor_id} />

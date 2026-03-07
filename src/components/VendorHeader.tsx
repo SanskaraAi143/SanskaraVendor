@@ -11,7 +11,7 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAuth } from '@/hooks/useAuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 const VendorHeader: React.FC = () => {
@@ -33,7 +33,7 @@ const VendorHeader: React.FC = () => {
   };
 
   const handleProfileClick = () => {
-    navigate('/profile');
+    navigate('/dashboard/profile');
   };
   
   return (
@@ -41,7 +41,7 @@ const VendorHeader: React.FC = () => {
       <div className="flex items-center justify-between h-full px-4">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="text-sanskara-maroon hover:text-sanskara-red transition-colors" />
-          <span className="text-xl font-semibold hidden sm:block gradient-text">Sanskara AI Dashboard</span>
+          <span className="text-xl font-semibold hidden sm:block gradient-text">Vendor Dashboard</span>
         </div>
         
         <div className="flex items-center gap-4">
@@ -87,7 +87,7 @@ const VendorHeader: React.FC = () => {
                 Profile Settings
               </DropdownMenuItem>
               
-              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/settings')}>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/dashboard/settings')}>
                 <Settings className="h-4 w-4 mr-2" />
                 Account Settings
               </DropdownMenuItem>
@@ -106,4 +106,4 @@ const VendorHeader: React.FC = () => {
   );
 };
 
-export default VendorHeader;
+export default React.memo(VendorHeader);

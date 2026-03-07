@@ -1,9 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  writeBatch,
+  doc,
+  addDoc
+} from 'firebase/firestore';
 import { toast } from '@/components/ui/use-toast';
 import { Users, Loader2 } from 'lucide-react';
 
@@ -32,24 +40,27 @@ const ServiceStaffAssignment: React.FC<ServiceStaffAssignmentProps> = ({ service
   const loadStaffAndAssignments = async () => {
     try {
       // Load vendor staff
-      const { data: staffData, error: staffError } = await supabase
-        .from('vendor_staff')
-        .select('staff_id, display_name, email, role')
-        .eq('vendor_id', vendorId)
-        .eq('is_active', true);
-
-      if (staffError) throw staffError;
+      const staffQuery = query(
+        collection(db, 'vendor_staff'),
+        where('vendor_id', '==', vendorId),
+        where('is_active', '==', true)
+      );
+      const staffSnapshot = await getDocs(staffQuery);
+      const staffData = staffSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        staff_id: doc.id
+      })) as Staff[];
 
       // Load current assignments from vendor_service_staff table
-      const { data: assignmentData, error: assignmentError } = await supabase
-        .from('vendor_service_staff')
-        .select('staff_id')
-        .eq('service_id', serviceId);
+      const assignmentQuery = query(
+        collection(db, 'vendor_service_staff'),
+        where('service_id', '==', serviceId)
+      );
+      const assignmentSnapshot = await getDocs(assignmentQuery);
+      const assignmentData = assignmentSnapshot.docs.map(doc => doc.data() as { staff_id: string });
 
-      if (assignmentError) throw assignmentError;
-
-      setStaff(staffData || []);
-      setAssignedStaff(assignmentData?.map(a => a.staff_id) || []);
+      setStaff(staffData);
+      setAssignedStaff(assignmentData.map(a => a.staff_id));
     } catch (error) {
       console.error('Error loading staff assignments:', error);
       toast({
@@ -63,8 +74,8 @@ const ServiceStaffAssignment: React.FC<ServiceStaffAssignmentProps> = ({ service
   };
 
   const handleStaffToggle = (staffId: string, isChecked: boolean) => {
-    setAssignedStaff(prev => 
-      isChecked 
+    setAssignedStaff(prev =>
+      isChecked
         ? [...prev, staffId]
         : prev.filter(id => id !== staffId)
     );
@@ -74,27 +85,29 @@ const ServiceStaffAssignment: React.FC<ServiceStaffAssignmentProps> = ({ service
     setSaving(true);
     try {
       // Remove all current assignments for this service
-      const { error: deleteError } = await supabase
-        .from('vendor_service_staff')
-        .delete()
-        .eq('service_id', serviceId);
+      const assignmentQuery = query(
+        collection(db, 'vendor_service_staff'),
+        where('service_id', '==', serviceId)
+      );
+      const assignmentSnapshot = await getDocs(assignmentQuery);
 
-      if (deleteError) throw deleteError;
+      const batch = writeBatch(db);
+      assignmentSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
 
       // Insert new assignments
-      if (assignedStaff.length > 0) {
-        const assignments = assignedStaff.map(staffId => ({
+      assignedStaff.forEach(staffId => {
+        const newAssignmentRef = doc(collection(db, 'vendor_service_staff'));
+        batch.set(newAssignmentRef, {
           service_id: serviceId,
           staff_id: staffId,
-          vendor_id: vendorId
-        }));
+          vendor_id: vendorId,
+          created_at: new Date().toISOString()
+        });
+      });
 
-        const { error: insertError } = await supabase
-          .from('vendor_service_staff')
-          .insert(assignments);
-
-        if (insertError) throw insertError;
-      }
+      await batch.commit();
 
       toast({
         title: 'Success',

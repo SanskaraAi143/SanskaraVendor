@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import ServiceForm from '@/components/service/ServiceForm';
 import { toast } from '@/components/ui/use-toast';
 import { Loader } from 'lucide-react';
@@ -16,33 +16,26 @@ const EditService: React.FC = () => {
   useEffect(() => {
     const fetchService = async () => {
       if (!serviceId) {
-        navigate('/services');
+        navigate('/dashboard/services');
         return;
       }
 
       try {
         setIsLoading(true);
-        const { data, error } = await supabase
-          .from('vendor_services')
-          .select('*')
-          .eq('service_id', serviceId)
-          .single();
+        const serviceRef = doc(db, 'vendor_services', serviceId);
+        const serviceSnap = await getDoc(serviceRef);
 
-        if (error) {
-          throw error;
-        }
-
-        if (!data) {
+        if (!serviceSnap.exists()) {
           toast({
             title: "Service not found",
             description: "The service you're trying to edit doesn't exist",
             variant: "destructive",
           });
-          navigate('/services');
+          navigate('/dashboard/services');
           return;
         }
 
-        setService(data);
+        setService({ ...serviceSnap.data(), service_id: serviceSnap.id });
       } catch (error: any) {
         console.error('Error fetching service:', error);
         toast({
@@ -50,7 +43,7 @@ const EditService: React.FC = () => {
           description: error.message || "Could not load service details",
           variant: "destructive",
         });
-        navigate('/services');
+        navigate('/dashboard/services');
       } finally {
         setIsLoading(false);
       }
@@ -80,7 +73,7 @@ const EditService: React.FC = () => {
           Update your service details
         </p>
       </div>
-      
+
       {service && <ServiceForm serviceId={serviceId} initialData={service} />}
     </div>
   );

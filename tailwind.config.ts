@@ -65,14 +65,17 @@ export default {
 				},
 				sanskara: {
 					red: "#C41E3A",
-					gold: "#D4AF37",
+					gold: "#FFD700", /* Mapped from --gold-highlight */
 					magenta: "#CB2C90",
 					orange: "#FF7722",
-					maroon: "#800000",
+					maroon: "#8B0000", /* Mapped from --primary-accent */
 					purple: "#9B30FF",
 					green: "#006400",
-					cream: "#FFF8DC",
-					amber: "#FFBF00"
+					cream: "#FDF6E3", /* Mapped from --bg-color */
+					amber: "#FFBF00",
+					"deep-blue": "#000080", /* Mapped from --secondary-accent */
+					"text-primary": "#4A4A4A",
+					"text-secondary": "#6c757d"
 				}
 			},
 			borderRadius: {

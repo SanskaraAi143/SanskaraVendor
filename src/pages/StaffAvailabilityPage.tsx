@@ -1,12 +1,22 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffDashboardLayout from '../components/staff/StaffDashboardLayout';
 import AvailabilityCalendar from '../components/staff/AvailabilityCalendar';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Calendar, Loader2 } from 'lucide-react';
-import { supabase } from '../integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  orderBy
+} from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,14 +66,19 @@ const StaffAvailabilityPage: React.FC = () => {
     if (!staffProfile?.staff_id) return;
 
     try {
-      const { data, error } = await supabase
-        .from('vendor_staff_availability')
-        .select('*')
-        .eq('staff_id', staffProfile.staff_id)
-        .order('available_date', { ascending: true });
+      const q = query(
+        collection(db, 'vendor_staff_availability'),
+        where('staff_id', '==', staffProfile.staff_id),
+        orderBy('available_date', 'asc')
+      );
 
-      if (error) throw error;
-      setAvailabilities(data || []);
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        staff_availability_id: doc.id
+      })) as StaffAvailabilityRecord[];
+
+      setAvailabilities(data);
     } catch (err: any) {
       console.error('Error loading availabilities:', err);
       toast({
@@ -99,34 +114,29 @@ const StaffAvailabilityPage: React.FC = () => {
     if (!staffProfile?.staff_id || !staffProfile?.vendor_id) return;
 
     try {
-      const existingRecord = availabilities.find(a => 
+      const existingRecord = availabilities.find(a =>
         a.available_date.split('T')[0] === formData.available_date
       );
 
       if (existingRecord) {
         // Update existing
-        const { error } = await supabase
-          .from('vendor_staff_availability')
-          .update({
-            status: formData.status,
-            notes: formData.notes,
-          })
-          .eq('staff_availability_id', existingRecord.staff_availability_id);
-
-        if (error) throw error;
+        const recordRef = doc(db, 'vendor_staff_availability', existingRecord.staff_availability_id);
+        await updateDoc(recordRef, {
+          status: formData.status,
+          notes: formData.notes,
+          updated_at: new Date().toISOString()
+        });
       } else {
         // Create new
-        const { error } = await supabase
-          .from('vendor_staff_availability')
-          .insert({
-            staff_id: staffProfile.staff_id,
-            vendor_id: staffProfile.vendor_id,
-            available_date: formData.available_date,
-            status: formData.status,
-            notes: formData.notes,
-          });
-
-        if (error) throw error;
+        await addDoc(collection(db, 'vendor_staff_availability'), {
+          staff_id: staffProfile.staff_id,
+          vendor_id: staffProfile.vendor_id,
+          available_date: formData.available_date,
+          status: formData.status,
+          notes: formData.notes,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
       }
 
       toast({
@@ -147,19 +157,14 @@ const StaffAvailabilityPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    const existingRecord = availabilities.find(a => 
+    const existingRecord = availabilities.find(a =>
       a.available_date.split('T')[0] === formData.available_date
     );
 
     if (!existingRecord) return;
 
     try {
-      const { error } = await supabase
-        .from('vendor_staff_availability')
-        .delete()
-        .eq('staff_availability_id', existingRecord.staff_availability_id);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'vendor_staff_availability', existingRecord.staff_availability_id));
 
       toast({
         title: 'Success',
@@ -237,8 +242,8 @@ const StaffAvailabilityPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
-                <Select 
-                  value={formData.status} 
+                <Select
+                  value={formData.status}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
                 >
                   <SelectTrigger>

@@ -39,34 +39,33 @@ const Navbar = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <span className="text-2xl font-serif font-bold text-wedrose-600">
-                Wedding
+              <span className="text-2xl font-serif font-bold text-sanskara-red">
+                Vendor
               </span>
-              <span className="text-2xl font-serif font-bold text-wedgold-600 ml-1">
-                Wisdom
+              <span className="text-2xl font-serif font-bold text-sanskara-gold ml-1">
+                Portal
               </span>
             </Link>
           </div>
 
           {/* Desktop Menu */}
           <nav className="hidden md:flex items-center space-x-1">
-            <NavLink to="/" active={location.pathname === "/"}>
-              Home
+            <NavLink to="/login" active={location.pathname === "/login"}>
+              Login
             </NavLink>
-            <NavLink to="/about" active={location.pathname === "/about"}>
-              Traditions
+            <NavLink to="/signup" active={location.pathname === "/signup"}>
+              Sign Up
             </NavLink>
-            <NavLink to="/vendors" active={location.pathname === "/vendors"}>
-              Vendors
+            <NavLink to="/staff/login" active={location.pathname === "/staff/login"}>
+              Staff Login
             </NavLink>
-            <Button className="ml-4 btn-primary">Get Started</Button>
           </nav>
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
             <button
               onClick={toggleMenu}
-              className="p-2 rounded-md text-wedrose-600 hover:text-wedrose-800 focus:outline-none"
+              className="p-2 rounded-md text-sanskara-red hover:text-sanskara-maroon focus:outline-none"
             >
               {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -78,29 +77,26 @@ const Navbar = () => {
           <div className="md:hidden">
             <div className="flex flex-col space-y-3 pt-4 pb-6 px-2 animate-fade-in">
               <MobileNavLink
-                to="/"
-                active={location.pathname === "/"}
+                to="/login"
+                active={location.pathname === "/login"}
                 onClick={toggleMenu}
               >
-                Home
+                Login
               </MobileNavLink>
               <MobileNavLink
-                to="/about"
-                active={location.pathname === "/about"}
+                to="/signup"
+                active={location.pathname === "/signup"}
                 onClick={toggleMenu}
               >
-                Traditions
+                Sign Up
               </MobileNavLink>
               <MobileNavLink
-                to="/vendors"
-                active={location.pathname === "/vendors"}
+                to="/staff/login"
+                active={location.pathname === "/staff/login"}
                 onClick={toggleMenu}
               >
-                Vendors
+                Staff Login
               </MobileNavLink>
-              <Button className="w-full btn-primary mt-2" onClick={toggleMenu}>
-                Get Started
-              </Button>
             </div>
           </div>
         )}
@@ -122,8 +118,8 @@ const NavLink = ({ to, active, children }: NavLinkProps) => {
       to={to}
       className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 ${
         active
-          ? "text-wedrose-600 bg-wedrose-50"
-          : "text-wedneutral-700 hover:text-wedrose-500 hover:bg-wedrose-50"
+          ? "text-sanskara-red bg-sanskara-red/10"
+          : "text-gray-700 hover:text-sanskara-red hover:bg-sanskara-red/5"
       }`}
     >
       {children}
@@ -137,8 +133,8 @@ const MobileNavLink = ({ to, active, children, onClick }: NavLinkProps) => {
       to={to}
       className={`px-4 py-3 rounded-md text-base font-medium transition-all duration-300 ${
         active
-          ? "text-wedrose-600 bg-wedrose-50"
-          : "text-wedneutral-700 hover:text-wedrose-500 hover:bg-wedrose-50"
+          ? "text-sanskara-red bg-sanskara-red/10"
+          : "text-gray-700 hover:text-sanskara-red hover:bg-sanskara-red/5"
       }`}
       onClick={onClick}
     >

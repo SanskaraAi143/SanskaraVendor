@@ -1,65 +1,98 @@
-
+import { db } from '@/lib/firebase';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
-import { CheckCircle2, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from 'firebase/firestore';
+
+interface AssignedService {
+  service_id: string;
+  service_name: string;
+  service_category: string;
+  vendor_name: string;
+}
 
 const VendorServicesWidget: React.FC = () => {
-  const [serviceCount, setServiceCount] = useState<number | null>(null);
+  const [assignedServices, setAssignedServices] = useState<AssignedService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, isLoading: authLoading } = useAuth();
+        const { user, staffProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user) {
-      setIsLoading(false);
-      console.warn("VendorServicesWidget: User not authenticated.");
+    if (!user || !staffProfile) {
+      if (!authLoading && !staffProfile) {
+          setIsLoading(false);
+      }
       return;
     }
 
-    const fetchServiceCount = async () => {
+    const fetchAssignedServices = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data: staffProfile, error: staffProfileError } = await supabase
-          .from('vendor_staff')
-          .select('vendor_id')
-          .eq('supabase_auth_uid', user.id)
-          .single();
+        const staffId = staffProfile.staff_id;
+        const vendorId = staffProfile.vendor_id;
 
-        if (staffProfileError) throw staffProfileError;
-        if (!staffProfile || !staffProfile.vendor_id) {
-          setError('Staff profile or vendor association not found.');
-          return;
+        // Fetch vendor name
+        let vendorName = 'Unknown Vendor';
+        if (vendorId) {
+          const vendorDoc = await getDoc(doc(db, 'vendors', vendorId));
+          if (vendorDoc.exists()) {
+            vendorName = vendorDoc.data().vendor_name || 'Unknown Vendor';
+          }
         }
-        
-        const { count, error: servicesError } = await supabase
-          .from('vendor_services')
-          .select('*', { count: 'exact', head: true })
-          .eq('vendor_id', staffProfile.vendor_id)
-          .eq('is_active', true);
 
-        if (servicesError) throw servicesError;
-        
-        setServiceCount(count ?? 0);
+        // Get assigned services from vendor_service_staff
+        const assignmentQuery = query(
+          collection(db, 'vendor_service_staff'),
+          where('staff_id', '==', staffId)
+        );
+        const assignmentSnapshot = await getDocs(assignmentQuery);
 
+        const servicesPromises = assignmentSnapshot.docs.map(async (assignmentDoc) => {
+          const assignment = assignmentDoc.data();
+          const serviceId = assignment.service_id;
+
+          if (!serviceId) return null;
+
+          const serviceDoc = await getDoc(doc(db, 'vendor_services', serviceId));
+          if (serviceDoc.exists()) {
+            const serviceData = serviceDoc.data();
+            return {
+              service_id: serviceDoc.id,
+              service_name: serviceData.service_name || 'Unknown Service',
+              service_category: serviceData.service_category || 'Unknown',
+              vendor_name: vendorName
+            };
+          }
+          return null;
+        });
+
+        const services = (await Promise.all(servicesPromises)).filter(Boolean) as AssignedService[];
+        setAssignedServices(services);
       } catch (err: any) {
-        console.error('Error fetching service count:', err);
+        console.error('Error fetching assigned services:', err);
         setError(err.message || 'Failed to fetch data.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchServiceCount();
-  }, [user, authLoading, navigate]);
+    fetchAssignedServices();
+  }, [user, authLoading]);
 
-  let content = <p>Overview of services offered by your vendor.</p>;
+  let content = <p>Services you are assigned to work on.</p>;
   let displayValue: string | number = "-";
 
   if (isLoading || authLoading) {
@@ -73,19 +106,38 @@ const VendorServicesWidget: React.FC = () => {
   } else if (error) {
     content = <p className="text-red-500 text-xs">{error}</p>;
     displayValue = "Error";
-  } else if (serviceCount !== null) {
-    displayValue = serviceCount;
-    content = <p>{serviceCount > 0 ? `Your vendor offers ${serviceCount} active service(s).` : 'No active services listed for your vendor.'}</p>;
+  } else if (assignedServices.length > 0) {
+    displayValue = assignedServices.length;
+    content = (
+      <div className="space-y-2">
+        <p>You are assigned to {assignedServices.length} service(s):</p>
+        <div className="text-xs space-y-1">
+          {assignedServices.slice(0, 3).map(service => (
+            <div key={service.service_id} className="truncate">
+              • {service.service_name}
+            </div>
+          ))}
+          {assignedServices.length > 3 && (
+            <div className="text-gray-500">
+              +{assignedServices.length - 3} more...
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  } else {
+    content = <p>No services assigned to you yet.</p>;
+    displayValue = 0;
   }
 
   return (
     <DashboardCard
-      title="Vendor Services"
+      title="My Assigned Services"
       icon={<CheckCircle2 className="h-5 w-5" />}
       color="sanskara-purple"
       value={displayValue}
       footerLink={{
-        text: 'Manage services',
+        text: 'View all services',
         href: '/staff/services',
       }}
     >

@@ -13,21 +13,33 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { CalendarIcon, CheckCircle2, Clock, Filter, Plus, Search, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  addDoc,
+  deleteDoc,
+  orderBy,
+  getDoc
+} from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { useDataCache } from '@/hooks/useDataCache';
 
 interface Task {
   vendor_task_id: string;
   title: string;
-  description: string;
+  description: string | null;
   status: string;
   priority: string;
-  due_date: string;
+  due_date: string | null;
   category: string;
-  booking_id?: string;
-  assigned_staff_id?: string;
+  booking_id?: string | null;
+  assigned_staff_id?: string | null;
   is_complete: boolean;
   created_at: string;
   updated_at: string;
@@ -47,19 +59,19 @@ interface Booking {
 
 interface TaskFormData {
   title: string;
-  description: string;
+  description: string | null;
   status: string;
   priority: string;
-  due_date: string;
+  due_date: string | null;
   category: string;
-  booking_id: string;
-  assigned_staff_id: string;
+  booking_id: string | null;
+  assigned_staff_id: string | null;
 }
 
 const Tasks: React.FC = () => {
-  const { vendorProfile } = useAuth();
-  const { getCachedData, setLoading, setData, setError } = useDataCache();
-  
+  const { vendorProfile, user } = useAuth();
+  const { getCachedData, setLoading, setData, setError, invalidateCache } = useDataCache();
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -74,56 +86,62 @@ const Tasks: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [formData, setFormData] = useState<TaskFormData>({
     title: '',
-    description: '',
+    description: null,
     status: 'To Do',
     priority: 'Medium',
-    due_date: '',
+    due_date: null,
     category: 'General',
-    booking_id: '',
-    assigned_staff_id: '',
+    booking_id: "-no-booking-selected-", // Initialize with the special string
+    assigned_staff_id: "-unassigned-staff-", // Initialize with the special string
   });
   const [date, setDate] = useState<Date | undefined>(undefined);
-  
+
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (vendorId) {
       fetchTasks();
       fetchStaff();
       fetchBookings();
     }
-  }, [vendorProfile]);
-  
+  }, [vendorProfile, user]);
+
   useEffect(() => {
     applyFilters();
   }, [tasks, searchQuery, statusFilter, priorityFilter, categoryFilter]);
-  
+
   const fetchTasks = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     setIsLoading(true);
-    
+
     // Check cache first
     const cachedTasks = getCachedData<Task[]>('tasks');
-    
+
     if (cachedTasks?.data) {
       setTasks(cachedTasks.data);
       setIsLoading(false);
       return;
     }
-    
+
     // If not in cache, fetch from API
     setLoading('tasks');
-    
+
     try {
-      const { data, error } = await supabase
-        .from('vendor_tasks')
-        .select('*')
-        .eq('vendor_id', vendorProfile.vendor_id)
-        .order('due_date', { ascending: true });
-        
-      if (error) throw error;
-      
-      setTasks(data || []);
-      setData('tasks', data);
+      const q = query(
+        collection(db, 'vendor_tasks'),
+        where('vendor_id', '==', vendorId),
+        orderBy('due_date', 'asc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const tasksData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        vendor_task_id: doc.id
+      })) as Task[];
+
+      setTasks(tasksData);
+      setData('tasks', tasksData);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       setError('tasks', error as Error);
@@ -136,125 +154,135 @@ const Tasks: React.FC = () => {
       setIsLoading(false);
     }
   };
-  
+
   const fetchStaff = async () => {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     try {
-      const { data, error } = await supabase
-        .from('vendor_staff')
-        .select('*')
-        .eq('vendor_id', vendorProfile?.vendor_id)
-        .eq('is_active', true);
-        
-      if (error) throw error;
-      
-      // Fix: Map the staff data to match Staff interface
-      const mappedStaff = (data || []).map(staffMember => ({
-        staff_id: staffMember.staff_id,
-        name: staffMember.display_name, // Map display_name to name
-        role: staffMember.role
-      }));
-      
+      const q = query(
+        collection(db, 'vendor_staff'),
+        where('vendor_id', '==', vendorId),
+        where('is_active', '==', true)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const mappedStaff = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          staff_id: doc.id,
+          name: data.display_name,
+          role: data.role
+        };
+      });
+
       setStaff(mappedStaff);
     } catch (error) {
       console.error('Error fetching staff:', error);
     }
   };
-  
+
   const fetchBookings = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          booking_id,
-          users (display_name),
-          event_date
-        `)
-        .eq('vendor_id', vendorProfile.vendor_id);
-        
-      if (error) throw error;
-      
-      const formattedBookings = data.map((booking: any) => ({
-        booking_id: booking.booking_id,
-        client_name: booking.users?.display_name || 'Unknown Client',
-        event_date: booking.event_date
+      const q = query(
+        collection(db, 'bookings'),
+        where('vendor_id', '==', vendorId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const formattedBookings = await Promise.all(querySnapshot.docs.map(async (bookingDoc) => {
+        const bookingData = bookingDoc.data();
+        let clientName = 'Unknown Client';
+
+        if (bookingData.user_id) {
+          const userSnap = await getDoc(doc(db, 'users', bookingData.user_id));
+          if (userSnap.exists()) {
+            clientName = userSnap.data().display_name || 'Unknown Client';
+          }
+        }
+
+        return {
+          booking_id: bookingDoc.id,
+          client_name: clientName,
+          event_date: bookingData.event_date
+        };
       }));
-      
+
       setBookings(formattedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
     }
   };
-  
+
   const applyFilters = () => {
     let filtered = [...tasks];
-    
+
     // Apply search filter
     if (searchQuery) {
-      filtered = filtered.filter(task => 
+      filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchQuery.toLowerCase())
+        (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
-    
+
     // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(task => task.status === statusFilter);
     }
-    
+
     // Apply priority filter
     if (priorityFilter !== 'all') {
       filtered = filtered.filter(task => task.priority === priorityFilter);
     }
-    
+
     // Apply category filter
     if (categoryFilter !== 'all') {
       filtered = filtered.filter(task => task.category === categoryFilter);
     }
-    
+
     setFilteredTasks(filtered);
   };
-  
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleDateSelect = (date: Date | undefined) => {
     setDate(date);
-    if (date) {
-      setFormData(prev => ({ ...prev, due_date: format(date, 'yyyy-MM-dd') }));
-    }
+    setFormData(prev => ({ ...prev, due_date: date ? format(date, 'yyyy-MM-dd') : null }));
   };
-  
+
   const resetForm = () => {
     setFormData({
       title: '',
-      description: '',
+      description: null,
       status: 'To Do',
       priority: 'Medium',
-      due_date: '',
+      due_date: null,
       category: 'General',
-      booking_id: '',
-      assigned_staff_id: '',
+      booking_id: "-no-booking-selected-", // Initialize with the special string
+      assigned_staff_id: "-unassigned-staff-", // Initialize with the special string
     });
     setDate(undefined);
     setSelectedTask(null);
   };
-  
+
   const openCreateDialog = () => {
     resetForm();
     setIsDialogOpen(true);
   };
-  
+
   const openEditDialog = (task: Task) => {
     setSelectedTask(task);
-    
+
     // Convert string date to Date object for the calendar
     let dueDate: Date | undefined = undefined;
     if (task.due_date) {
@@ -264,7 +292,7 @@ const Tasks: React.FC = () => {
         console.error('Invalid date format:', task.due_date);
       }
     }
-    
+
     setFormData({
       title: task.title,
       description: task.description || '',
@@ -272,61 +300,63 @@ const Tasks: React.FC = () => {
       priority: task.priority,
       due_date: task.due_date,
       category: task.category,
-      booking_id: task.booking_id || '',
-      assigned_staff_id: task.assigned_staff_id || '',
+      booking_id: task.booking_id || "-no-booking-selected-",
+      assigned_staff_id: task.assigned_staff_id || "-unassigned-staff-",
     });
-    
+
     setDate(dueDate);
     setIsDialogOpen(true);
   };
-  
+
   const openDeleteDialog = (task: Task) => {
     setSelectedTask(task);
     setIsDeleteDialogOpen(true);
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!vendorProfile?.vendor_id) return;
-    
+
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     try {
-      const updatedTask = {
+      const payload = {
         ...formData,
-        assigned_staff_id: formData.assigned_staff_id,
-        vendor_id: vendorProfile?.vendor_id || '',
-        is_complete: formData.status === 'Completed'
+        description: formData.description === '' ? null : formData.description,
+        due_date: formData.due_date === '' ? null : formData.due_date,
+        booking_id: formData.booking_id === "-no-booking-selected-" ? null : formData.booking_id,
+        assigned_staff_id: formData.assigned_staff_id === "-unassigned-staff-" ? null : formData.assigned_staff_id,
+        vendor_id: vendorId,
+        is_complete: formData.status === 'Completed',
+        updated_at: new Date().toISOString()
       };
-      
+
       if (selectedTask) {
         // Update existing task
-        const { error } = await supabase
-          .from('vendor_tasks')
-          .update(updatedTask)
-          .eq('vendor_task_id', selectedTask.vendor_task_id);
-          
-        if (error) throw error;
-        
+        const taskRef = doc(db, 'vendor_tasks', selectedTask.vendor_task_id);
+        await updateDoc(taskRef, payload);
+
         toast({
           title: "Success",
           description: "Task updated successfully",
         });
       } else {
         // Create new task
-        const { error } = await supabase
-          .from('vendor_tasks')
-          .insert([updatedTask]);
-          
-        if (error) throw error;
-        
+        const tasksRef = collection(db, 'vendor_tasks');
+        await addDoc(tasksRef, {
+          ...payload,
+          created_at: new Date().toISOString()
+        });
+
         toast({
           title: "Success",
           description: "Task created successfully",
         });
       }
-      
-      // Refresh tasks
-      fetchTasks();
+
+      // Refresh tasks and invalidate cache
+      invalidateCache('tasks'); // Invalidate the tasks cache
+      fetchTasks(); // Refetch tasks from the backend
       setIsDialogOpen(false);
       resetForm();
     } catch (error) {
@@ -338,25 +368,21 @@ const Tasks: React.FC = () => {
       });
     }
   };
-  
+
   const handleDelete = async () => {
     if (!selectedTask) return;
-    
+
     try {
-      const { error } = await supabase
-        .from('vendor_tasks')
-        .delete()
-        .eq('vendor_task_id', selectedTask.vendor_task_id);
-        
-      if (error) throw error;
-      
+      await deleteDoc(doc(db, 'vendor_tasks', selectedTask.vendor_task_id));
+
       toast({
         title: "Success",
         description: "Task deleted successfully",
       });
-      
-      // Refresh tasks
-      fetchTasks();
+
+      // Refresh tasks and invalidate cache
+      invalidateCache('tasks'); // Invalidate the tasks cache
+      fetchTasks(); // Refetch tasks from the backend
       setIsDeleteDialogOpen(false);
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -367,7 +393,7 @@ const Tasks: React.FC = () => {
       });
     }
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'To Do':
@@ -382,7 +408,7 @@ const Tasks: React.FC = () => {
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'Low':
@@ -397,17 +423,17 @@ const Tasks: React.FC = () => {
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
-  
+
   const getStaffNameById = (staffId: string) => {
     const staffMember = staff.find(s => s.staff_id === staffId);
     return staffMember ? staffMember.name : 'Unassigned';
   };
-  
+
   const getBookingNameById = (bookingId: string) => {
     const booking = bookings.find(b => b.booking_id === bookingId);
     return booking ? `${booking.client_name} (${format(new Date(booking.event_date), 'MMM d, yyyy')})` : 'No Booking';
   };
-  
+
   const formatDate = (dateString: string) => {
     if (!dateString) return 'No due date';
     try {
@@ -416,7 +442,7 @@ const Tasks: React.FC = () => {
       return 'Invalid date';
     }
   };
-  
+
   const getUniqueCategories = () => {
     const categories = new Set<string>();
     tasks.forEach(task => categories.add(task.category));
@@ -431,7 +457,7 @@ const Tasks: React.FC = () => {
           Manage your tasks and to-dos
         </p>
       </div>
-      
+
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
           <div className="relative w-full md:w-64">
@@ -443,7 +469,7 @@ const Tasks: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-[150px]">
               <SelectValue placeholder="Status" />
@@ -456,7 +482,7 @@ const Tasks: React.FC = () => {
               <SelectItem value="On Hold">On Hold</SelectItem>
             </SelectContent>
           </Select>
-          
+
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
             <SelectTrigger className="w-full sm:w-[150px]">
               <SelectValue placeholder="Priority" />
@@ -469,7 +495,7 @@ const Tasks: React.FC = () => {
               <SelectItem value="Urgent">Urgent</SelectItem>
             </SelectContent>
           </Select>
-          
+
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-full sm:w-[150px]">
               <SelectValue placeholder="Category" />
@@ -482,20 +508,20 @@ const Tasks: React.FC = () => {
             </SelectContent>
           </Select>
         </div>
-        
+
         <Button onClick={openCreateDialog} className="bg-sanskara-red hover:bg-sanskara-maroon text-white">
           <Plus className="mr-2 h-4 w-4" />
           Add Task
         </Button>
       </div>
-      
+
       <Tabs defaultValue="all">
         <TabsList>
           <TabsTrigger value="all">All Tasks</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="all" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-8">
@@ -514,7 +540,7 @@ const Tasks: React.FC = () => {
                       {task.description && (
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
                       )}
-                      
+
                       <div className="flex flex-wrap gap-2 mt-3">
                         <Badge variant="outline" className={getStatusColor(task.status)}>
                           {task.status}
@@ -529,19 +555,19 @@ const Tasks: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="flex flex-col items-end gap-2">
                       <div className="flex items-center text-xs text-muted-foreground">
                         <Clock className="h-3 w-3 mr-1" />
                         <span>{formatDate(task.due_date)}</span>
                       </div>
-                      
+
                       {task.assigned_staff_id && (
                         <div className="text-xs text-muted-foreground">
                           Assigned to: {getStaffNameById(task.assigned_staff_id)}
                         </div>
                       )}
-                      
+
                       {task.booking_id && (
                         <div className="text-xs text-muted-foreground">
                           Booking: {getBookingNameById(task.booking_id)}
@@ -561,7 +587,7 @@ const Tasks: React.FC = () => {
             </div>
           )}
         </TabsContent>
-        
+
         <TabsContent value="upcoming" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-8">
@@ -579,7 +605,7 @@ const Tasks: React.FC = () => {
                         {task.description && (
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
                         )}
-                        
+
                         <div className="flex flex-wrap gap-2 mt-3">
                           <Badge variant="outline" className={getStatusColor(task.status)}>
                             {task.status}
@@ -594,13 +620,13 @@ const Tasks: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex flex-col items-end gap-2">
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
                           <span>{formatDate(task.due_date)}</span>
                         </div>
-                        
+
                         {task.assigned_staff_id && (
                           <div className="text-xs text-muted-foreground">
                             Assigned to: {getStaffNameById(task.assigned_staff_id)}
@@ -620,7 +646,7 @@ const Tasks: React.FC = () => {
             </div>
           )}
         </TabsContent>
-        
+
         <TabsContent value="completed" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-8">
@@ -641,7 +667,7 @@ const Tasks: React.FC = () => {
                         {task.description && (
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
                         )}
-                        
+
                         <div className="flex flex-wrap gap-2 mt-3">
                           <Badge variant="outline" className={getStatusColor(task.status)}>
                             {task.status}
@@ -656,13 +682,13 @@ const Tasks: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex flex-col items-end gap-2">
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
                           <span>{formatDate(task.due_date)}</span>
                         </div>
-                        
+
                         {task.assigned_staff_id && (
                           <div className="text-xs text-muted-foreground">
                             Assigned to: {getStaffNameById(task.assigned_staff_id)}
@@ -680,7 +706,7 @@ const Tasks: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
-      
+
       {/* Task Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -690,7 +716,7 @@ const Tasks: React.FC = () => {
               {selectedTask ? 'Update task details' : 'Add a new task to your list'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
@@ -702,7 +728,7 @@ const Tasks: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -713,7 +739,7 @@ const Tasks: React.FC = () => {
                 rows={3}
               />
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
@@ -732,7 +758,7 @@ const Tasks: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
                 <Select
@@ -750,7 +776,7 @@ const Tasks: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="due_date">Due Date</Label>
                 <Popover>
@@ -776,7 +802,7 @@ const Tasks: React.FC = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
@@ -795,7 +821,7 @@ const Tasks: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="booking_id">Related Booking</Label>
                 <Select
@@ -806,7 +832,7 @@ const Tasks: React.FC = () => {
                     <SelectValue placeholder="Select booking" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Booking</SelectItem>
+                    <SelectItem value="-no-booking-selected-">No Booking</SelectItem>
                     {bookings.map(booking => (
                       <SelectItem key={booking.booking_id} value={booking.booking_id}>
                         {booking.client_name} ({formatDate(booking.event_date)})
@@ -815,7 +841,7 @@ const Tasks: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="assigned_staff_id">Assign To</Label>
                 <Select
@@ -823,10 +849,12 @@ const Tasks: React.FC = () => {
                   onValueChange={(value) => handleSelectChange('assigned_staff_id', value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Assign to staff" />
+                    <SelectValue placeholder="Assign to staff">
+                      {formData.assigned_staff_id === "-unassigned-staff-" ? "Unassigned" : getStaffNameById(formData.assigned_staff_id)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="-unassigned-staff-">Unassigned</SelectItem>
                     {staff.map(staffMember => (
                       <SelectItem key={staffMember.staff_id} value={staffMember.staff_id}>
                         {staffMember.name} ({staffMember.role})
@@ -836,7 +864,7 @@ const Tasks: React.FC = () => {
                 </Select>
               </div>
             </div>
-            
+
             <DialogFooter className="flex justify-between items-center pt-4">
               {selectedTask && (
                 <Button
@@ -864,7 +892,7 @@ const Tasks: React.FC = () => {
           </form>
         </DialogContent>
       </Dialog>
-      
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -874,14 +902,14 @@ const Tasks: React.FC = () => {
               Are you sure you want to delete this task? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-4">
             <p className="font-medium">{selectedTask?.title}</p>
             {selectedTask?.description && (
               <p className="text-sm text-muted-foreground mt-1">{selectedTask.description}</p>
             )}
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel

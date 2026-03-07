@@ -50,7 +50,7 @@ const VendorSidebar: React.FC = () => {
             <div className="absolute inset-0 bg-sanskara-red rounded-full opacity-80"></div>
             <div className="absolute inset-1 bg-sanskara-gold rounded-full"></div>
             <div className="absolute inset-3 bg-sanskara-cream rounded-full flex items-center justify-center">
-              <span className="text-sanskara-maroon text-xs font-bold">S</span>
+              <span className="text-sanskara-maroon text-xs font-bold">V</span>
             </div>
           </div>
         ) : (
@@ -68,7 +68,7 @@ const VendorSidebar: React.FC = () => {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/" end className={getNavClass}>
+                  <NavLink to="/dashboard" end className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <Store className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Dashboard</span>}
@@ -79,7 +79,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/calendar" className={getNavClass}>
+                  <NavLink to="/dashboard/calendar" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <Calendar className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Calendar</span>}
@@ -90,7 +90,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/bookings" className={getNavClass}>
+                  <NavLink to="/dashboard/bookings" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <BookOpen className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Bookings</span>}
@@ -101,7 +101,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/services" className={getNavClass}>
+                  <NavLink to="/dashboard/services" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <CheckCircle className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Services</span>}
@@ -112,7 +112,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/tasks" className={getNavClass}>
+                  <NavLink to="/dashboard/tasks" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <ListTodo className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Tasks</span>}
@@ -133,7 +133,7 @@ const VendorSidebar: React.FC = () => {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/staff" className={getNavClass}>
+                  <NavLink to="/dashboard/staff" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <Users className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Staff</span>}
@@ -144,7 +144,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/notifications" className={getNavClass}>
+                  <NavLink to="/dashboard/notifications" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <BellRing className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Notifications</span>}
@@ -155,7 +155,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/reviews" className={getNavClass}>
+                  <NavLink to="/dashboard/reviews" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <Star className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Reviews</span>}
@@ -166,7 +166,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/payments" className={getNavClass}>
+                  <NavLink to="/dashboard/payments" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <DollarSign className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Payments</span>}
@@ -177,7 +177,7 @@ const VendorSidebar: React.FC = () => {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/settings" className={getNavClass}>
+                  <NavLink to="/dashboard/settings" className={getNavClass}>
                     <div className="flex items-center py-2 px-3 gap-3">
                       <Settings className="h-5 w-5 flex-shrink-0" />
                       {!collapsed && <span>Settings</span>}
@@ -193,4 +193,4 @@ const VendorSidebar: React.FC = () => {
   );
 };
 
-export default VendorSidebar;
+export default React.memo(VendorSidebar);

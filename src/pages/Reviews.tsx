@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +17,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  doc,
+  deleteDoc,
+  updateDoc,
+  orderBy
+} from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 
 interface Review {
@@ -39,78 +49,73 @@ const Reviews: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterRating, setFilterRating] = useState<string | null>(null);
-  const { vendorProfile } = useAuth();
+  const { vendorProfile, user } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (vendorProfile?.vendor_id) {
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (vendorId) {
       fetchReviews();
     }
-  }, [vendorProfile, filterRating]);
+  }, [vendorProfile, user, filterRating]);
 
   const fetchReviews = async () => {
-    if (!vendorProfile?.vendor_id) return;
-    
+    const vendorId = vendorProfile?.vendor_id || user?.uid;
+    if (!vendorId) return;
+
     try {
       setIsLoading(true);
-      
-      let query = supabase
-        .from('reviews')
-        .select('*')
-        .eq('vendor_id', vendorProfile.vendor_id);
-        
+
+      let q = query(
+        collection(db, 'reviews'),
+        where('vendor_id', '==', vendorId)
+      );
+
       if (filterRating) {
-        query = query.eq('rating', parseInt(filterRating));
+        q = query(q, where('rating', '==', parseInt(filterRating)));
       }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      // Fetch user names for each review
+
+      const querySnapshot = await getDocs(q);
+      const reviewsData = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        review_id: doc.id
+      })) as Review[];
+
+      // Fetch user names and service names for each review
       const enhancedReviews = await Promise.all(
-        (data || []).map(async (review) => {
+        reviewsData.map(async (review) => {
           // Get user info
-          const { data: userData } = await supabase
-            .from('users')
-            .select('display_name')
-            .eq('user_id', review.user_id)
-            .single();
-            
-          // Get service info from bookings
-          const { data: bookingData } = await supabase
-            .from('bookings')
-            .select(`
-              booking_id,
-              booking_services (
-                vendor_service_id
-              )
-            `)
-            .eq('booking_id', review.booking_id)
-            .single();
-            
-          let serviceName = "Unknown Service";
-          
-          if (bookingData?.booking_services && bookingData.booking_services.length > 0) {
-            const { data: serviceData } = await supabase
-              .from('vendor_services')
-              .select('service_name')
-              .eq('service_id', bookingData.booking_services[0].vendor_service_id)
-              .single();
-              
-            if (serviceData) {
-              serviceName = serviceData.service_name;
+          let userName = 'Anonymous User';
+          if (review.user_id) {
+            const userSnap = await getDoc(doc(db, 'users', review.user_id));
+            if (userSnap.exists()) {
+              userName = userSnap.data().display_name || 'Anonymous User';
             }
           }
-          
+
+          // Get service info from bookings
+          let serviceName = "Unknown Service";
+          if (review.booking_id) {
+            const bookingSnap = await getDoc(doc(db, 'bookings', review.booking_id));
+            if (bookingSnap.exists()) {
+              const bookingData = bookingSnap.data();
+              if (bookingData.booking_services && bookingData.booking_services.length > 0) {
+                const serviceSnap = await getDoc(doc(db, 'vendor_services', bookingData.booking_services[0].vendor_service_id));
+                if (serviceSnap.exists()) {
+                  serviceName = serviceSnap.data().service_name;
+                }
+              }
+            }
+          }
+
           return {
             ...review,
-            user_name: userData?.display_name || 'Anonymous User',
+            user_name: userName,
             service_name: serviceName
           };
         })
       );
-      
+
       setReviews(enhancedReviews);
     } catch (error) {
       console.error('Error fetching reviews:', error);
@@ -128,17 +133,12 @@ const Reviews: React.FC = () => {
     if (!confirm("Are you sure you want to delete this review?")) {
       return;
     }
-    
+
     try {
-      const { error } = await supabase
-        .from('reviews')
-        .delete()
-        .eq('review_id', reviewId);
-        
-      if (error) throw error;
-      
+      await deleteDoc(doc(db, 'reviews', reviewId));
+
       setReviews(reviews.filter(review => review.review_id !== reviewId));
-      
+
       toast({
         title: "Review deleted",
         description: "The review has been successfully deleted",
@@ -155,19 +155,18 @@ const Reviews: React.FC = () => {
 
   const handleVisibilityChange = async (reviewId: string, visibility: string) => {
     try {
-      const { error } = await supabase
-        .from('reviews')
-        .update({ review_visibility: visibility })
-        .eq('review_id', reviewId);
-        
-      if (error) throw error;
-      
-      setReviews(reviews.map(review => 
-        review.review_id === reviewId 
-          ? { ...review, review_visibility: visibility } 
+      const reviewRef = doc(db, 'reviews', reviewId);
+      await updateDoc(reviewRef, {
+        review_visibility: visibility,
+        updated_at: new Date().toISOString()
+      });
+
+      setReviews(reviews.map(review =>
+        review.review_id === reviewId
+          ? { ...review, review_visibility: visibility }
           : review
       ));
-      
+
       toast({
         title: "Visibility updated",
         description: `Review is now ${visibility.toLowerCase()}`,
@@ -189,7 +188,7 @@ const Reviews: React.FC = () => {
       return 'Invalid date';
     }
   };
-  
+
   const formatReviewId = (id: string | number): string => {
     return String(id).substring(0, 8);
   };
@@ -200,11 +199,10 @@ const Reviews: React.FC = () => {
       .map((_, i) => (
         <Star
           key={i}
-          className={`h-4 w-4 ${
-            i < rating
+          className={`h-4 w-4 ${i < rating
               ? 'text-sanskara-amber fill-sanskara-amber'
               : 'text-gray-300'
-          }`}
+            }`}
         />
       ));
   };
@@ -219,8 +217,8 @@ const Reviews: React.FC = () => {
       </div>
 
       <div className="flex items-center">
-        <Select 
-          value={filterRating || "all"} 
+        <Select
+          value={filterRating || "all"}
           onValueChange={(value) => setFilterRating(value === "all" ? null : value)}
         >
           <SelectTrigger className="w-[180px]">
@@ -250,7 +248,7 @@ const Reviews: React.FC = () => {
             </div>
             <h3 className="text-xl font-medium mb-2">No Reviews Yet</h3>
             <p className="text-muted-foreground text-center mb-6 max-w-md">
-              {filterRating 
+              {filterRating
                 ? `No ${filterRating}-star reviews found. Try selecting a different rating filter.`
                 : "You haven't received any reviews yet. Reviews will appear here once customers rate your services."}
             </p>
@@ -272,7 +270,7 @@ const Reviews: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium">{review.user_name}</h3>
-                        <Badge 
+                        <Badge
                           variant="outline"
                           className={
                             review.review_visibility === 'public'

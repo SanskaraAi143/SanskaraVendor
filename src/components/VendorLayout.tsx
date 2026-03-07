@@ -3,12 +3,47 @@ import React from 'react';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import VendorSidebar from './VendorSidebar';
 import VendorHeader from './VendorHeader';
+import { useAuth } from '@/hooks/useAuth';
+import { useLocation, Navigate } from 'react-router-dom';
 
 interface VendorLayoutProps {
   children: React.ReactNode;
 }
 
 const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
+  const { user, vendorProfile, staffProfile, isLoading, isLoadingVendorProfile, isLoadingStaffProfile } = useAuth();
+  const location = useLocation();
+
+  // Show loading while checking authentication
+  if (isLoading || isLoadingVendorProfile || isLoadingStaffProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no user, redirect to login
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If user is staff, redirect to staff portal (onboarding handled in staff routes)
+  if (staffProfile) {
+    return <Navigate to="/staff/dashboard" replace />;
+  }
+
+  // If user is vendor, check onboarding
+  if (!vendorProfile && location.pathname !== '/onboard') {
+    const onboardingSkipped = localStorage.getItem('onboardingSkipped') === 'false';
+    if (!onboardingSkipped) {
+      return <Navigate to="/onboard" state={{ from: location }} replace />;
+    }
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen bg-gray-50/50">

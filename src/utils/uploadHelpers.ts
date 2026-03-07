@@ -1,10 +1,16 @@
-import { supabase } from '@/integrations/supabase/client';
+import { storage } from '@/lib/firebase';
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject
+} from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Uploads a file to Supabase Storage
+ * Uploads a file to Firebase Storage
  * @param file File object to upload
- * @param bucket Bucket name
+ * @param bucket Bucket name (not used directly in ref for Firebase, but can be part of the path if needed)
  * @param folder Folder path within bucket (optional)
  * @returns URL of the uploaded file or null if failed
  */
@@ -17,27 +23,22 @@ export const uploadFile = async (
     // Generate a unique file name to prevent collisions
     const fileExt = file.name.split('.').pop();
     const fileName = `${uuidv4()}.${fileExt}`;
-    
-    // Create the file path (userId/filename or just filename)
-    const filePath = folder 
-      ? `${folder}/${fileName}`
-      : fileName;
-    
+
+    // Create the file path (bucket/folder/filename or just bucket/filename)
+    // Note: in Firebase, 'bucket' is usually part of the initialization, 
+    // but here we use it as the top-level folder to match Supabase structure.
+    const filePath = folder
+      ? `${bucket}/${folder}/${fileName}`
+      : `${bucket}/${fileName}`;
+
+    const storageRef = ref(storage, filePath);
+
     // Upload the file
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file);
-    
-    if (error) {
-      console.error('Error uploading file:', error);
-      return null;
-    }
-    
+    const snapshot = await uploadBytes(storageRef, file);
+
     // Get the public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
-    
+    const publicUrl = await getDownloadURL(snapshot.ref);
+
     return publicUrl;
   } catch (error) {
     console.error('Error in uploadFile:', error);
@@ -46,7 +47,7 @@ export const uploadFile = async (
 };
 
 /**
- * Uploads multiple files to Supabase Storage
+ * Uploads multiple files to Firebase Storage
  * @param files Array of File objects to upload
  * @param bucket Bucket name
  * @param folder Folder path within bucket (optional)
@@ -58,19 +59,19 @@ export const uploadMultipleFiles = async (
   folder: string = ''
 ): Promise<string[]> => {
   const urls: string[] = [];
-  
+
   for (const file of files) {
     const url = await uploadFile(file, bucket, folder);
     if (url) {
       urls.push(url);
     }
   }
-  
+
   return urls;
 };
 
 /**
- * Deletes a file from Supabase Storage
+ * Deletes a file from Firebase Storage
  * @param url Full URL of the file to delete
  * @param bucket Bucket name
  * @param userId User ID for identifying the file's folder
@@ -83,26 +84,17 @@ export const deleteFile = async (url: string, bucket: string, userId: string): P
       throw new Error('Invalid URL provided to deleteFile');
     }
 
-    // Extract the file path from the URL
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/');
-
-    // Ensure the userId is not appended twice
-    const filePathParts = pathParts.slice(pathParts.indexOf(bucket) + 1);
-    const filePath = filePathParts[0] === userId
-      ? filePathParts.join('/')
-      : `${userId}/${filePathParts.join('/')}`;
+    // Extract the storage path from the URL
+    // Firebase URLs look like: https://firebasestorage.googleapis.com/v0/b/[bucket]/o/[path]?alt=media&token=[token]
+    const decodedUrl = decodeURIComponent(url);
+    const pathStart = decodedUrl.indexOf('/o/') + 3;
+    const pathEnd = decodedUrl.indexOf('?');
+    const filePath = decodedUrl.substring(pathStart, pathEnd !== -1 ? pathEnd : undefined);
 
     console.log('Deleting file at path:', filePath);
 
-    const { error } = await supabase.storage
-      .from(bucket)
-      .remove([filePath]);
-
-    if (error) {
-      console.error('Error deleting file:', error);
-      return false;
-    }
+    const storageRef = ref(storage, filePath);
+    await deleteObject(storageRef);
 
     return true;
   } catch (error) {

@@ -1,167 +1,24 @@
-
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuthContext';
-import { toast } from '@/components/ui/use-toast';
+import React, { useState } from 'react';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bell, CheckCircle, Clock } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
-
-interface Notification {
-  notification_id: string;
-  message: string;
-  notification_type: string;
-  related_entity_type: string;
-  related_entity_id: string;
-  is_read: boolean;
-  created_at: string;
-  read_at: string | null;
-}
+import { formatDistanceToNow } from 'date-fns';
 
 const NotificationsPage: React.FC = () => {
   const { vendorProfile } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
   const [activeTab, setActiveTab] = useState('all');
-  
-  useEffect(() => {
-    if (vendorProfile) {
-      fetchNotifications();
-      
-      // Set up realtime subscription
-      const channel = supabase
-        .channel('notification_changes')
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `recipient_staff_id=eq.${vendorProfile.vendor_id}` 
-        }, () => {
-          fetchNotifications();
-        })
-        .subscribe();
-        
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [vendorProfile, activeTab]);
-  
-  const fetchNotifications = async () => {
-    if (!vendorProfile) return;
-    
-    setIsLoading(true);
-    
-    try {
-      let query = supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipient_staff_id', vendorProfile.vendor_id);
-      
-      if (activeTab === 'unread') {
-        query = query.eq('is_read', false);
-      } else if (activeTab === 'read') {
-        query = query.eq('is_read', true);
-      }
-      
-      query = query.order('created_at', { ascending: false });
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      if (data) {
-        setNotifications(data as Notification[]);
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load notifications',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const markAsRead = async (notificationId: string) => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({
-          is_read: true,
-          read_at: new Date().toISOString()
-        })
-        .eq('notification_id', notificationId);
-        
-      if (error) throw error;
-      
-      // Update local state
-      setNotifications(prevNotifications =>
-        prevNotifications.map(notification =>
-          notification.notification_id === notificationId
-            ? { ...notification, is_read: true, read_at: new Date().toISOString() }
-            : notification
-        )
-      );
-      
-      toast({
-        title: 'Success',
-        description: 'Notification marked as read',
-      });
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update notification',
-        variant: 'destructive',
-      });
-    }
-  };
-  
-  const markAllAsRead = async () => {
-    try {
-      const unreadNotifications = notifications.filter(n => !n.is_read);
-      if (unreadNotifications.length === 0) return;
-      
-      const { error } = await supabase
-        .from('notifications')
-        .update({
-          is_read: true,
-          read_at: new Date().toISOString()
-        })
-        .eq('recipient_staff_id', vendorProfile?.vendor_id)
-        .eq('is_read', false);
-        
-      if (error) throw error;
-      
-      // Update all unread notifications in local state
-      setNotifications(prevNotifications =>
-        prevNotifications.map(notification =>
-          !notification.is_read
-            ? { ...notification, is_read: true, read_at: new Date().toISOString() }
-            : notification
-        )
-      );
-      
-      toast({
-        title: 'Success',
-        description: 'All notifications marked as read',
-      });
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update notifications',
-        variant: 'destructive',
-      });
-    }
-  };
-  
+
+  const filteredNotifications = notifications.filter(notification => {
+    if (activeTab === 'unread') return !notification.is_read;
+    if (activeTab === 'read') return notification.is_read;
+    return true;
+  });
+
   const getNotificationType = (type: string) => {
     switch (type) {
       case 'booking':
@@ -176,7 +33,7 @@ const NotificationsPage: React.FC = () => {
         return <Badge className="bg-gray-100 text-gray-800 border-gray-300">{type || 'General'}</Badge>;
     }
   };
-  
+
   const getTimeDisplay = (timestamp: string) => {
     try {
       const date = new Date(timestamp);
@@ -185,7 +42,7 @@ const NotificationsPage: React.FC = () => {
       return 'Unknown time';
     }
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -195,8 +52,8 @@ const NotificationsPage: React.FC = () => {
             Stay updated on important events
           </p>
         </div>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={markAllAsRead}
           disabled={!notifications.some(n => !n.is_read)}
         >
@@ -204,14 +61,14 @@ const NotificationsPage: React.FC = () => {
           Mark All as Read
         </Button>
       </div>
-      
+
       <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-6">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="unread">Unread</TabsTrigger>
           <TabsTrigger value="read">Read</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value={activeTab}>
           <Card>
             <CardHeader>
@@ -225,23 +82,23 @@ const NotificationsPage: React.FC = () => {
                   <div className="h-8 w-8 rounded-full border-4 border-sanskara-red/20 border-t-sanskara-red animate-spin"></div>
                   <p className="ml-3">Loading notifications...</p>
                 </div>
-              ) : notifications.length === 0 ? (
+              ) : filteredNotifications.length === 0 ? (
                 <div className="text-center py-8">
                   <Bell className="mx-auto h-12 w-12 text-muted-foreground opacity-30" />
                   <h3 className="mt-2 text-lg font-medium">No notifications</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {activeTab === 'all' 
-                      ? 'You have no notifications at this time.' 
+                    {activeTab === 'all'
+                      ? 'You have no notifications at this time.'
                       : activeTab === 'unread'
-                      ? 'You have no unread notifications.'
-                      : 'You have no read notifications.'}
+                        ? 'You have no unread notifications.'
+                        : 'You have no read notifications.'}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {notifications.map(notification => (
-                    <div 
-                      key={notification.notification_id} 
+                  {filteredNotifications.map(notification => (
+                    <div
+                      key={notification.notification_id}
                       className={`p-4 border rounded-lg ${!notification.is_read ? 'bg-muted/30' : ''}`}
                     >
                       <div className="flex justify-between items-start">
@@ -260,9 +117,9 @@ const NotificationsPage: React.FC = () => {
                           </div>
                         </div>
                         {!notification.is_read && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => markAsRead(notification.notification_id)}
                           >
                             <Clock className="w-4 h-4 mr-1" />
