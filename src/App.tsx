@@ -43,6 +43,8 @@ import AutofillVendorOnboarding from './components/onboarding/AutofillVendorOnbo
 import { VendorOnboarding } from './components/onboarding/VendorOnboarding';
 // Removed empty vendor-onboarding step imports
 
+import UserGuide from './pages/UserGuide';
+
 import { NotificationProvider } from './contexts/NotificationContext';
 
 function App() {
@@ -114,6 +116,7 @@ function App() {
         {/* Protected Vendor Routes */}
         <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/user-guide" element={<UserGuide />} />
           <Route path="/dashboard/bookings" element={<Bookings />} />
           <Route path="/dashboard/calendar" element={<Calendar />} />
           <Route path="/dashboard/services" element={<Services />} />

@@ -175,12 +175,20 @@ const Dashboard: React.FC = () => {
             Here's an overview of your business performance and upcoming events.
           </p>
         </div>
-        <Link to="/dashboard/profile">
-          <Button variant="outline">
-            <User className="mr-2 h-4 w-4" />
-            View Profile
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link to="/user-guide?tab=vendor">
+            <Button variant="secondary">
+              <BookOpen className="mr-2 h-4 w-4" />
+              How to Use
+            </Button>
+          </Link>
+          <Link to="/dashboard/profile">
+            <Button variant="outline">
+              <User className="mr-2 h-4 w-4" />
+              View Profile
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
